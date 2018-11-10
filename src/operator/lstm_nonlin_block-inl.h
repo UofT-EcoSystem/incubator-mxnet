@@ -15,21 +15,20 @@ enum class EnumOpInputs  {CellInput, HiddenState, CellState};
 enum class EnumOpOutputs            {HiddenState, CellState};
 // NO Need for Workspace for Reserve Space
 
-struct LSTMCellParam : public dmlc::Parameter < LSTMCellParam >
+struct LSTMNonLinBlockParam : public dmlc::Parameter < LSTMNonLinBlockParam >
 {
 	// All parameters do not require explicit declaration.
 	// The reason is because they can be effectively inferred from the shape of the input data.
-	std::uint32_t batch_size;
-	std::uint32_t state_size;
+	int batch_size, state_size;
 };
 
 template < typename xpu, typename DType >
-class LSTMCellOp : public Operator
+class LSTMNonLinBlockOp : public Operator
 {
 private:
-	LSTMCellParam _param;
+	LSTMNonLinBlockParam _param;
 public:
-	explicit LSTMCellOp(LSTMCellParam param)
+	explicit LSTMNonLinBlockOp(LSTMNonLinBlockParam param)
 	{
 		// empty
 	}
@@ -54,14 +53,17 @@ public:
 };
 
 template<typename xpu>
-Operator * CreateOp(LSTMCellParam param, int dtype);
+Operator * CreateOp(LSTMNonLinBlockParam param, int dtype);
 
 #if DMLC_USE_CXX11
 
-class LSTMCellProp : public OperatorProperty
+class LSTMNonLinBlockProp : public OperatorProperty
 {
 private:
+	LSTMNonLinBlockParam _param;
 public:
+	LSTMNonLinBlockProp(LSTMNonLinBlockParam param) : _param(param) {}
+
 	std::vector < std::string > ListArguments() const override
 	{
 		return {"CellInput", "HiddenState", "CellState"};
@@ -100,7 +102,7 @@ public:
 
 		if (ishape.ndim() ==  0) return false;
 
-		CHECK_EQ(ishape.ndim(), 2U) << "Input data should be rank-3 tensor of dim "
+		CHECK_EQ(ishape.ndim(), 2U) << "Input data should be rank-2 tensor of dim "
 			"[batch size, state size].";
 
 		int batch_size = ishape[0];
@@ -153,12 +155,12 @@ public:
 
 	OperatorProperty * Copy() const override
 	{
-		return new LSTMCellProp(_param);
+		return new LSTMNonLinBlockProp(_param);
 	}
 
 	std::string TypeString() const override
 	{
-		return "LSTMCell";
+		return "LSTMNonLinBlock";
 	}
 
 	std::vector < int > DeclareBackwardDependency(
@@ -173,14 +175,8 @@ public:
 		 * that is, ONLY variables that are returned in the list of dependencies
 		 * will be preserved by the forward pass for use in the backward pass.
 		 */
-		// Note that here we deliberately ignore the `out_data`.
-		return {
-			// Do not need to store the input data.
-			// The compute kernel reserves the space needed for backward pass.
-			// in_data[EnumOpInputs ::  CellInput],
-		        // in_data[EnumOpInputs ::HiddenState],
-			// in_data[EnumOpInputs ::  CellState],
-			out_grad[EnumOpOutputs::HiddenState],
+		// Note that here we deliberately ignore the `in_data` and `out_data`.
+		return {out_grad[EnumOpOutputs::HiddenState],
 			out_grad[EnumOpOutputs::  CellState]};
 	}
 
@@ -204,7 +200,7 @@ public:
 	Operator* CreateOperatorEx(Context ctx, 
 				   std::vector < TShape > * in_shape,
         			   std::vector < int >    * in_type) const override;
-}; // class LSTMCellProp
+}; // class LSTMNonLinBlockProp
 
 #endif // DMLC_USE_CXX11
 
