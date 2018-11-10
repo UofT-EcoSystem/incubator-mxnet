@@ -98,52 +98,26 @@ public:
 		// query the input shape and perform shape inference
 		const TShape & ishape = (*in_shape)[EnumOpInputs::CellInput];
 
-		if (dshape.ndim() ==  0) return false;
-CHECK_EQ(dshape.ndim(), 3U) \
-<< "Input data should be rank-3 tensor of dim [sequence length, batch size, input size]";
+		if (ishape.ndim() ==  0) return false;
 
-		int state_size = ishape[]
+		CHECK_EQ(ishape.ndim(), 2U) << "Input data should be rank-3 tensor of dim "
+			"[batch size, state size].";
 
-int batch_size = dshape[1];
-int input_size = dshape[2];
-int numDirections = param_.bidirectional ? 2 : 1;
-int total_layers = numDirections * param_.num_layers;  // double for bidirectional
-SHAPE_ASSIGN_CHECK(*in_shape,
-rnn_enum::kState,
-Shape3(total_layers, batch_size, param_.state_size));
-if (param_.mode == rnn_enum::kLstm)
-SHAPE_ASSIGN_CHECK(*in_shape,
-rnn_enum::kStateCell,
-Shape3(total_layers, batch_size, param_.state_size));
+		int batch_size = ishape[0];
+		int state_size = ishape[1];
 
-// calculate parameter vector length
-int param_size = rnn_param_size(param_.num_layers,
-input_size,
-param_.state_size,
-param_.bidirectional,
-param_.mode);
-SHAPE_ASSIGN_CHECK(*in_shape, rnn_enum::kParams, Shape1(param_size));
+		SHAPE_ASSIGN_CHECK(*in_shape, EnumOpInputs::HiddenState, 
+			Shape3(batch_size, state_size));
+		SHAPE_ASSIGN_CHECK(*in_shape, EnumOpInputs::  CellState,
+			Shape3(batch_size, state_size));
 
-out_shape->clear();
-// output: [sequence len, batch, output size]
-TShape oshape = dshape;
-oshape[2] = numDirections * param_.state_size;
-out_shape->push_back(oshape);
-if (!param_.state_outputs) {
-return true;
-} else {
-// outStateShape: [layer_num, batch, state size]
-TShape outStateShape = dshape;
-outStateShape[0] = total_layers;
-outStateShape[1] = batch_size;
-outStateShape[2] = param_.state_size;
-out_shape->push_back(outStateShape);
-// Deal with lstm cell state
-if (param_.mode == rnn_enum::kLstm)
-out_shape->push_back(outStateShape);
-return true;
-}
-}
+		out_shapes.clear();
+
+		out_shapes.push_back(in_shape[EnumOpInputs::HiddenState]);
+		out_shapes.push_back(in_shape[EnumOpInputs::  CellState]);
+
+		return true;
+	}
 
 	bool InferType(std::vector < int > *  in_type,
 	               std::vector < int > * out_type,
@@ -169,27 +143,12 @@ return true;
 			}
 		}
 
-CHECK_NE(dtype, -1) << "First input must have specified type";
-for (index_t i = 0; i < in_type->size(); ++i) {
-if ((*in_type)[i] == -1) {
-(*in_type)[i] = dtype;
-} else {
-CHECK_EQ((*in_type)[i], dtype) << "This layer requires uniform type. "
-<< "Expected " << dtype << " v.s. given "
-<< (*in_type)[i] << " at " << ListArguments()[i];
-}
-}
-out_type->clear();
-out_type->push_back(dtype);
-if (!param_.state_outputs) {
-return true;
-} else {
-out_type->push_back(dtype);
-// Deal with lstm cell state
-if (param_.mode == rnn_enum::kLstm)
-out_type->push_back(dtype);
-			return true;
-		}
+		out_type->clear();
+
+		out_type->push_back(itype); // HiddenState
+		out_type->push_back(itype); //   CellState
+		
+		return true;
 	}
 
 	OperatorProperty * Copy() const override
@@ -215,9 +174,12 @@ out_type->push_back(dtype);
 		 * will be preserved by the forward pass for use in the backward pass.
 		 */
 		// Note that here we deliberately ignore the `out_data`.
-		return { in_data[EnumOpInputs ::  CellInput],
-		         in_data[EnumOpInputs ::HiddenState],
-			 in_data[EnumOpInputs ::  CellState],
+		return {
+			// Do not need to store the input data.
+			// The compute kernel reserves the space needed for backward pass.
+			// in_data[EnumOpInputs ::  CellInput],
+		        // in_data[EnumOpInputs ::HiddenState],
+			// in_data[EnumOpInputs ::  CellState],
 			out_grad[EnumOpOutputs::HiddenState],
 			out_grad[EnumOpOutputs::  CellState]};
 	}
