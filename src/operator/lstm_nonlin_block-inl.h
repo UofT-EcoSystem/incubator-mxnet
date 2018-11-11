@@ -1,11 +1,12 @@
 #pragma once
 
+#include <vector>
+
 #include <dmlc/logging.h>
 #include <dmlc/parameter.h>
-
 #include <mxnet/operator.h>
 
-#include <vector>
+#include "operator_common.h"
 
 namespace mxnet {
 	namespace op {
@@ -13,13 +14,17 @@ namespace mxnet {
 
 enum class EnumOpInputs  {CellInput, HiddenState, CellState};
 enum class EnumOpOutputs            {HiddenState, CellState};
-// NO Need for Workspace for Reserve Space
+// NO Need for Workspace or Reserve Space
+
+		} // anonymous namespace
 
 struct LSTMNonLinBlockParam : public dmlc::Parameter < LSTMNonLinBlockParam >
 {
 	// All parameters do not require explicit declaration.
 	// The reason is because they can be effectively inferred from the shape of the input data.
 	int batch_size, state_size;
+
+	DMLC_DECLARE_PARAMETER(LSTMNonLinBlockParam) {}
 };
 
 template < typename xpu, typename DType >
@@ -62,6 +67,7 @@ class LSTMNonLinBlockProp : public OperatorProperty
 private:
 	LSTMNonLinBlockParam _param;
 public:
+	LSTMNonLinBlockProp() {}
 	LSTMNonLinBlockProp(LSTMNonLinBlockParam param) : _param(param) {}
 
 	std::vector < std::string > ListArguments() const override
@@ -81,12 +87,12 @@ public:
 	void Init(const std::vector < std::pair < std::string, 
 	                                          std::string > > & kwargs) override
 	{
-		param_.Init(kwargs);
+		_param.Init(kwargs);
 	}
 
 	std::map < std::string, std::string > GetParams() const override
 	{
-		return param_.__DICT__();
+		return _param.__DICT__();
 	}
 
 	bool InferShape(std::vector < TShape > *  in_shape,
@@ -98,7 +104,7 @@ public:
 		CHECK_EQ(in_shape->size(), 3U);
 
 		// query the input shape and perform shape inference
-		const TShape & ishape = (*in_shape)[EnumOpInputs::CellInput];
+		const TShape & ishape = (*in_shape)[int(EnumOpInputs::CellInput)];
 
 		if (ishape.ndim() ==  0) return false;
 
@@ -108,15 +114,15 @@ public:
 		int batch_size = ishape[0];
 		int state_size = ishape[1];
 
-		SHAPE_ASSIGN_CHECK(*in_shape, EnumOpInputs::HiddenState, 
-			Shape3(batch_size, state_size));
-		SHAPE_ASSIGN_CHECK(*in_shape, EnumOpInputs::  CellState,
-			Shape3(batch_size, state_size));
+		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::HiddenState), 
+			Shape2(batch_size, state_size));
+		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::  CellState),
+			Shape2(batch_size, state_size));
 
-		out_shapes.clear();
+		out_shape->clear();
 
-		out_shapes.push_back(in_shape[EnumOpInputs::HiddenState]);
-		out_shapes.push_back(in_shape[EnumOpInputs::  CellState]);
+		out_shape->push_back((*in_shape)[int(EnumOpInputs::HiddenState)]);
+		out_shape->push_back((*in_shape)[int(EnumOpInputs::  CellState)]);
 
 		return true;
 	}
@@ -176,8 +182,8 @@ public:
 		 * will be preserved by the forward pass for use in the backward pass.
 		 */
 		// Note that here we deliberately ignore the `in_data` and `out_data`.
-		return {out_grad[EnumOpOutputs::HiddenState],
-			out_grad[EnumOpOutputs::  CellState]};
+		return {out_grad[int(EnumOpOutputs::HiddenState)],
+			out_grad[int(EnumOpOutputs::  CellState)]};
 	}
 
 	std::vector < ResourceRequest >  ForwardResource(
@@ -204,6 +210,5 @@ public:
 
 #endif // DMLC_USE_CXX11
 
-		} // namespace 
 	} // namespace op
 } // namespace mxnet
