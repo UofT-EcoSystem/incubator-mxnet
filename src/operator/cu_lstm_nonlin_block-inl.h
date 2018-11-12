@@ -12,6 +12,124 @@ namespace mxnet {
 
 #if defined(__CUDACC__)
 
+template < typename RealType >
+static __forceinline__ __device__ RealType __cu_sigmoid(RealType i)
+{
+	return 1.0 / (1.0 + exp(-i));
+}
+
+/**
+ * Forward Pass of the LSTM Nonlinear Block
+ * This kernel shall be launched using the parameter <<< ceil(BxH / 128), 128 >>>.
+ * @param1   i_cell_input [B x 4H]:  (Input) Input to the LSTM Cell from the Previous Layer
+ * @param2 i_hidden_state [B x 4H]:  (Input) Hidden State from the Previous Time Step
+ * @param3   i_cell_state [B x  H]:  (Input)   Cell State from the Previous Time Step
+ * @param4 reserved_space [B x 5H]: (Output) Space reserved by the Forward Pass to facilitate Backward Pass Compute
+ * @param5 o_hidden_state [B x  H]: (Output) Hidden State Output that goes to the Next Time Step and/or Layer
+ * @param6   o_cell_state [B x  H]: (Output)   Cell State Output that goes to the Next Time Step and/or Layer
+ * @param7 BxH: (Parameter) State Size x Batch Size, used to check whether the Thread Index goes Out of Bound
+ */
+template < typename RealType >
+static __global__ void _cuda_fused_lstm_nonlin_block__forward(
+	const RealType * const __restrict__   i_cell_input,
+	const RealType * const __restrict__ i_hidden_state,
+	const RealType * const __restrict__   i_cell_state,
+	      RealType * const __restrict__ reserved_space,
+	      RealType * const __restrict__ o_hidden_state,
+	      RealType * const __restrict__   o_cell_state, const unsigned BxH)
+{
+	const unsigned g_threadIdx = threadIdx.x + blockIdx.x * blockDim.x;
+
+	if (g_threadIdx >= BxH) { return ; }
+
+	RealType  input_gate = __cu_sigmoid(i_cell_input[0 * BxH + g_threadIdx] + 
+	                                  i_hidden_state[0 * BxH + g_threadIdx]);
+	RealType forget_gate = __cu_sigmoid(i_cell_input[1 * BxH + g_threadIdx] + 
+	                                  i_hidden_state[1 * BxH + g_threadIdx]);
+	RealType  input_actv =         tanh(i_cell_input[2 * BxH + g_threadIdx] + 
+	                                  i_hidden_state[2 * BxH + g_threadIdx]);
+	RealType output_gate = __cu_sigmoid(i_cell_input[3 * BxH + g_threadIdx] + 
+	                                  i_hidden_state[3 * BxH + g_threadIdx]);
+
+	if (reserved_space != nullptr)
+	{
+		// reserve the gates to be used in the backward pass
+		reserved_space[0 * BxH + g_threadIdx] =  input_gate;
+		reserved_space[1 * BxH + g_threadIdx] = forget_gate;
+		reserved_space[2 * BxH + g_threadIdx] =  input_actv;
+		reserved_space[3 * BxH + g_threadIdx] = output_gate;
+	}
+
+	RealType cell_state = forget_gate * i_cell_state[g_threadIdx] + input_actv * input_gate;
+
+	  o_cell_state[g_threadIdx] =      cell_state;
+	o_hidden_state[g_threadIdx] = tanh(cell_state) * output_gate;
+}
+
+/**
+ * Backward Pass of the LSTM Nonlinear Block
+ * This kernel shall be launched using the parameter <<< ceil(BxH / 128), 128 >>>.
+ * All the parameters are the same as the forward kernel, except that the input now becomes output and vice versa.
+ */
+template < typename RealType >
+static __global__ void _cuda_fused_lstm_nonlin_block_backward(
+	      RealType * const __restrict__   i_cell_input_grad,
+	      RealType * const __restrict__ i_hidden_state_grad,
+	const RealType * const __restrict__   i_cell_state,
+	      RealType * const __restrict__   i_cell_state_grad,
+	const RealType * const __restrict__ reserved_space,
+	const RealType * const __restrict__ o_hidden_state_grad,
+	const RealType * const __restrict__   o_cell_state_grad, const unsigned BxH)
+{
+	const unsigned g_threadIdx = threadIdx.x + blockIdx.x * blockDim.x;
+
+	if (g_threadIdx >= BxH) { return ; }
+
+	// read the activations stored in the forward pass
+	RealType  input_gate = reserved_space[BxH * 0 + g_threadIdx];
+	RealType forget_gate = reserved_space[BxH * 1 + g_threadIdx];
+	RealType  input_actv = reserved_space[BxH * 2 + g_threadIdx];
+	RealType output_gate = reserved_space[BxH * 3 + g_threadIdx];
+	
+	RealType i_cell_state_reg  =      i_cell_state[g_threadIdx];
+	RealType   cell_state_actv = tanh(i_cell_state_reg);
+
+	//   o_cell_state[g_threadIdx] =      cell_state;
+	// o_hidden_state[g_threadIdx] = tanh(cell_state) * output_gate;
+
+	RealType o_hidden_state_grad_reg = o_hidden_state_grad[g_threadIdx];
+
+	RealType     output_gate_grad = o_hidden_state_grad_reg * cell_state_actv;
+	RealType cell_state_actv_grad = o_hidden_state_grad_reg * output_gate;
+	
+	RealType cell_state_grad = o_cell_state_grad[g_threadIdx] + cell_state_actv_grad * (1 - cell_state_actv * cell_state_actv);
+
+	// cell_state = forget_gate * i_cell_state[g_threadIdx] + input_actv * input_gate;
+	RealType  forget_gate_grad = cell_state_grad * i_cell_state_reg;
+	RealType   input_actv_grad = cell_state_grad * input_gate;
+	RealType   input_gate_grad = cell_state_grad * input_actv;
+
+	i_cell_state_grad[g_threadIdx] = cell_state_grad * forget_gate;
+
+	// RealType  input_gate = __cu_sigmoid(i_cell_input[0 * BxH + g_threadIdx] + 
+	//                                   i_hidden_state[0 * BxH + g_threadIdx]);
+	// RealType forget_gate = __cu_sigmoid(i_cell_input[1 * BxH + g_threadIdx] + 
+	//                                   i_hidden_state[1 * BxH + g_threadIdx]);
+	// RealType  input_actv =         tanh(i_cell_input[2 * BxH + g_threadIdx] + 
+	//                                   i_hidden_state[2 * BxH + g_threadIdx]);
+	// RealType output_gate = __cu_sigmoid(i_cell_input[3 * BxH + g_threadIdx] + 
+	//                                   i_hidden_state[3 * BxH + g_threadIdx]);
+
+	  i_cell_input_grad[BxH * 0 + g_threadIdx] = 
+	i_hidden_state_grad[BxH * 0 + g_threadIdx] =  input_gate_grad *  input_gate * (1 -  input_gate);
+	  i_cell_input_grad[BxH * 1 + g_threadIdx] = 
+	i_hidden_state_grad[BxH * 1 + g_threadIdx] = forget_gate_grad * forget_gate * (1 - forget_gate);
+	  i_cell_input_grad[BxH * 2 + g_threadIdx] = 
+	i_hidden_state_grad[BxH * 2 + g_threadIdx] =  input_actv_grad * (1 - input_actv * input_actv);
+	  i_cell_input_grad[BxH * 3 + g_threadIdx] = 
+	i_hidden_state_grad[BxH * 3 + g_threadIdx] = output_gate_grad * output_gate * (1 - output_gate);
+}
+
 template < typename DType >
 class CULSTMNonLinBlockOp : public Operator
 {
@@ -41,7 +159,7 @@ public:
 		CHECK_EQ( in_data.size(),  in_expected); // CellInput, HiddenState, CellState
 		CHECK_EQ(out_data.size(), out_expected); //            HiddenState, CellState
 
-		Stream < gpu > * cuda_stream = ctx.get_stream();
+		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 
 		Tensor < gpu, 2, DType >   i_cell_input =  in_data[int(EnumOpInputs ::  CellInput)].
 			get < gpu, 2, DType > (cuda_stream);
