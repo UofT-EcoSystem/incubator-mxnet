@@ -22,7 +22,7 @@ struct LSTMNonLinBlockParam : public dmlc::Parameter < LSTMNonLinBlockParam >
 {
 	// All parameters do not require explicit declaration.
 	// The reason is because they can be effectively inferred from the shape of the input data.
-	int batch_size, state_size;
+	unsigned batch_size, state_size;
 
 	DMLC_DECLARE_PARAMETER(LSTMNonLinBlockParam) {}
 };
@@ -111,13 +111,13 @@ public:
 		CHECK_EQ(ishape.ndim(), 2U) << "Input data should be rank-2 tensor of dim "
 			"[batch size, state size].";
 
-		int batch_size = ishape[0];
-		int state_size = ishape[1];
+		unsigned batch_size = ishape[0];
+		unsigned state_size = ishape[1] / 4;
 
 		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::HiddenState), 
-			Shape2(batch_size, state_size));
+			Shape2(batch_size, 4 * state_size));
 		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::  CellState),
-			Shape2(batch_size, state_size));
+			Shape2(batch_size,     state_size));
 
 		out_shape->clear();
 
@@ -137,7 +137,7 @@ public:
 
 		CHECK_NE(itype, -1) << "First input must have specified type.";
 
-		for (std::size_t i = 0; i < in_type->size(); ++i)
+		for (std::size_t i = 1; i < in_type->size(); ++i)
 		{
 			if ((*in_type)[i] == -1) 
 			{
@@ -181,8 +181,8 @@ public:
 		 * that is, ONLY variables that are returned in the list of dependencies
 		 * will be preserved by the forward pass for use in the backward pass.
 		 */
-		// Note that here we deliberately ignore the `in_data` and `out_data`.
-		return {out_grad[int(EnumOpOutputs::HiddenState)],
+		return { in_data[int(EnumOpInputs ::  CellState)],
+			out_grad[int(EnumOpOutputs::HiddenState)],
 			out_grad[int(EnumOpOutputs::  CellState)]};
 	}
 

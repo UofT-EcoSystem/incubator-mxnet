@@ -134,7 +134,12 @@ template < typename DType >
 class CULSTMNonLinBlockOp : public Operator
 {
 private:
-	LSTMNonLinBlockParam _param; bool _initialized = false;
+	LSTMNonLinBlockParam _param; 
+	
+	bool _initialized = false;
+
+	// ReserveSpace
+	Storage::Handle _reserved_space;
 public:
 	explicit CULSTMNonLinBlockOp(LSTMNonLinBlockParam param)
 	{
@@ -143,9 +148,30 @@ public:
 	
 	~CULSTMNonLinBlockOp()
 	{
-		// TODO: Free the storage allocated for ReserveSpace.
+		Storage::Get()->Free(_reserved_space);
 	}
 
+private:
+	void _Init(mshadow::Stream < gpu > * cuda_stream,
+	          const std::vector < TBlob > &  in_data,
+		  const std::vector < TBlob > & out_data)
+	{
+		using namespace mshadow;
+
+		CHECK_EQ(_initialized, false);
+
+		Tensor < gpu, 2, DType > i_cell_input = in_data[int(EnumOpInputs::CellInput)].
+			get < gpu, 2, DType > (cuda_stream);
+		
+		// infer the parameters from the cell input
+		_param.batch_size = i_cell_input.shape_[0];
+		_param.state_size = i_cell_input.shape_[1] / 4;
+		
+		// allocate the reserve space
+		_reserved_space = Storage::Get()->Alloc(_param.batch_size * 4 * _param.state_size * sizeof(DType), 
+		                                        Context::GPU());
+	}
+public:
 	virtual void  Forward(const OpContext & ctx,
 	                      const std::vector < TBlob > &  in_data,
 			      const std::vector < OpReqType > &  req,
@@ -180,9 +206,24 @@ public:
 
 		if (!_initialized)
 		{
-			// TODO: Allocate the memory for the reserved space.
+			_Init(cuda_stream, in_data, out_data);
 		}
-		// TODO: Forward kernel goes here.
+
+		const unsigned BxH = _param.batch_size * _param.state_size;
+
+		_cuda_fused_lstm_nonlin_block__forward < DType >
+			<<<
+				(BxH - 1) / 128 + 1, 128, 0, Stream < gpu > ::GetStream(cuda_stream)
+			>>> 
+			(
+				  i_cell_input.dptr_, 
+				i_hidden_state.dptr_,
+				  i_cell_state.dptr_,
+				ctx.is_train ? 
+					reinterpret_cast < DType * > (_reserved_space.dptr) : nullptr,
+				o_hidden_state.dptr_,
+				  o_cell_state.dptr_, BxH
+			);
 	}
 
 	virtual void Backward(const OpContext & ctx,
@@ -197,10 +238,10 @@ public:
 
 		std::size_t in_expected = 3, out_expected = 2;
 
-		// CHECK_EQ( in_data.size(),  in_expected);
+		CHECK_EQ( in_data.size(),  in_expected);
 		CHECK_EQ( in_grad.size(),  in_expected);
 		CHECK_EQ(     req.size(),  in_expected);
-		// CHECK_EQ(out_data.size(), out_expected);
+		CHECK_EQ(out_data.size(), out_expected);
 		CHECK_EQ(out_grad.size(), out_expected);
 
 		CHECK_NE(req[int(EnumOpInputs::  CellInput)], kAddTo) << "AddTo is not supported for "   "cell input.";
@@ -212,6 +253,8 @@ public:
 		Tensor < gpu, 2, DType >   i_cell_input_grad =  in_grad[int(EnumOpInputs ::  CellInput)].
 			get < gpu, 2, DType > (cuda_stream);
 		Tensor < gpu, 2, DType > i_hidden_state_grad =  in_grad[int(EnumOpInputs ::HiddenState)].
+			get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 2, DType >   i_cell_state      =  in_data[int(EnumOpInputs ::  CellState)].
 			get < gpu, 2, DType > (cuda_stream);
 		Tensor < gpu, 2, DType >   i_cell_state_grad =  in_grad[int(EnumOpInputs ::  CellState)].
 			get < gpu, 2, DType > (cuda_stream);
@@ -226,9 +269,22 @@ public:
 		CHECK_EQ(o_hidden_state_grad.CheckContiguous(), true);
 		CHECK_EQ(  o_cell_state_grad.CheckContiguous(), true);
 
-		// TODO: Backward kernel goes here.
-	}
+		const unsigned BxH = _param.batch_size * _param.state_size;
 
+		_cuda_fused_lstm_nonlin_block_backward < DType >
+			<<<
+				(BxH - 1) / 128 + 1, 128, 0, Stream < gpu > ::GetStream(cuda_stream)
+			>>> 
+			(
+				  i_cell_input_grad.dptr_,
+				i_hidden_state_grad.dptr_,
+				  i_cell_state     .dptr_,
+				  i_cell_state_grad.dptr_,
+				reinterpret_cast < DType * > (_reserved_space.dptr),
+				o_hidden_state_grad.dptr_,
+				  o_cell_state_grad.dptr_, BxH
+			);
+	}
 }; // class CULSTMNonLinBlockOp
 
 #endif // __CUDACC__
