@@ -68,7 +68,7 @@ private:
 	LSTMNonLinBlockParam _param;
 public:
 	LSTMNonLinBlockProp() {}
-	LSTMNonLinBlockProp(LSTMNonLinBlockParam param) : _param(param) {}
+	explicit LSTMNonLinBlockProp(LSTMNonLinBlockParam param) : _param(param) {}
 
 	std::vector < std::string > ListArguments() const override
 	{

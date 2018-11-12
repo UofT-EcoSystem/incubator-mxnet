@@ -1,4 +1,5 @@
 #include "lstm_nonlin_block-inl.h"
+#include "cu_lstm_nonlin_block-inl.h"
 
 namespace mxnet {
 	namespace op {
@@ -8,7 +9,7 @@ Operator * CreateOp < gpu > (LSTMNonLinBlockParam param, int dtype)
 {
 	Operator * op = nullptr;
 
-	MSHADOW_REAL_TYPE_SWITCH(dtype, DType, { op = nullptr });
+	MSHADOW_REAL_TYPE_SWITCH(dtype, DType, { op = nullptr; });
 
 	return op;
 }
