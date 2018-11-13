@@ -109,7 +109,7 @@ public:
 		if (ishape.ndim() ==  0) return false;
 
 		CHECK_EQ(ishape.ndim(), 2U) << "Input data should be rank-2 tensor of dim "
-			"[batch size, state size].";
+			"[batch size, 4 * state size].";
 
 		unsigned batch_size = ishape[0];
 		unsigned state_size = ishape[1] / 4;
@@ -121,8 +121,8 @@ public:
 
 		out_shape->clear();
 
-		out_shape->push_back((*in_shape)[int(EnumOpInputs::HiddenState)]);
-		out_shape->push_back((*in_shape)[int(EnumOpInputs::  CellState)]);
+		out_shape->push_back((*in_shape)[int(EnumOpInputs::CellState)]);
+		out_shape->push_back((*in_shape)[int(EnumOpInputs::CellState)]);
 
 		return true;
 	}
@@ -181,10 +181,33 @@ public:
 		 * that is, ONLY variables that are returned in the list of dependencies
 		 * will be preserved by the forward pass for use in the backward pass.
 		 */
-		return { in_data[int(EnumOpInputs ::  CellState)],
+		return {
+			// in_data[int(EnumOpInputs ::  CellState)],
 			out_grad[int(EnumOpOutputs::HiddenState)],
 			out_grad[int(EnumOpOutputs::  CellState)]};
 	}
+
+	// std::vector < std::pair < int, void * > >  ForwardInplaceOption(
+	// 	const std::vector < int >    &  in_data, 
+	// 	const std::vector < void * > & out_data) const override
+	// {
+	// 	return {std::make_pair(in_data[int(EnumOpInputs ::HiddenState)], 
+	// 	                      out_data[int(EnumOpOutputs::HiddenState)]),
+	// 		std::make_pair(in_data[int(EnumOpInputs ::  CellState)],
+	// 		              out_data[int(EnumOpOutputs::  CellState)])};
+	// }
+
+	// std::vector < std::pair < int, void * > > BackwardInplaceOption(
+	// 	const std::vector < int >    & out_grad,
+	// 	const std::vector < int >    &  in_data,
+	// 	const std::vector < int >    & out_data,
+	// 	const std::vector < void * > &  in_grad) const override
+	// {
+	// 	return {std::make_pair(out_grad[int(EnumOpOutputs::HiddenState)],
+	// 	                        in_grad[int(EnumOpInputs ::HiddenState)]),
+	// 		std::make_pair(out_grad[int(EnumOpOutputs::  CellState)],
+	// 		                in_grad[int(EnumOpInputs ::  CellState)])};
+	// }
 
 	std::vector < ResourceRequest >  ForwardResource(
 		const std::vector < TShape > & in_shape) const override

@@ -1,5 +1,4 @@
-#include "lstm_nonlin_block-inl.h"
-#include "cu_lstm_nonlin_block-inl.h"
+#include "cu_lstm_nonlin_block-inl.cuh"
 
 namespace mxnet {
 	namespace op {

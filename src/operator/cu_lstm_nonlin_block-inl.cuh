@@ -24,10 +24,11 @@ static __forceinline__ __device__ RealType __cu_sigmoid(RealType i)
  * @param1   i_cell_input [B x 4H]:  (Input) Input to the LSTM Cell from the Previous Layer
  * @param2 i_hidden_state [B x 4H]:  (Input) Hidden State from the Previous Time Step
  * @param3   i_cell_state [B x  H]:  (Input)   Cell State from the Previous Time Step
- * @param4 reserved_space [B x 5H]: (Output) Space reserved by the Forward Pass to facilitate Backward Pass Compute
+ * @param4 reserved_space [B x 4H]: (Output) Space reserved by the Forward Pass to facilitate Backward Pass Compute
  * @param5 o_hidden_state [B x  H]: (Output) Hidden State Output that goes to the Next Time Step and/or Layer
  * @param6   o_cell_state [B x  H]: (Output)   Cell State Output that goes to the Next Time Step and/or Layer
- * @param7 BxH: (Parameter) State Size x Batch Size, used to check whether the Thread Index goes Out of Bound
+ * @param7 batch_size: (Parameter) Batch Size
+ * @param8 state_size: (Parameter) State Size
  */
 template < typename RealType >
 static __global__ void _cuda_fused_lstm_nonlin_block__forward(
@@ -36,34 +37,43 @@ static __global__ void _cuda_fused_lstm_nonlin_block__forward(
 	const RealType * const __restrict__   i_cell_state,
 	      RealType * const __restrict__ reserved_space,
 	      RealType * const __restrict__ o_hidden_state,
-	      RealType * const __restrict__   o_cell_state, const unsigned BxH)
+	      RealType * const __restrict__   o_cell_state, 
+	const unsigned batch_size, const unsigned state_size)
 {
-	const unsigned g_threadIdx = threadIdx.x + blockIdx.x * blockDim.x;
+	const unsigned g_threadIdx = threadIdx.x + blockIdx.x * blockDim.x,
+		BxH = batch_size * state_size;
 
 	if (g_threadIdx >= BxH) { return ; }
 
-	RealType  input_gate = __cu_sigmoid(i_cell_input[0 * BxH + g_threadIdx] + 
-	                                  i_hidden_state[0 * BxH + g_threadIdx]);
-	RealType forget_gate = __cu_sigmoid(i_cell_input[1 * BxH + g_threadIdx] + 
-	                                  i_hidden_state[1 * BxH + g_threadIdx]);
-	RealType  input_actv =         tanh(i_cell_input[2 * BxH + g_threadIdx] + 
-	                                  i_hidden_state[2 * BxH + g_threadIdx]);
-	RealType output_gate = __cu_sigmoid(i_cell_input[3 * BxH + g_threadIdx] + 
-	                                  i_hidden_state[3 * BxH + g_threadIdx]);
+	const unsigned batch_idx_x4H_plus_state_idx = (g_threadIdx / state_size) * 4 * state_size + 
+	                                               g_threadIdx % state_size;
+	const unsigned batch_idx_x5H_plus_state_idx = (g_threadIdx / state_size) * 5 * state_size + 
+	                                               g_threadIdx % state_size;
+
+	RealType  input_gate = __cu_sigmoid(i_cell_input[batch_idx_x4H_plus_state_idx + 0 * state_size] + 
+	                                  i_hidden_state[batch_idx_x4H_plus_state_idx + 0 * state_size]);
+	RealType forget_gate = __cu_sigmoid(i_cell_input[batch_idx_x4H_plus_state_idx + 1 * state_size] + 
+	                                  i_hidden_state[batch_idx_x4H_plus_state_idx + 1 * state_size]);
+	RealType  input_actv =         tanh(i_cell_input[batch_idx_x4H_plus_state_idx + 2 * state_size] + 
+	                                  i_hidden_state[batch_idx_x4H_plus_state_idx + 2 * state_size]);
+	RealType output_gate = __cu_sigmoid(i_cell_input[batch_idx_x4H_plus_state_idx + 3 * state_size] + 
+	                                  i_hidden_state[batch_idx_x4H_plus_state_idx + 3 * state_size]);
+
+	RealType i_cell_state_reg = i_cell_state[g_threadIdx];
+	RealType o_cell_state_reg = forget_gate * i_cell_state_reg + input_actv * input_gate;
+
+	  o_cell_state[g_threadIdx] =      o_cell_state_reg;
+	o_hidden_state[g_threadIdx] = tanh(o_cell_state_reg) * output_gate;
 
 	if (reserved_space != nullptr)
 	{
 		// reserve the gates to be used in the backward pass
-		reserved_space[0 * BxH + g_threadIdx] =  input_gate;
-		reserved_space[1 * BxH + g_threadIdx] = forget_gate;
-		reserved_space[2 * BxH + g_threadIdx] =  input_actv;
-		reserved_space[3 * BxH + g_threadIdx] = output_gate;
+		reserved_space[batch_idx_x5H_plus_state_idx + 0 * state_size] =  input_gate;
+		reserved_space[batch_idx_x5H_plus_state_idx + 1 * state_size] = forget_gate;
+		reserved_space[batch_idx_x5H_plus_state_idx + 2 * state_size] =  input_actv;
+		reserved_space[batch_idx_x5H_plus_state_idx + 3 * state_size] = output_gate;
+		reserved_space[batch_idx_x5H_plus_state_idx + 4 * state_size] = i_cell_state_reg;
 	}
-
-	RealType cell_state = forget_gate * i_cell_state[g_threadIdx] + input_actv * input_gate;
-
-	  o_cell_state[g_threadIdx] =      cell_state;
-	o_hidden_state[g_threadIdx] = tanh(cell_state) * output_gate;
 }
 
 /**
@@ -75,24 +85,30 @@ template < typename RealType >
 static __global__ void _cuda_fused_lstm_nonlin_block_backward(
 	      RealType * const __restrict__   i_cell_input_grad,
 	      RealType * const __restrict__ i_hidden_state_grad,
-	const RealType * const __restrict__   i_cell_state,
+	// const RealType * const __restrict__   i_cell_state,
 	      RealType * const __restrict__   i_cell_state_grad,
 	const RealType * const __restrict__ reserved_space,
 	const RealType * const __restrict__ o_hidden_state_grad,
-	const RealType * const __restrict__   o_cell_state_grad, const unsigned BxH)
+	const RealType * const __restrict__   o_cell_state_grad,
+	const unsigned batch_size, const unsigned state_size)
 {
-	const unsigned g_threadIdx = threadIdx.x + blockIdx.x * blockDim.x;
+	const unsigned g_threadIdx = threadIdx.x + blockIdx.x * blockDim.x,
+		BxH = batch_size * state_size;
 
 	if (g_threadIdx >= BxH) { return ; }
 
+	const unsigned batch_idx_x4H_plus_state_idx = (g_threadIdx / state_size) * 4 * state_size + 
+	                                               g_threadIdx % state_size;
+	const unsigned batch_idx_x5H_plus_state_idx = (g_threadIdx / state_size) * 5 * state_size + 
+	                                               g_threadIdx % state_size;
+
 	// read the activations stored in the forward pass
-	RealType  input_gate = reserved_space[BxH * 0 + g_threadIdx];
-	RealType forget_gate = reserved_space[BxH * 1 + g_threadIdx];
-	RealType  input_actv = reserved_space[BxH * 2 + g_threadIdx];
-	RealType output_gate = reserved_space[BxH * 3 + g_threadIdx];
-	
-	RealType i_cell_state_reg  =      i_cell_state[g_threadIdx];
-	RealType   cell_state_actv = tanh(i_cell_state_reg);
+	RealType   input_gate = reserved_space[batch_idx_x5H_plus_state_idx + 0 * state_size];
+	RealType  forget_gate = reserved_space[batch_idx_x5H_plus_state_idx + 1 * state_size];
+	RealType   input_actv = reserved_space[batch_idx_x5H_plus_state_idx + 2 * state_size];
+	RealType  output_gate = reserved_space[batch_idx_x5H_plus_state_idx + 3 * state_size];
+	RealType i_cell_state = reserved_space[batch_idx_x5H_plus_state_idx + 4 * state_size];
+	RealType   cell_state_actv = tanh(i_cell_state);
 
 	//   o_cell_state[g_threadIdx] =      cell_state;
 	// o_hidden_state[g_threadIdx] = tanh(cell_state) * output_gate;
@@ -105,7 +121,7 @@ static __global__ void _cuda_fused_lstm_nonlin_block_backward(
 	RealType cell_state_grad = o_cell_state_grad[g_threadIdx] + cell_state_actv_grad * (1 - cell_state_actv * cell_state_actv);
 
 	// cell_state = forget_gate * i_cell_state[g_threadIdx] + input_actv * input_gate;
-	RealType  forget_gate_grad = cell_state_grad * i_cell_state_reg;
+	RealType  forget_gate_grad = cell_state_grad * i_cell_state;
 	RealType   input_actv_grad = cell_state_grad * input_gate;
 	RealType   input_gate_grad = cell_state_grad * input_actv;
 
@@ -120,14 +136,14 @@ static __global__ void _cuda_fused_lstm_nonlin_block_backward(
 	// RealType output_gate = __cu_sigmoid(i_cell_input[3 * BxH + g_threadIdx] + 
 	//                                   i_hidden_state[3 * BxH + g_threadIdx]);
 
-	  i_cell_input_grad[BxH * 0 + g_threadIdx] = 
-	i_hidden_state_grad[BxH * 0 + g_threadIdx] =  input_gate_grad *  input_gate * (1 -  input_gate);
-	  i_cell_input_grad[BxH * 1 + g_threadIdx] = 
-	i_hidden_state_grad[BxH * 1 + g_threadIdx] = forget_gate_grad * forget_gate * (1 - forget_gate);
-	  i_cell_input_grad[BxH * 2 + g_threadIdx] = 
-	i_hidden_state_grad[BxH * 2 + g_threadIdx] =  input_actv_grad * (1 - input_actv * input_actv);
-	  i_cell_input_grad[BxH * 3 + g_threadIdx] = 
-	i_hidden_state_grad[BxH * 3 + g_threadIdx] = output_gate_grad * output_gate * (1 - output_gate);
+	  i_cell_input_grad[batch_idx_x4H_plus_state_idx + 0 * state_size] = 
+	i_hidden_state_grad[batch_idx_x4H_plus_state_idx + 0 * state_size] =  input_gate_grad *  input_gate * (1 -  input_gate);
+	  i_cell_input_grad[batch_idx_x4H_plus_state_idx + 1 * state_size] = 
+	i_hidden_state_grad[batch_idx_x4H_plus_state_idx + 1 * state_size] = forget_gate_grad * forget_gate * (1 - forget_gate);
+	  i_cell_input_grad[batch_idx_x4H_plus_state_idx + 2 * state_size] = 
+	i_hidden_state_grad[batch_idx_x4H_plus_state_idx + 2 * state_size] =  input_actv_grad * (1 - input_actv * input_actv);
+	  i_cell_input_grad[batch_idx_x4H_plus_state_idx + 3 * state_size] = 
+	i_hidden_state_grad[batch_idx_x4H_plus_state_idx + 3 * state_size] = output_gate_grad * output_gate * (1 - output_gate);
 }
 
 template < typename DType >
@@ -148,7 +164,7 @@ public:
 	
 	~CULSTMNonLinBlockOp()
 	{
-		Storage::Get()->Free(_reserved_space);
+		// Storage::Get()->Free(_reserved_space);
 	}
 
 private:
@@ -168,8 +184,9 @@ private:
 		_param.state_size = i_cell_input.shape_[1] / 4;
 		
 		// allocate the reserve space
-		_reserved_space = Storage::Get()->Alloc(_param.batch_size * 4 * _param.state_size * sizeof(DType), 
-		                                        Context::GPU());
+		// _reserved_space = Storage::Get()->Alloc(_param.batch_size * 4 * _param.state_size * sizeof(DType), 
+		//                                         Context::GPU());
+		_initialized = true;
 	}
 public:
 	virtual void  Forward(const OpContext & ctx,
@@ -209,6 +226,12 @@ public:
 			_Init(cuda_stream, in_data, out_data);
 		}
 
+		if (ctx.is_train)
+		{
+			_reserved_space = Storage::Get()->Alloc(_param.batch_size * 5 * _param.state_size * sizeof(DType), 
+		                                                Context::GPU());
+		}
+
 		const unsigned BxH = _param.batch_size * _param.state_size;
 
 		_cuda_fused_lstm_nonlin_block__forward < DType >
@@ -222,7 +245,8 @@ public:
 				ctx.is_train ? 
 					reinterpret_cast < DType * > (_reserved_space.dptr) : nullptr,
 				o_hidden_state.dptr_,
-				  o_cell_state.dptr_, BxH
+				  o_cell_state.dptr_,
+				_param.batch_size, _param.state_size
 			);
 	}
 
@@ -254,8 +278,8 @@ public:
 			get < gpu, 2, DType > (cuda_stream);
 		Tensor < gpu, 2, DType > i_hidden_state_grad =  in_grad[int(EnumOpInputs ::HiddenState)].
 			get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType >   i_cell_state      =  in_data[int(EnumOpInputs ::  CellState)].
-			get < gpu, 2, DType > (cuda_stream);
+		// Tensor < gpu, 2, DType >   i_cell_state      =  in_data[int(EnumOpInputs ::  CellState)].
+		// 	get < gpu, 2, DType > (cuda_stream);
 		Tensor < gpu, 2, DType >   i_cell_state_grad =  in_grad[int(EnumOpInputs ::  CellState)].
 			get < gpu, 2, DType > (cuda_stream);
 		Tensor < gpu, 2, DType > o_hidden_state_grad = out_grad[int(EnumOpOutputs::HiddenState)].
@@ -278,12 +302,15 @@ public:
 			(
 				  i_cell_input_grad.dptr_,
 				i_hidden_state_grad.dptr_,
-				  i_cell_state     .dptr_,
+				//   i_cell_state     .dptr_,
 				  i_cell_state_grad.dptr_,
 				reinterpret_cast < DType * > (_reserved_space.dptr),
 				o_hidden_state_grad.dptr_,
-				  o_cell_state_grad.dptr_, BxH
+				  o_cell_state_grad.dptr_,
+				_param.batch_size, _param.state_size
 			);
+		
+		Storage::Get()->Free(_reserved_space);
 	}
 }; // class CULSTMNonLinBlockOp
 
