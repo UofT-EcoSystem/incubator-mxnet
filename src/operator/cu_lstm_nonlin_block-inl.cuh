@@ -266,9 +266,12 @@ public:
 		CHECK_EQ(out_data.size(), out_expected);
 		CHECK_EQ(out_grad.size(), out_expected);
 
-		CHECK_NE(req[int(EnumOpInputs::  CellInput)], kAddTo) << "AddTo is not supported for "   "cell input.";
-		CHECK_NE(req[int(EnumOpInputs::HiddenState)], kAddTo) << "AddTo is not supported for " "hidden state.";
-		CHECK_NE(req[int(EnumOpInputs::  CellState)], kAddTo) << "AddTo is not supported for "   "cell state.";	
+		CHECK_NE(req[int(EnumOpInputs::  CellInput)], kAddTo) << "AddTo is not supported for "   
+			  "cell input.";
+		CHECK_NE(req[int(EnumOpInputs::HiddenState)], kAddTo) << "AddTo is not supported for " 
+			"hidden state.";
+		CHECK_NE(req[int(EnumOpInputs::  CellState)], kAddTo) << "AddTo is not supported for " 
+			  "cell state.";	
 
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 	
