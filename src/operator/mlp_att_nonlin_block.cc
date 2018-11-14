@@ -26,8 +26,8 @@ DMLC_REGISTER_PARAMETER(MlpAttNonLinBlockParam);
 
 MXNET_REGISTER_OP_PROPERTY(MlpAttNonLinBlock, MlpAttNonLinBlockProp)
 	.describe("Applied the MLP attention non-linear block to the source and query hidden state.")
-	.add_argument(  "SrcHidden", "NDArray-or-Symbol", "Source Hidden State")
-	.add_argument("QueryHidden", "NDArray-or-Symbol",  "Query Hidden State")
+	.add_argument("SrcHidden", "NDArray-or-Symbol", "Source Hidden State")
+	.add_argument("QryHidden", "NDArray-or-Symbol",  "Query Hidden State")
 	.add_arguments(MlpAttNonLinBlockParam::__FIELDS__());
 
 	} // namespace op

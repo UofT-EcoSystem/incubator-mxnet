@@ -10,7 +10,7 @@ namespace mxnet {
 	namespace op {
 		namespace {
 
-enum class EnumOpInputs  {SrcHidden, QueryHidden};
+enum class EnumOpInputs  {SrcHidden, QryHidden};
 enum class EnumOpOutputs {AttHidden};
 // NO Need for Temporary Workspace
 
@@ -75,7 +75,7 @@ public:
 
 	std::vector < std::string > ListArguments() const override
 	{
-		return {"SrcHidden", "QueryHidden"};
+		return {"SrcHidden", "QryHidden"};
 	}
 	std::vector < std::string > ListOutputs  () const override 
 	{
@@ -114,7 +114,7 @@ public:
 		unsigned seq_len    = src_hidden_shape[1];
 		unsigned state_size = src_hidden_shape[2];
 
-		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::QueryHidden),
+		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::QryHidden),
 			Shape2(batch_size, state_size));
 		
 		out_shape->clear();
