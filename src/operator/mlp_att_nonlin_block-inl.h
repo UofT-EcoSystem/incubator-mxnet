@@ -23,7 +23,7 @@ struct MlpAttNonLinBlockParam : public dmlc::Parameter < MlpAttNonLinBlockParam 
 	unsigned batch_size, seq_len, state_size;
 
 	DMLC_DECLARE_PARAMETER(MlpAttNonLinBlockParam) {}
-}
+};
 
 template < typename xpu, typename DType >
 class MlpAttNonLinBlockOp : public Operator
@@ -100,21 +100,21 @@ public:
 		CHECK_EQ(in_shape->size(), 2U);
 
 		// query the input shape and perform shape inference
-		const TShape & src_hidden = (*in_shape)[int(EnumOpInputs::SrcHidden)];
+		const TShape & src_hidden_shape = (*in_shape)[int(EnumOpInputs::SrcHidden)];
 
-		CHECK_EQ(src_hidden.ndim(), 3U) << "Source Hidden should be rank-3 tensor of dim"
+		CHECK_EQ(src_hidden_shape.ndim(), 3U) << "Source Hidden should be rank-3 tensor of dim"
 			"[batch size, seq len, state size].";
 
-		unsigned batch_size = src_hidden[0];
-		unsigned seq_len    = src_hidden[1];
-		unsigned state_size = src_hidden[2];
+		unsigned batch_size = src_hidden_shape[0];
+		unsigned seq_len    = src_hidden_shape[1];
+		unsigned state_size = src_hidden_shape[2];
 
 		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::QueryHidden),
 			Shape2(batch_size, state_size));
 		
 		out_shape->clear();
 
-		out_shape->push_back((*in_shape)[int(EnumOpInputs::QueryHidden)]);
+		out_shape->push_back((*in_shape)[int(EnumOpInputs::QueryHidden)]); // AttHidden
 
 		return true;
 	}
@@ -124,25 +124,27 @@ public:
 	{
 		CHECK_GE(in_type->size(), 1U);
 
-		CHECK_NE(itype, -1) << "First input must have specified type.";
+		int src_hidden_type = (*in_type)[0];
+
+		CHECK_NE(src_hidden_type, -1) << "First input must have specified type.";
 
 		for (std::size_t i = 1; i < in_type->size(); ++i)
 		{
 			if ((*in_type)[i] == -1) 
 			{
-				(*in_type)[i] = itype;
+				(*in_type)[i] = src_hidden_type;
 			}
 			else
 			{
-				CHECK_EQ((*in_type)[i], itype) << "This layer requires uniform type. " << 
-					"Expected " << itype << " v.s. given " << 
+				CHECK_EQ((*in_type)[i], src_hidden_type) << "This layer requires uniform type. " << 
+					"Expected " << src_hidden_type << " v.s. given " << 
 					(*in_type)[i] << " at " << ListArguments()[i];
 			}
 		}
 
 		out_type->clear();
 
-		out_type->push_back(itype); // AttHidden
+		out_type->push_back(src_hidden_type); // AttHidden
 		
 		return true;
 	}
@@ -162,7 +164,7 @@ public:
 		const std::vector < int > &  in_data,
 		const std::vector < int > & out_data) const override
 	{
-		return { out_grad[int(EnumOpOutputs::AttHidden)]; }
+		return { out_grad[int(EnumOpOutputs::AttHidden)] };
 	}
 
 	std::vector < ResourceRequest >  ForwardResource(

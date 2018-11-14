@@ -1,0 +1,17 @@
+#include "mlp_att_nonlin_block-inl.h"
+
+namespace mxnet {
+	namespace op {
+
+template <> 
+Operator * CreateOp < gpu > (MlpAttNonLinBlockParam param, int dtype)
+{
+	Operator * op = nullptr;
+
+	MSHADOW_SGL_DBL_TYPE_SWITCH(dtype, DType, { op = nullptr; });
+
+	return op;
+}
+
+	} // namespace op
+} // namespace mxnet
