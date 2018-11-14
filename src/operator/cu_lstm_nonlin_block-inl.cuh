@@ -5,7 +5,6 @@
 #include <mxnet/storage.h>
 
 #include "lstm_nonlin_block-inl.h"
-// #include "lstm_nonlin_block-impl.h"
 
 namespace mxnet {
 	namespace op {
@@ -161,7 +160,6 @@ public:
 	{
 		_param = param;
 	}
-	
 	~CULSTMNonLinBlockOp()
 	{
 		// Storage::Get()->Free(_reserved_space);
@@ -169,8 +167,8 @@ public:
 
 private:
 	void _Init(mshadow::Stream < gpu > * cuda_stream,
-	          const std::vector < TBlob > &  in_data,
-		  const std::vector < TBlob > & out_data)
+	           const std::vector < TBlob > &  in_data,
+		   const std::vector < TBlob > & out_data)
 	{
 		using namespace mshadow;
 
