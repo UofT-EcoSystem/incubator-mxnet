@@ -1,4 +1,4 @@
-#include "mlp_att_nonlin_block-inl.h"
+#include "cu_mlp_att_nonlin_block-inl.cuh"
 
 namespace mxnet {
 	namespace op {
