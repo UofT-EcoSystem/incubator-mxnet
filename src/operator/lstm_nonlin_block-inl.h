@@ -78,7 +78,6 @@ public:
 	{
 		return {"HiddenState", "CellState"};
 	}
-
 	int NumOutputs() const override 
 	{
 		return 2;
@@ -89,7 +88,6 @@ public:
 	{
 		_param.Init(kwargs);
 	}
-
 	std::map < std::string, std::string > GetParams() const override
 	{
 		return _param.__DICT__();
@@ -106,8 +104,6 @@ public:
 		// query the input shape and perform shape inference
 		const TShape & ishape = (*in_shape)[int(EnumOpInputs::CellInput)];
 
-		if (ishape.ndim() ==  0) return false;
-
 		CHECK_EQ(ishape.ndim(), 2U) << "Input data should be rank-2 tensor of dim "
 			"[batch size, 4 * state size].";
 
@@ -121,15 +117,14 @@ public:
 
 		out_shape->clear();
 
-		out_shape->push_back((*in_shape)[int(EnumOpInputs::CellState)]);
-		out_shape->push_back((*in_shape)[int(EnumOpInputs::CellState)]);
+		out_shape->push_back((*in_shape)[int(EnumOpInputs::CellState)]); // HiddenState
+		out_shape->push_back((*in_shape)[int(EnumOpInputs::CellState)]); //   CellState
 
 		return true;
 	}
-
-	bool InferType(std::vector < int > *  in_type,
-	               std::vector < int > * out_type,
-	               std::vector < int > * aux_type) const override
+	bool InferType (std::vector < int > *  in_type,
+	                std::vector < int > * out_type,
+	                std::vector < int > * aux_type) const override
 	{
 		CHECK_GE(in_type->size(), 1U);
 
@@ -187,27 +182,29 @@ public:
 			out_grad[int(EnumOpOutputs::  CellState)]};
 	}
 
-	// std::vector < std::pair < int, void * > >  ForwardInplaceOption(
-	// 	const std::vector < int >    &  in_data, 
-	// 	const std::vector < void * > & out_data) const override
-	// {
-	// 	return {std::make_pair(in_data[int(EnumOpInputs ::HiddenState)], 
-	// 	                      out_data[int(EnumOpOutputs::HiddenState)]),
-	// 		std::make_pair(in_data[int(EnumOpInputs ::  CellState)],
-	// 		              out_data[int(EnumOpOutputs::  CellState)])};
-	// }
+	/*
+	std::vector < std::pair < int, void * > >  ForwardInplaceOption(
+		const std::vector < int >    &  in_data, 
+		const std::vector < void * > & out_data) const override
+	{
+		return {std::make_pair(in_data[int(EnumOpInputs ::HiddenState)], 
+		                      out_data[int(EnumOpOutputs::HiddenState)]),
+			std::make_pair(in_data[int(EnumOpInputs ::  CellState)],
+			              out_data[int(EnumOpOutputs::  CellState)])};
+	}
 
-	// std::vector < std::pair < int, void * > > BackwardInplaceOption(
-	// 	const std::vector < int >    & out_grad,
-	// 	const std::vector < int >    &  in_data,
-	// 	const std::vector < int >    & out_data,
-	// 	const std::vector < void * > &  in_grad) const override
-	// {
-	// 	return {std::make_pair(out_grad[int(EnumOpOutputs::HiddenState)],
-	// 	                        in_grad[int(EnumOpInputs ::HiddenState)]),
-	// 		std::make_pair(out_grad[int(EnumOpOutputs::  CellState)],
-	// 		                in_grad[int(EnumOpInputs ::  CellState)])};
-	// }
+	std::vector < std::pair < int, void * > > BackwardInplaceOption(
+		const std::vector < int >    & out_grad,
+		const std::vector < int >    &  in_data,
+		const std::vector < int >    & out_data,
+		const std::vector < void * > &  in_grad) const override
+	{
+		return {std::make_pair(out_grad[int(EnumOpOutputs::HiddenState)],
+		                        in_grad[int(EnumOpInputs ::HiddenState)]),
+			std::make_pair(out_grad[int(EnumOpOutputs::  CellState)],
+			                in_grad[int(EnumOpInputs ::  CellState)])};
+	}
+	 */
 
 	std::vector < ResourceRequest >  ForwardResource(
 		const std::vector < TShape > & in_shape) const override
