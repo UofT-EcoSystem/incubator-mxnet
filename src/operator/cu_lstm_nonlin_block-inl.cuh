@@ -202,16 +202,16 @@ public:
 
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 
-		Tensor < gpu, 2, DType >   i_cell_input =  in_data[int(EnumOpInputs ::  CellInput)].
-			get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType > i_hidden_state =  in_data[int(EnumOpInputs ::HiddenState)].
-			get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType >   i_cell_state =  in_data[int(EnumOpInputs ::  CellState)].
-			get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType > o_hidden_state = out_data[int(EnumOpOutputs::HiddenState)].
-			get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType >   o_cell_state = out_data[int(EnumOpOutputs::  CellState)].
-			get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 2, DType >   i_cell_input =  in_data[int(EnumOpInputs ::  CellInput)]
+			.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 2, DType > i_hidden_state =  in_data[int(EnumOpInputs ::HiddenState)]
+			.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 2, DType >   i_cell_state =  in_data[int(EnumOpInputs ::  CellState)]
+			.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 2, DType > o_hidden_state = out_data[int(EnumOpOutputs::HiddenState)]
+			.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 2, DType >   o_cell_state = out_data[int(EnumOpOutputs::  CellState)]
+			.get < gpu, 2, DType > (cuda_stream);
 
 		CHECK_EQ(  i_cell_input.CheckContiguous(), true);
 		CHECK_EQ(i_hidden_state.CheckContiguous(), true);
@@ -275,18 +275,18 @@ public:
 
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 	
-		Tensor < gpu, 2, DType >   i_cell_input_grad =  in_grad[int(EnumOpInputs ::  CellInput)].
-			get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType > i_hidden_state_grad =  in_grad[int(EnumOpInputs ::HiddenState)].
-			get < gpu, 2, DType > (cuda_stream);
-		// Tensor < gpu, 2, DType >   i_cell_state      =  in_data[int(EnumOpInputs ::  CellState)].
-		// 	get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType >   i_cell_state_grad =  in_grad[int(EnumOpInputs ::  CellState)].
-			get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType > o_hidden_state_grad = out_grad[int(EnumOpOutputs::HiddenState)].
-			get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType >   o_cell_state_grad = out_grad[int(EnumOpOutputs::  CellState)].
-			get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 2, DType >   i_cell_input_grad =  in_grad[int(EnumOpInputs ::  CellInput)]
+			.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 2, DType > i_hidden_state_grad =  in_grad[int(EnumOpInputs ::HiddenState)]
+			.get < gpu, 2, DType > (cuda_stream);
+		// Tensor < gpu, 2, DType >   i_cell_state      =  in_data[int(EnumOpInputs ::  CellState)]
+		// 	.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 2, DType >   i_cell_state_grad =  in_grad[int(EnumOpInputs ::  CellState)]
+			.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 2, DType > o_hidden_state_grad = out_grad[int(EnumOpOutputs::HiddenState)]
+			.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 2, DType >   o_cell_state_grad = out_grad[int(EnumOpOutputs::  CellState)]
+			.get < gpu, 2, DType > (cuda_stream);
 
 		CHECK_EQ(  i_cell_input_grad.CheckContiguous(), true);
 		CHECK_EQ(i_hidden_state_grad.CheckContiguous(), true);
