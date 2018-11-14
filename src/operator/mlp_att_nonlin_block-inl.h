@@ -18,8 +18,6 @@ enum class EnumOpOutputs {AttHidden};
 
 struct MlpAttNonLinBlockParam : public dmlc::Parameter < MlpAttNonLinBlockParam >
 {
-	// All parameters do not require explicit declaration.
-	// The reason is because they can be effectively inferred from the shape of the input data.
 	unsigned batch_size, seq_len, state_size;
 
 	bool layer_norm;

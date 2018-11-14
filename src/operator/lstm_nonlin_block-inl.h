@@ -20,8 +20,6 @@ enum class EnumOpOutputs            {HiddenState, CellState};
 
 struct LSTMNonLinBlockParam : public dmlc::Parameter < LSTMNonLinBlockParam >
 {
-	// All parameters do not require explicit declaration.
-	// The reason is because they can be effectively inferred from the shape of the input data.
 	unsigned batch_size, state_size;
 
 	DMLC_DECLARE_PARAMETER(LSTMNonLinBlockParam) {}
