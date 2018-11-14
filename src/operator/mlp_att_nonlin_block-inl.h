@@ -77,7 +77,7 @@ public:
 
 	std::vector < std::string > ListArguments() const override
 	{
-		return {"AttHidden", "QueryHidden"};
+		return {"SrcHidden", "QueryHidden"};
 	}
 	std::vector < std::string > ListOutputs  () const override 
 	{
@@ -121,7 +121,7 @@ public:
 		
 		out_shape->clear();
 
-		out_shape->push_back((*in_shape)[int(EnumOpInputs::QueryHidden)]); // AttHidden
+		out_shape->push_back((*in_shape)[int(EnumOpInputs::SrcHidden)]); // AttHidden
 
 		return true;
 	}
@@ -185,15 +185,15 @@ public:
 		return {};
 	}
 
-	Operator * CreateOperator(Context ctx) const override
+	Operator * CreateOperator  (Context ctx) const override
 	{
 		LOG(FATAL) << "Not Implemented";
 		
 		return nullptr;
   	}
-	Operator* CreateOperatorEx(Context ctx, 
-				   std::vector < TShape > * in_shape,
-        			   std::vector < int >    * in_type) const override;
+	Operator * CreateOperatorEx(Context ctx, 
+				    std::vector < TShape > * in_shape,
+        			    std::vector < int >    * in_type) const override;
 }; // class MlpAttNonLinBlockProp
 
 #endif // DMLC_USE_CXX11
