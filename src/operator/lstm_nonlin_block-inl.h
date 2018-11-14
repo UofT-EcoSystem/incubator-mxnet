@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vector>
+// #include <vector>
 
 #include <dmlc/logging.h>
 #include <dmlc/parameter.h>
@@ -14,7 +14,7 @@ namespace mxnet {
 
 enum class EnumOpInputs  {CellInput, HiddenState, CellState};
 enum class EnumOpOutputs            {HiddenState, CellState};
-// NO Need for Workspace or Reserve Space
+// NO Need for Temporary Workspace
 
 		} // anonymous namespace
 
