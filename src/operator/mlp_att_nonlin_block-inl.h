@@ -22,7 +22,14 @@ struct MlpAttNonLinBlockParam : public dmlc::Parameter < MlpAttNonLinBlockParam 
 	// The reason is because they can be effectively inferred from the shape of the input data.
 	unsigned batch_size, seq_len, state_size;
 
-	DMLC_DECLARE_PARAMETER(MlpAttNonLinBlockParam) {}
+	bool layer_norm;
+
+	DMLC_DECLARE_PARAMETER(MlpAttNonLinBlockParam)
+	{
+		DMLC_DECLARE_PARAMETER(layer_norm)
+			.describe("Whether to perform layer normalization after "
+			          "broadcast add query to source hidden state.")
+	}
 };
 
 template < typename xpu, typename DType >
