@@ -12,8 +12,8 @@ namespace mxnet {
 	namespace op {
 		namespace {
 
-enum class EnumOpInputs  {CellInput, HiddenState, CellState};
-enum class EnumOpOutputs            {HiddenState, CellState};
+enum class EnumOpInputs  { CellInput, HiddenState, CellState };
+enum class EnumOpOutputs            { HiddenState, CellState };
 // NO Need for Temporary Workspace
 
 		} // anonymous namespace
