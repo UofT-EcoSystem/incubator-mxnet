@@ -11,14 +11,14 @@ namespace mxnet {
 		namespace {
 
 enum class EnumOpInputs  {SrcHidden, QryHidden};
-enum class EnumOpOutputs {AttHidden};
+enum class EnumOpOutputs {AttScores};
 // NO Need for Temporary Workspace
 
 		} // namespace 
 
 struct MlpAttNonLinBlockParam : public dmlc::Parameter < MlpAttNonLinBlockParam >
 {
-	unsigned batch_size, seq_len, state_size;
+	unsigned batch_size, seq_length, state_size;
 
 	bool layer_norm;
 
@@ -79,11 +79,11 @@ public:
 	}
 	std::vector < std::string > ListOutputs  () const override 
 	{
-		return {"AttHidden"};
+		return {"AttScores"};
 	}
 	int NumOutputs() const override 
 	{
-		return 2;
+		return 1;
 	}
 
 	void Init(const std::vector < std::pair < std::string,
@@ -108,10 +108,10 @@ public:
 		const TShape & src_hidden_shape = (*in_shape)[int(EnumOpInputs::SrcHidden)];
 
 		CHECK_EQ(src_hidden_shape.ndim(), 3U) << "Source Hidden should be rank-3 tensor of dim"
-			"[batch size, seq len, state size].";
+			"[batch size, seq length, state size].";
 
 		unsigned batch_size = src_hidden_shape[0];
-		unsigned seq_len    = src_hidden_shape[1];
+		// unsigned seq_length = src_hidden_shape[1];
 		unsigned state_size = src_hidden_shape[2];
 
 		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::QryHidden),
@@ -119,7 +119,11 @@ public:
 		
 		out_shape->clear();
 
-		out_shape->push_back((*in_shape)[int(EnumOpInputs::SrcHidden)]); // AttHidden
+		TShape att_scores_shape = src_hidden_shape;
+
+		att_scores_shape[2] = 1;
+
+		out_shape->push_back(att_scores_shape); // AttScores
 
 		return true;
 	}
@@ -149,7 +153,7 @@ public:
 
 		out_type->clear();
 
-		out_type->push_back(src_hidden_type); // AttHidden
+		out_type->push_back(src_hidden_type); // AttScores
 		
 		return true;
 	}
@@ -169,7 +173,7 @@ public:
 		const std::vector < int > &  in_data,
 		const std::vector < int > & out_data) const override
 	{
-		return { out_grad[int(EnumOpOutputs::AttHidden)] };
+		return { out_grad[int(EnumOpOutputs::AttScores)] };
 	}
 
 	std::vector < ResourceRequest >  ForwardResource(
