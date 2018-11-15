@@ -10,7 +10,7 @@ namespace mxnet {
 	namespace op {
 		namespace {
 
-enum class EnumOpInputs  {SrcHidden, QryHidden};
+enum class EnumOpInputs  {SrcHidden, QryHidden, H2SWeight};
 enum class EnumOpOutputs {AttScores};
 // NO Need for Temporary Workspace
 
@@ -102,7 +102,7 @@ public:
 	{
 		using namespace mshadow;
 
-		CHECK_EQ(in_shape->size(), 2U);
+		CHECK_EQ(in_shape->size(), 3U); // SrcHidden, QryHidden, H2SWeight
 
 		// query the input shape and perform shape inference
 		const TShape & src_hidden_shape = (*in_shape)[int(EnumOpInputs::SrcHidden)];
@@ -116,12 +116,17 @@ public:
 
 		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::QryHidden),
 			Shape2(batch_size, state_size));
+		// According to the documentation provided by MXNet,
+		// `FullyConnected` layers are implemented in $Y = XW^T$, where 
+		// $X$ is of dimension $B\times H$ and $W$ is of dimension $H'\times H$.
+		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::H2SWeight),
+			Shape2(         1, state_size));
 		
 		out_shape->clear();
 
 		TShape att_scores_shape = src_hidden_shape;
 
-		att_scores_shape[2] = 1;
+		att_scores_shape[2] = 1; // [batch_size x seq_length x 1]
 
 		out_shape->push_back(att_scores_shape); // AttScores
 
