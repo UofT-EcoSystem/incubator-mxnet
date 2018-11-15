@@ -97,7 +97,7 @@ public:
 	{
 		using namespace mshadow;
 
-		CHECK_EQ(in_shape->size(), 3U);
+		CHECK_EQ(in_shape->size(), 3U); // CellInput, HiddenState, CellState
 
 		// query the input shape and perform shape inference
 		const TShape & ishape = (*in_shape)[int(EnumOpInputs::CellInput)];
