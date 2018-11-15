@@ -8,7 +8,7 @@ Operator * CreateOp < gpu > (MlpAttNonLinBlockParam param, int dtype)
 {
 	Operator * op = nullptr;
 
-	MSHADOW_SGL_DBL_TYPE_SWITCH(dtype, DType, { op = nullptr; });
+	MSHADOW_SGL_DBL_TYPE_SWITCH(dtype, DType, { op = new CUMlpAttNonLinBlockOp < DType > (param); });
 
 	return op;
 }
