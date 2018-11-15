@@ -14,33 +14,35 @@ namespace mxnet {
 
 template < typename RealType >
 static __forceinline__ __device__ void __cu_reduce_sum(
-	volatile RealType * const __restrict__ reduced_sum, 
-	         RealType                      value)
+	volatile RealType * const __restrict__ svmem_reduced_sum, 
+	         RealType                      local_value)
 {
 	namespace cg = cooperative_groups;
 
 	RealType local_sum;
 
 	cg::thread_block this_cta = cg::this_thread_block();
-	cg::sync(this_cta);
-	// up to this point, the content of shared memory has been initialized with local variable
+
+	svmem_reduced_sum[threadIdx.x] = local_value;
+	cg::sync(this_cta); // up to this point, the content of shared memory has been initialized with local variable
 	// =========================================================================================
 	// do reduction in shared mem
 	if ((blockDim.x >= 512) && (threadIdx.x < 256)) 
-		reduced_sum[threadIdx.x] = local_sum = local_sum + reduced_sum[threadIdx.x + 256];
+		svmem_reduced_sum[threadIdx.x] = local_sum = local_sum + svmem_reduced_sum[threadIdx.x + 256];
 	cg::sync(this_cta);
     	if ((blockDim.x >= 256) && (threadIdx.x < 128))
-		reduced_sum[threadIdx.x] = local_sum = local_sum + reduced_sum[threadIdx.x + 128];
+		svmem_reduced_sum[threadIdx.x] = local_sum = local_sum + svmem_reduced_sum[threadIdx.x + 128];
 	cg::sync(this_cta);
 	if ((blockDim.x >= 128) && (threadIdx.x <  64))
-		reduced_sum[threadIdx.x] = local_sum = local_sum + reduced_sum[threadIdx.x +  64];
+		svmem_reduced_sum[threadIdx.x] = local_sum = local_sum + svmem_reduced_sum[threadIdx.x +  64];
 	cg::sync(this_cta);
-
+	// =========================================================================================
+	// further reduction will be done within a wrap, therefore no cta-level synchronization is needed
 	if (threadIdx.x < 32)
 	{
 		cg::coalesced_group active_threads = cg::coalesced_threads();
 
-		if (blockDim.x >= 64) local_sum += reduced_sum[threadIdx.x + 32];
+		if (blockDim.x >= 64) local_sum += svmem_reduced_sum[threadIdx.x + 32];
 
 #pragma unroll
 		for (int offset = warpSize / 2; offset > 0; offset /= 2)
@@ -48,27 +50,22 @@ static __forceinline__ __device__ void __cu_reduce_sum(
 			local_sum += active_threads.shfl_down(local_sum, offset);
 		}
 	}
-	if (threadIdx.x == 0) reduced_sum[0] = local_sum;
+	if (threadIdx.x == 0) svmem_reduced_sum[0] = local_sum;
 	cg::sync(this_cta);
 }
 
 /**
  * Forward Pass of the MLP Attention Layer Nonlinear Block
  * This kernel shall be launched using the parameter <<< (B, T), H >>>
- * @param1 src_hidden [B x T x H]:  (Input)    Source Hidden State
- * @param2 qry_hidden [B     x H]:  (Input)     Query Hidden State
- * @param3 reserved_space
- * @param4 att_hidden [B x T x H]: (Output) Attention Hidden State
- * @param5 layer_norm: (Hyper-parameter) Whether to perform Layer Normalization
- * @param6 batch_size: (Parameter) Batch Size
- * @param7 seq_length: (Parameter) Sequence Length
- * @param8 state_size: (Parameter) State Size
+ * @param1 src_hidden [B x T x H]:  (Input) Source Hidden State
+ * @param2 qry_hidden [B     x H]:  (Input)  Query Hidden State
+ * @param3 att_hidden [B x T x H]: (Output) Attention Hidden State
+ * @param4 layer_norm: (Parameter) Whether to perform Layer Normalization
  */
 template < typename RealType >
 static __global__ void _cuda_fused_mlp_att_nonlin_block__forward(
 	const RealType * const __restrict__ src_hidden,
 	const RealType * const __restrict__ qry_hidden,
-	//       RealType * const __restrict__ reserved_space,
 	      RealType * const __restrict__ att_hidden, const bool layer_norm)
 {
 	/*
@@ -88,9 +85,19 @@ static __global__ void _cuda_fused_mlp_att_nonlin_block__forward(
                 attention_hidden = self._ln.normalize(attention_hidden)
 	 */
 
+	extern __shared__ volatile RealType svmem_reduced_sum[];
+
 	if (layer_norm)
 	{
-		
+		__cu_reduce_sum(svmem_reduced_sum,  att_hidden_reg);
+		RealType exp_X = svmem_reduced_sum[0] / blockDim.x; // EXP[X]
+		__cu_reduce_sum(svmem_reduced_sum, (att_hidden_reg - exp_X) *
+		                                   (att_hidden_reg - exp_X));
+		RealType var_X = svmem_reduced_sum[0] / blockDim.x; // VAR[X]
+	
+		// perform layer normalization
+		att_hidden_reg = att_hidden_reg - exp_X;
+		att_hidden_reg = att_hidden_reg / sqrt(var_X);
 	}
 
 	/*
