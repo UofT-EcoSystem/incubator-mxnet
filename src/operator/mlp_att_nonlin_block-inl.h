@@ -10,9 +10,9 @@ namespace mxnet {
 	namespace op {
 		namespace {
 
-enum class EnumOpInputs  {SrcHidden, QryHidden, H2SWeight};
-enum class EnumOpOutputs {AttScores};
-// NO Need for Temporary Workspace
+enum class EnumOpInputs    { SrcHidden, QryHidden, H2SWeight };
+enum class EnumOpOutputs   { AttScores };
+enum class EnumOpWorkspace { Workspace };
 
 		} // namespace 
 
@@ -178,18 +178,23 @@ public:
 		const std::vector < int > &  in_data,
 		const std::vector < int > & out_data) const override
 	{
-		return { out_grad[int(EnumOpOutputs::AttScores)] };
+		return {  in_data[int(EnumOpInputs::SrcHidden)],
+			  in_data[int(EnumOpInputs::QryHidden)],
+			  in_data[int(EnumOpInputs::H2SWeight)],
+			 out_grad[int(EnumOpOutputs::AttScores)] };
 	}
 
 	std::vector < ResourceRequest >  ForwardResource(
 		const std::vector < TShape > & in_shape) const override
 	{
-		return {};
+		// return {};
+		return { ResourceRequest::kTempSpace };
 	}
 	std::vector < ResourceRequest > BackwardResource(
 		const std::vector < TShape > & in_shape) const override
 	{
-		return {};
+		// return {};
+		return { ResourceRequest::kTempSpace };
 	}
 
 	Operator * CreateOperator  (Context ctx) const override
