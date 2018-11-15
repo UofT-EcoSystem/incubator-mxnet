@@ -104,7 +104,9 @@ static __global__ void _cuda_fused_mlp_att_nonlin_block__forward(
 	
 		// perform layer normalization
 		att_hidden_reg = att_hidden_reg - exp_X;
-		att_hidden_reg = att_hidden_reg / sqrt(var_X);
+#define VARIANCE_EPSILON 0.000001 // avoid the case when the variance is exactly 0
+		att_hidden_reg = att_hidden_reg / sqrt(var_X + VARIANCE_EPSILON);
+#undef  VARIANCE_EPSILON
 	}
 
 	/*
@@ -113,6 +115,58 @@ static __global__ void _cuda_fused_mlp_att_nonlin_block__forward(
                                                  name="%shidden" % self.prefix)
 	 */
 	att_hidden[g_threadIdx] = tanh(att_hidden_reg);
+}
+
+// FullyConnected Layer Y = XW^T
+// @param1 X [batch_size x input_dim]: (Input) Input Variable `X`
+// @param2 W [num_hidden x input_dim]: (Input) Weight Parameter `W`
+// @param3 O [batch_size x num_hidden]: (Output) Output Variable `Y`
+// @param4 batch_size: (Parameter) Batch Size
+// @param5 input_dim : (Parameter) Input Dimension
+// @param6 num_hidden: (Parameter) Number of Hidden Units
+template < typename RealType >
+static inline void FullyConnected(cublasHandle_t cublas_handle,
+	const RealType * const __restrict__ X,
+	const RealType * const __restrict__ W,
+	      RealType * const __restrict__ O,
+	const unsigned batch_size, const unsigned input_dim, const unsigned num_hidden);
+
+template <>
+inline void FullyConnected < float  > (cublasHandle_t cublas_handle,
+	const float  * const __restrict__ X,
+	const float  * const __restrict__ W,
+	      float  * const __restrict__ O,
+	const unsigned batch_size, const unsigned input_dim, const unsigned num_hidden)
+{
+	float  alpha = 1.0, beta = 0.0;
+
+	CUBLAS_CALL(cublasSgemm(cublas_handle, // cublas Handle
+	                        CUBLAS_OP_T, // W.T
+				CUBLAS_OP_N, // X
+				num_hidden,  // Y.shape[1]
+				batch_size,  // Y.shape[0]
+				input_dim,   // W.shape[1]
+				&alpha, W, input_dim, X, input_dim,
+				& beta, O, num_hidden));
+}
+
+template <>
+inline void FullyConnected < double > (cublasHandle_t cublas_handle,
+	const double * const __restrict__ X,
+	const double * const __restrict__ W,
+	      double * const __restrict__ O,
+	const unsigned batch_size, const unsigned input_dim, const unsigned num_hidden)
+{
+	double alpha = 1.0, beta = 0.0;
+
+	CUBLAS_CALL(cublasDgemm(cublas_handle, // cublas Handle
+	                        CUBLAS_OP_T, // W.T
+				CUBLAS_OP_N, // X
+				num_hidden,  // Y.shape[1]
+				batch_size,  // Y.shape[0]
+				input_dim,   // W.shape[1]
+				&alpha, W, input_dim, X, input_dim,
+				& beta, O, num_hidden));
 }
 
 template < typename DType >
@@ -212,6 +266,20 @@ public:
 				att_hidden.dptr_,
 				_param.layer_norm
 			);
+		
+		/*
+             # (batch_size, seq_len, 1)
+            attention_scores = mx.sym.FullyConnected(data=attention_hidden,
+                                                     weight=self.att_h2s_weight,
+                                                     num_hidden=1,
+                                                     no_bias=True,
+                                                     flatten=False,
+                                                     name="%sraw_att_score_fc" % self.prefix)
+		 */
+		CHECK_EQ(cuda_stream->blas_handle_ownership_, Stream < gpu > ::OwnHandle) << 
+			"Must initialize the cuBLAS handle in CUDA stream.";
+		
+		// TODO: Make sure that we have handled column-major correctly.
 	}
 
 	virtual void Backward(const OpContext & ctx,
