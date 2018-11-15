@@ -178,9 +178,9 @@ public:
 		const std::vector < int > &  in_data,
 		const std::vector < int > & out_data) const override
 	{
-		return {  in_data[int(EnumOpInputs::SrcHidden)],
-			  in_data[int(EnumOpInputs::QryHidden)],
-			  in_data[int(EnumOpInputs::H2SWeight)],
+		return {  in_data[int(EnumOpInputs ::SrcHidden)],
+			  in_data[int(EnumOpInputs ::QryHidden)],
+			  in_data[int(EnumOpInputs ::H2SWeight)],
 			 out_grad[int(EnumOpOutputs::AttScores)] };
 	}
 
