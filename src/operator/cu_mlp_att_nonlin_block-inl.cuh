@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <cooperative_groups.h>
 
 #include <mxnet/storage.h>
 
@@ -10,6 +11,95 @@ namespace mxnet {
 	namespace op {
 
 #if defined(__CUDACC__)
+
+template < typename RealType >
+static __forceinline__ __device__ void __cu_reduce_sum(
+	volatile RealType * const __restrict__ reduced_sum, 
+	         RealType                      value)
+{
+	namespace cg = cooperative_groups;
+
+	RealType local_sum;
+
+	cg::thread_block this_cta = cg::this_thread_block();
+	cg::sync(this_cta);
+	// up to this point, the content of shared memory has been initialized with local variable
+	// =========================================================================================
+	// do reduction in shared mem
+	if ((blockDim.x >= 512) && (threadIdx.x < 256)) 
+		reduced_sum[threadIdx.x] = local_sum = local_sum + reduced_sum[threadIdx.x + 256];
+	cg::sync(this_cta);
+    	if ((blockDim.x >= 256) && (threadIdx.x < 128))
+		reduced_sum[threadIdx.x] = local_sum = local_sum + reduced_sum[threadIdx.x + 128];
+	cg::sync(this_cta);
+	if ((blockDim.x >= 128) && (threadIdx.x <  64))
+		reduced_sum[threadIdx.x] = local_sum = local_sum + reduced_sum[threadIdx.x +  64];
+	cg::sync(this_cta);
+
+	if (threadIdx.x < 32)
+	{
+		cg::coalesced_group active_threads = cg::coalesced_threads();
+
+		if (blockDim.x >= 64) local_sum += reduced_sum[threadIdx.x + 32];
+
+#pragma unroll
+		for (int offset = warpSize / 2; offset > 0; offset /= 2)
+		{
+			local_sum += active_threads.shfl_down(local_sum, offset);
+		}
+	}
+	if (threadIdx.x == 0) reduced_sum[0] = local_sum;
+	cg::sync(this_cta);
+}
+
+/**
+ * Forward Pass of the MLP Attention Layer Nonlinear Block
+ * This kernel shall be launched using the parameter <<< (B, T), H >>>
+ * @param1 src_hidden [B x T x H]:  (Input)    Source Hidden State
+ * @param2 qry_hidden [B     x H]:  (Input)     Query Hidden State
+ * @param3 reserved_space
+ * @param4 att_hidden [B x T x H]: (Output) Attention Hidden State
+ * @param5 layer_norm: (Hyper-parameter) Whether to perform Layer Normalization
+ * @param6 batch_size: (Parameter) Batch Size
+ * @param7 seq_length: (Parameter) Sequence Length
+ * @param8 state_size: (Parameter) State Size
+ */
+template < typename RealType >
+static __global__ void _cuda_fused_mlp_att_nonlin_block__forward(
+	const RealType * const __restrict__ src_hidden,
+	const RealType * const __restrict__ qry_hidden,
+	//       RealType * const __restrict__ reserved_space,
+	      RealType * const __restrict__ att_hidden, const bool layer_norm)
+{
+	/*
+            # (batch_size, seq_len, attention_num_hidden)
+            attention_hidden = mx.sym.broadcast_add(lhs=attention_hidden_lhs, rhs=query_hidden,
+                                                    name="%squery_plus_input" % self.prefix)
+	 */
+	const unsigned g_threadIdx = blockIdx.y *  gridDim.x *  blockDim.x + 
+	                                          blockIdx.x *  blockDim.x + 
+						               threadIdx.x;
+
+	RealType att_hidden_reg = src_hidden[g_threadIdx] + 
+	                          qry_hidden[blockIdx.y * blockDim.x + threadIdx.x];
+	
+	/*
+            if self._ln is not None:
+                attention_hidden = self._ln.normalize(attention_hidden)
+	 */
+
+	if (layer_norm)
+	{
+		
+	}
+
+	/*
+            # (batch_size, seq_len, attention_num_hidden)
+            attention_hidden = mx.sym.Activation(attention_hidden, act_type="tanh",
+                                                 name="%shidden" % self.prefix)
+	 */
+	att_hidden[g_threadIdx] = tanh(att_hidden_reg);
+}
 
 template < typename DType >
 class CUMlpAttNonLinBlockOp : public Operator
@@ -41,7 +131,7 @@ private:
 
 		// infer the parameters from the source hidden state
 		_param.batch_size = src_hidden.shape_[0];
-		_param.seq_len    = src_hidden.shape_[1];
+		_param.seq_length = src_hidden.shape_[1];
 		_param.state_size = src_hidden.shape_[2];
 
 		_initialized = true;
@@ -55,10 +145,10 @@ public:
 	{
 		using namespace mshadow;
 
-		std::size_t in_expected = 2, out_expected = 1;
+		std::size_t in_expected = 3, out_expected = 1;
 
-		CHECK_EQ( in_data.size(),  in_expected); // SrcHidden, QryHidden
-		CHECK_EQ(out_data.size(), out_expected); // AttHidden
+		CHECK_EQ( in_data.size(),  in_expected); // SrcHidden, QryHidden, H2SWeight
+		CHECK_EQ(out_data.size(), out_expected); // AttScores
 
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 
@@ -66,22 +156,26 @@ public:
 			.get < gpu, 3, DType > (cuda_stream);
 		Tensor < gpu, 2, DType > qry_hidden =  in_data[int(EnumOpInputs ::QryHidden)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 3, DType > att_hidden = out_data[int(EnumOpOutputs::AttHidden)]
+		Tensor < gpu, 2, DType > h2s_weight =  in_data[int(EnumOpInputs ::H2SWeight)]
+			.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 3, DType > att_scores = out_data[int(EnumOpOutputs::AttScores)]
 			.get < gpu, 3, DType > (cuda_stream);
 
 		CHECK_EQ(src_hidden.CheckContiguous(), true);
 		CHECK_EQ(qry_hidden.CheckContiguous(), true);
-		CHECK_EQ(att_hidden.CheckContiguous(), true);
+		CHECK_EQ(h2s_weight.CheckContiguous(), true);
+		CHECK_EQ(att_scores.CheckContiguous(), true);
 
 		if (!_initialized)
 		{
 			_Init(cuda_stream, in_data, out_data);
 		}
-		
+		/*
 		if (ctx.is_train)
 		{
 			// TODO: Allocate the reserved space for training.
 		}
+		 */
 		// TODO: Forward kernel goes here.
 	}
 
@@ -95,7 +189,7 @@ public:
 	{
 		using namespace mshadow;
 
-		std::size_t in_expected = 2, out_expected = 1;
+		std::size_t in_expected = 3, out_expected = 1;
 
 		CHECK_EQ( in_data.size(),  in_expected);
 		CHECK_EQ( in_grad.size(),  in_expected);
@@ -103,23 +197,26 @@ public:
 		CHECK_EQ(out_data.size(), out_expected);
 		CHECK_EQ(out_grad.size(), out_expected);
 
-		CHECK_NE(req[int(EnumOpInputs::SrcHidden)], kAddTo) << "AddTo is not supported for " 
-			"source hidden state.";
-		CHECK_NE(req[int(EnumOpInputs::QryHidden)], kAddTo) << "AddTo is not supported for "  
-			 "query hidden state.";
+		// TODO: Double check that the gradient computations and make sure that they are or are NOT accumulative.
+		CHECK_NE(req[int(EnumOpInputs::SrcHidden)], kAddTo) << "AddTo is not supported for " "source hidden state.";
+		CHECK_NE(req[int(EnumOpInputs::QryHidden)], kAddTo) << "AddTo is not supported for "  "query hidden state.";
+		CHECK_NE(req[int(EnumOpInputs::H2SWeight)], kAddTo) << "AddTo is not supported for " "hidden-to-score weight.";
 		
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 
 		Tensor < gpu, 3, DType > src_hidden_grad =  in_grad[int(EnumOpInputs ::SrcHidden)]
-			.get < gpu, 2, DType > (cuda_stream);
+			.get < gpu, 3, DType > (cuda_stream);
 		Tensor < gpu, 2, DType > qry_hidden_grad =  in_grad[int(EnumOpInputs ::QryHidden)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType > att_hidden_grad = out_grad[int(EnumOpOutputs::AttHidden)]
+		Tensor < gpu, 2, DType > h2s_weight_grad =  in_grad[int(EnumOpInputs ::H2SWeight)]
 			.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 3, DType > att_scores_grad = out_grad[int(EnumOpOutputs::AttScores)]
+			.get < gpu, 3, DType > (cuda_stream);
 
 		CHECK_EQ(src_hidden_grad.CheckContiguous(), true);
 		CHECK_EQ(qry_hidden_grad.CheckContiguous(), true);
-		CHECK_EQ(att_hidden_grad.CheckContiguous(), true);
+		CHECK_EQ(h2s_weight_grad.CheckContiguous(), true);
+		CHECK_EQ(att_scores_grad.CheckContiguous(), true);
 
 		// TODO: Backward kernel goes here.
 	}
