@@ -19,22 +19,25 @@ static __forceinline__ __device__ void __cu_reduce_sum(
 {
 	namespace cg = cooperative_groups;
 
-	RealType local_sum;
+	RealType local_sum = 0;
 
 	cg::thread_block this_cta = cg::this_thread_block();
 
 	svmem_reduced_sum[threadIdx.x] = local_value;
 	cg::sync(this_cta); // up to this point, the content of shared memory has been initialized with local variable
 	// =========================================================================================
-	// do reduction in shared mem
-	if ((blockDim.x >= 512) && (threadIdx.x < 256)) 
-		svmem_reduced_sum[threadIdx.x] = local_sum = local_sum + svmem_reduced_sum[threadIdx.x + 256];
+	// do reduction in shared memory
+	if ((blockDim.x > 512) && (threadIdx.x < 512))
+		svmem_reduced_sum[threadIdx.x] = local_sum += (threadIdx.x + 512) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x + 512];
 	cg::sync(this_cta);
-    	if ((blockDim.x >= 256) && (threadIdx.x < 128))
-		svmem_reduced_sum[threadIdx.x] = local_sum = local_sum + svmem_reduced_sum[threadIdx.x + 128];
+	if ((blockDim.x > 256) && (threadIdx.x < 256)) 
+		svmem_reduced_sum[threadIdx.x] = local_sum += (threadIdx.x + 256) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x + 256];
 	cg::sync(this_cta);
-	if ((blockDim.x >= 128) && (threadIdx.x <  64))
-		svmem_reduced_sum[threadIdx.x] = local_sum = local_sum + svmem_reduced_sum[threadIdx.x +  64];
+    	if ((blockDim.x > 128) && (threadIdx.x < 128))
+		svmem_reduced_sum[threadIdx.x] = local_sum += (threadIdx.x + 128) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x + 128];
+	cg::sync(this_cta);
+	if ((blockDim.x >  64) && (threadIdx.x <  64))
+		svmem_reduced_sum[threadIdx.x] = local_sum += (threadIdx.x +  64) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x +  64];
 	cg::sync(this_cta);
 	// =========================================================================================
 	// further reduction will be done within a wrap, therefore no cta-level synchronization is needed
@@ -42,7 +45,7 @@ static __forceinline__ __device__ void __cu_reduce_sum(
 	{
 		cg::coalesced_group active_threads = cg::coalesced_threads();
 
-		if (blockDim.x >= 64) local_sum += svmem_reduced_sum[threadIdx.x + 32];
+		if (blockDim.x > 32) local_sum += (threadIdx.x + 32) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x + 32];
 
 #pragma unroll
 		for (int offset = warpSize / 2; offset > 0; offset /= 2)
@@ -56,7 +59,7 @@ static __forceinline__ __device__ void __cu_reduce_sum(
 
 /**
  * Forward Pass of the MLP Attention Layer Nonlinear Block
- * This kernel shall be launched using the parameter <<< (B, T), H >>>
+ * This kernel shall be launched using the parameter <<< (B, T), H, H * sizeof(RealType) >>>
  * @param1 src_hidden [B x T x H]:  (Input) Source Hidden State
  * @param2 qry_hidden [B     x H]:  (Input)  Query Hidden State
  * @param3 att_hidden [B x T x H]: (Output) Attention Hidden State
@@ -84,15 +87,19 @@ static __global__ void _cuda_fused_mlp_att_nonlin_block__forward(
             if self._ln is not None:
                 attention_hidden = self._ln.normalize(attention_hidden)
 	 */
+	// declaring dynamic shared memory in templated CUDA kernel is tricky
+	// please refer to this StackOverflow thread: 
+	// https://stackoverflow.com/questions/27570552/templated-cuda-kernel-with-dynamic-shared-memory
+	extern __shared__ volatile unsigned char svmem[];
 
-	extern __shared__ volatile RealType svmem_reduced_sum[];
+	volatile RealType * svmem_reduced_sum = reinterpret_cast < volatile RealType * > (svmem);
 
 	if (layer_norm)
 	{
-		__cu_reduce_sum(svmem_reduced_sum,  att_hidden_reg);
+		__cu_reduce_sum (svmem_reduced_sum,  att_hidden_reg);
 		RealType exp_X = svmem_reduced_sum[0] / blockDim.x; // EXP[X]
-		__cu_reduce_sum(svmem_reduced_sum, (att_hidden_reg - exp_X) *
-		                                   (att_hidden_reg - exp_X));
+		__cu_reduce_sum (svmem_reduced_sum, (att_hidden_reg - exp_X) *
+		                                    (att_hidden_reg - exp_X));
 		RealType var_X = svmem_reduced_sum[0] / blockDim.x; // VAR[X]
 	
 		// perform layer normalization
@@ -143,6 +150,7 @@ private:
 
 		_initialized = true;
 	}
+	
 public:
 	virtual void  Forward(const OpContext & ctx,
 	                      const std::vector < TBlob > &  in_data,
@@ -180,10 +188,30 @@ public:
 		/*
 		if (ctx.is_train)
 		{
-			// TODO: Allocate the reserved space for training.
+			// TODO: Allocate training reserved space here.
 		}
 		 */
-		// TODO: Forward kernel goes here.
+		// obtain the requested workspace
+		Tensor < gpu, 3, DType > att_hidden = ctx.requested[int(EnumOpWorkspace::Workspace)]
+			.get_space_typed < gpu, 3, DType > (
+				Shape3(_param.batch_size, 
+				       _param.seq_length,
+				       _param.state_size), cuda_stream);
+
+		_cuda_fused_mlp_att_nonlin_block__forward < DType >
+			<<<
+				dim3(_param.batch_size,
+				     _param.seq_length),
+				_param.state_size,
+				_param.state_size * sizeof(DType),
+				Stream < gpu > ::GetStream(cuda_stream)
+			>>>
+			(
+				src_hidden.dptr_,
+				qry_hidden.dptr_,
+				att_hidden.dptr_,
+				_param.layer_norm
+			);
 	}
 
 	virtual void Backward(const OpContext & ctx,
