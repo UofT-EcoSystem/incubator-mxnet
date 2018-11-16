@@ -268,7 +268,7 @@ public:
 			);
 		
 		/*
-             # (batch_size, seq_len, 1)
+            # (batch_size, seq_len, 1)
             attention_scores = mx.sym.FullyConnected(data=attention_hidden,
                                                      weight=self.att_h2s_weight,
                                                      num_hidden=1,
@@ -279,7 +279,12 @@ public:
 		CHECK_EQ(cuda_stream->blas_handle_ownership_, Stream < gpu > ::OwnHandle) << 
 			"Must initialize the cuBLAS handle in CUDA stream.";
 		
-		// TODO: Make sure that we have handled column-major correctly.
+		FullyConnected(Stream < gpu > ::GetBlasHandle(cuda_stream),
+		               att_hidden.dptr_,
+		               h2s_weight.dptr_,
+			       att_scores.dptr_,
+				_param.batch_size * _param.seq_length, 
+				_param.state_size, 1);
 	}
 
 	virtual void Backward(const OpContext & ctx,
