@@ -147,7 +147,7 @@ public:
 		}
 		 */
 		// obtain the requested workspace
-		Tensor < gpu, 3, DType > att_hidden = ctx.requested[int(EnumOpWorkspace::Workspace)]
+		Tensor < gpu, 3, DType > att_hidden = ctx.requested[int(EnumOpWorkspace::AttHidden)]
 			.get_space_typed < gpu, 3, DType > (
 				Shape3(_param.batch_size, 
 				       _param.seq_length,
@@ -206,9 +206,15 @@ public:
 		CHECK_EQ(out_data.size(), out_expected);
 		CHECK_EQ(out_grad.size(), out_expected);
 
-		CHECK_NE(req[int(EnumOpInputs::SrcHidden)], kAddTo) << "AddTo is not supported for " "source hidden state.";
-		CHECK_NE(req[int(EnumOpInputs::QryHidden)], kAddTo) << "AddTo is not supported for "  "query hidden state.";
-		CHECK_NE(req[int(EnumOpInputs::H2SWeight)], kAddTo) << "AddTo is not supported for " "hidden-to-score weight.";
+		// Those three inputs should ONLY be used within the attention layer, 
+		// but since they are reused across different time steps, 
+		// therefore the gradient request for those variables must be `AddTo`.
+		CHECK_EQ(req[int(EnumOpInputs::SrcHidden)], kAddTo) << // "AddTo is not supported for " "source hidden state.";
+			"The gradient request for " "source hidden" " must be AddTo.";
+		CHECK_EQ(req[int(EnumOpInputs::QryHidden)], kAddTo) << // "AddTo is not supported for "  "query hidden state.";
+			"The gradient request for "  "query hidden" " must be AddTo.";
+		CHECK_EQ(req[int(EnumOpInputs::H2SWeight)], kAddTo) << // "AddTo is not supported for " "hidden-to-score weight.";
+			"The gradient request for " "hidden-to-score weight" " must be AddTo.";
 		
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 
@@ -238,13 +244,18 @@ public:
 		CHECK_EQ(att_scores_grad.CheckContiguous(), true);
 
 		// obtain the requested workspace
-		// !Important: Replay the forward pass computation.
-		Tensor < gpu, 3, DType > att_hidden = ctx.requested[int(EnumOpWorkspace::Workspace)]
+		Tensor < gpu, 3, DType > att_hidden      = ctx.requested[int(EnumOpWorkspace::AttHidden    )]
 			.get_space_typed < gpu, 3, DType > (
 				Shape3(_param.batch_size, 
 				       _param.seq_length,
 				       _param.state_size), cuda_stream);
+		Tensor < gpu, 3, DType > att_hidden_grad = ctx.requested[int(EnumOpWorkspace::AttHiddenGrad)]
+			.get_space_typed < gpu, 3, DType > (
+				Shape3(_param.batch_size,
+				       _param.seq_length,
+				       _param.state_size), cuda_stream);
 		
+		// !Important: Replay the forward pass computation.
 		_cuda_fused_mlp_att_nonlin_block__forward < DType >
 			<<<
 				dim3(_param.batch_size,
@@ -259,6 +270,33 @@ public:
 				att_hidden.dptr_,
 				_param.layer_norm
 			);
+
+		/*
+            # (batch_size, seq_len, 1)
+            attention_scores = mx.sym.FullyConnected(data=attention_hidden,
+                                                     weight=self.att_h2s_weight,
+                                                     num_hidden=1,
+                                                     no_bias=True,
+                                                     flatten=False,
+                                                     name="%sraw_att_score_fc" % self.prefix)
+		 */
+		CHECK_EQ(cuda_stream->blas_handle_ownership_, Stream < gpu > ::OwnHandle) << 
+			"Must initialize the cuBLAS handle in CUDA stream.";
+		
+		FullyConnectedBWWeight(Stream < gpu > ::GetBlasHandle(cuda_stream),
+		                       att_scores_grad.dptr_,
+				       att_hidden     .dptr_,
+				       h2s_weight_grad.dptr_,
+				       req[int(EnumOpInputs::H2SWeight)],
+				       _param.batch_size * _param.seq_length,
+				       _param.state_size, 1);
+		FullyConnectedBWData  (Stream < gpu > ::GetBlasHandle(cuda_stream),
+		                       att_scores_grad.dptr_,
+				       h2s_weight     .dptr_,
+				       att_hidden_grad.dptr_,
+				       OpReqType::kWriteTo,
+				       _param.batch_size * _param.seq_length,
+				       _param.state_size, 1);
 
 		// TODO: Backward kernel goes here.
 	}
