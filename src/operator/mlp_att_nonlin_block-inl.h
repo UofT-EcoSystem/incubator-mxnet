@@ -12,7 +12,7 @@ namespace mxnet {
 
 enum class EnumOpInputs    { SrcHidden, QryHidden, H2SWeight };
 enum class EnumOpOutputs   { AttScores };
-enum class EnumOpWorkspace { Workspace };
+enum class EnumOpWorkspace { AttHidden, AttHiddenGrad };
 
 		} // namespace 
 
@@ -188,13 +188,14 @@ public:
 		const std::vector < TShape > & in_shape) const override
 	{
 		// return {};
-		return { ResourceRequest::kTempSpace };
+		return { ResourceRequest::kTempSpace }; // EnumOpWorkspace::AttHidden
 	}
 	std::vector < ResourceRequest > BackwardResource(
 		const std::vector < TShape > & in_shape) const override
 	{
 		// return {};
-		return { ResourceRequest::kTempSpace };
+		return { ResourceRequest::kTempSpace,   // EnumOpWorkspace::AttHidden
+		         ResourceRequest::kTempSpace }; // EnumOpWorkspace::AttHiddenGrad
 	}
 
 	Operator * CreateOperator  (Context ctx) const override
