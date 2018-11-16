@@ -225,15 +225,19 @@ public:
 		CHECK_EQ(out_data.size(), out_expected);
 		CHECK_EQ(out_grad.size(), out_expected);
 
-		// Those three inputs should ONLY be used within the attention layer, 
-		// but since they are reused across different time steps, 
-		// therefore the gradient request for those variables must be `AddTo`.
-		CHECK_EQ(req[int(EnumOpInputs::SrcHidden)], kAddTo  ) << // "AddTo is not supported for " "source hidden state.";
-			"The gradient request for " "source hidden" " must be "   "AddTo.";
-		CHECK_EQ(req[int(EnumOpInputs::QryHidden)], kWriteTo) << // "AddTo is not supported for "  "query hidden state.";
-			"The gradient request for "  "query hidden" " must be " "WriteTo.";
-		CHECK_EQ(req[int(EnumOpInputs::H2SWeight)], kAddTo  ) << // "AddTo is not supported for " "hidden-to-score weight.";
-			"The gradient request for " "hidden-to-score weight" " must be AddTo.";
+		// The gradient request type is automatically determined by the `graph_executor`.
+		// For variables that are exclusive to *this* operator, its gradient request type will be `WriteTo` (or `WriteInplace`).
+		// Otherwise, its gradient request type will be `AddTo`.
+		// In our case, `SrcHidden` and `H2SWeight` are both shared across multiple time steps,
+		// so their gradient request type must be `AddTo`.
+		// In contrast, each MLP attention operator has exclusive access to `QryHidden`,
+		// so   its gradient request type must be either `WriteTo` or `WriteInplace`.
+		CHECK_EQ(req[int(EnumOpInputs::SrcHidden)], kAddTo) << 
+			"The gradient request for " "source hidden" " must be "     "AddTo.";
+		CHECK_NE(req[int(EnumOpInputs::QryHidden)], kAddTo) << // Note that the condition here is NOT_EQUAL.
+			"The gradient request for "  "query hidden" " must NOT be " "AddTo.";
+		CHECK_EQ(req[int(EnumOpInputs::H2SWeight)], kAddTo) << 
+			"The gradient request for " "hidden-to-score weight" " must be " "AddTo.";
 		
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 
