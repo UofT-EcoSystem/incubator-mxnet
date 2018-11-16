@@ -12,51 +12,6 @@ namespace mxnet {
 
 #if defined(__CUDACC__)
 
-template < typename RealType >
-static __forceinline__ __device__ void __cu_reduce_sum(
-	volatile RealType * const __restrict__ svmem_reduced_sum, 
-	         RealType                      local_value)
-{
-	namespace cg = cooperative_groups;
-
-	RealType local_sum = 0;
-
-	cg::thread_block this_cta = cg::this_thread_block();
-
-	svmem_reduced_sum[threadIdx.x] = local_value;
-	cg::sync(this_cta); // up to this point, the content of shared memory has been initialized with local variable
-	// =========================================================================================
-	// do reduction in shared memory
-	if ((blockDim.x > 512) && (threadIdx.x < 512))
-		svmem_reduced_sum[threadIdx.x] = local_sum += (threadIdx.x + 512) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x + 512];
-	cg::sync(this_cta);
-	if ((blockDim.x > 256) && (threadIdx.x < 256)) 
-		svmem_reduced_sum[threadIdx.x] = local_sum += (threadIdx.x + 256) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x + 256];
-	cg::sync(this_cta);
-    	if ((blockDim.x > 128) && (threadIdx.x < 128))
-		svmem_reduced_sum[threadIdx.x] = local_sum += (threadIdx.x + 128) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x + 128];
-	cg::sync(this_cta);
-	if ((blockDim.x >  64) && (threadIdx.x <  64))
-		svmem_reduced_sum[threadIdx.x] = local_sum += (threadIdx.x +  64) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x +  64];
-	cg::sync(this_cta);
-	// =========================================================================================
-	// further reduction will be done within a wrap, therefore no cta-level synchronization is needed
-	if (threadIdx.x < 32)
-	{
-		cg::coalesced_group active_threads = cg::coalesced_threads();
-
-		if (blockDim.x > 32) local_sum += (threadIdx.x + 32) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x + 32];
-
-#pragma unroll
-		for (int offset = warpSize / 2; offset > 0; offset /= 2)
-		{
-			local_sum += active_threads.shfl_down(local_sum, offset);
-		}
-	}
-	if (threadIdx.x == 0) svmem_reduced_sum[0] = local_sum;
-	cg::sync(this_cta);
-}
-
 /**
  * Forward Pass of the MLP Attention Layer Nonlinear Block
  * This kernel shall be launched using the parameter <<< (B, T), H, H * sizeof(RealType) >>>
@@ -69,55 +24,9 @@ template < typename RealType >
 static __global__ void _cuda_fused_mlp_att_nonlin_block__forward(
 	const RealType * const __restrict__ src_hidden,
 	const RealType * const __restrict__ qry_hidden,
-	      RealType * const __restrict__ att_hidden, const bool layer_norm)
-{
-	/*
-            # (batch_size, seq_len, attention_num_hidden)
-            attention_hidden = mx.sym.broadcast_add(lhs=attention_hidden_lhs, rhs=query_hidden,
-                                                    name="%squery_plus_input" % self.prefix)
-	 */
-	const unsigned g_threadIdx = blockIdx.y *  gridDim.x *  blockDim.x + 
-	                                          blockIdx.x *  blockDim.x + 
-						               threadIdx.x;
+	      RealType * const __restrict__ att_hidden, const bool layer_norm);
 
-	RealType att_hidden_reg = src_hidden[g_threadIdx] + 
-	                          qry_hidden[blockIdx.y * blockDim.x + threadIdx.x];
-	
-	/*
-            if self._ln is not None:
-                attention_hidden = self._ln.normalize(attention_hidden)
-	 */
-	// declaring dynamic shared memory in templated CUDA kernel is tricky
-	// please refer to this StackOverflow thread: 
-	// https://stackoverflow.com/questions/27570552/templated-cuda-kernel-with-dynamic-shared-memory
-	extern __shared__ volatile unsigned char svmem[];
-
-	volatile RealType * svmem_reduced_sum = reinterpret_cast < volatile RealType * > (svmem);
-
-	if (layer_norm)
-	{
-		__cu_reduce_sum (svmem_reduced_sum,  att_hidden_reg);
-		RealType exp_X = svmem_reduced_sum[0] / blockDim.x; // EXP[X]
-		__cu_reduce_sum (svmem_reduced_sum, (att_hidden_reg - exp_X) *
-		                                    (att_hidden_reg - exp_X));
-		RealType var_X = svmem_reduced_sum[0] / blockDim.x; // VAR[X]
-	
-		// perform layer normalization
-		att_hidden_reg = att_hidden_reg - exp_X;
-#define VARIANCE_EPSILON 0.000001 // avoid the case when the variance is exactly 0
-		att_hidden_reg = att_hidden_reg / sqrt(var_X + VARIANCE_EPSILON);
-#undef  VARIANCE_EPSILON
-	}
-
-	/*
-            # (batch_size, seq_len, attention_num_hidden)
-            attention_hidden = mx.sym.Activation(attention_hidden, act_type="tanh",
-                                                 name="%shidden" % self.prefix)
-	 */
-	att_hidden[g_threadIdx] = tanh(att_hidden_reg);
-}
-
-// FullyConnected Layer Y = XW^T
+// FullyConnected Layer Y = XW^T  Forward Pass
 // @param1 X [batch_size x input_dim]: (Input) Input Variable `X`
 // @param2 W [num_hidden x input_dim]: (Input) Weight Parameter `W`
 // @param3 O [batch_size x num_hidden]: (Output) Output Variable `Y`
@@ -130,44 +39,6 @@ static inline void FullyConnected(cublasHandle_t cublas_handle,
 	const RealType * const __restrict__ W,
 	      RealType * const __restrict__ O,
 	const unsigned batch_size, const unsigned input_dim, const unsigned num_hidden);
-
-template <>
-inline void FullyConnected < float  > (cublasHandle_t cublas_handle,
-	const float  * const __restrict__ X,
-	const float  * const __restrict__ W,
-	      float  * const __restrict__ O,
-	const unsigned batch_size, const unsigned input_dim, const unsigned num_hidden)
-{
-	float  alpha = 1.0, beta = 0.0;
-
-	CUBLAS_CALL(cublasSgemm(cublas_handle, // cublas Handle
-	                        CUBLAS_OP_T, // W.T
-				CUBLAS_OP_N, // X
-				num_hidden,  // Y.shape[1]
-				batch_size,  // Y.shape[0]
-				input_dim,   // W.shape[1]
-				&alpha, W, input_dim, X, input_dim,
-				& beta, O, num_hidden));
-}
-
-template <>
-inline void FullyConnected < double > (cublasHandle_t cublas_handle,
-	const double * const __restrict__ X,
-	const double * const __restrict__ W,
-	      double * const __restrict__ O,
-	const unsigned batch_size, const unsigned input_dim, const unsigned num_hidden)
-{
-	double alpha = 1.0, beta = 0.0;
-
-	CUBLAS_CALL(cublasDgemm(cublas_handle, // cublas Handle
-	                        CUBLAS_OP_T, // W.T
-				CUBLAS_OP_N, // X
-				num_hidden,  // Y.shape[1]
-				batch_size,  // Y.shape[0]
-				input_dim,   // W.shape[1]
-				&alpha, W, input_dim, X, input_dim,
-				& beta, O, num_hidden));
-}
 
 template < typename DType >
 class CUMlpAttNonLinBlockOp : public Operator
@@ -283,8 +154,8 @@ public:
 		               att_hidden.dptr_,
 		               h2s_weight.dptr_,
 			       att_scores.dptr_,
-				_param.batch_size * _param.seq_length, 
-				_param.state_size, 1);
+			       _param.batch_size * _param.seq_length, 
+			       _param.state_size, 1);
 	}
 
 	virtual void Backward(const OpContext & ctx,
@@ -312,6 +183,14 @@ public:
 		
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 
+		// get the input data in the forward pass
+		Tensor < gpu, 3, DType > src_hidden      =  in_data[int(EnumOpInputs ::SrcHidden)]
+			.get < gpu, 3, DType > (cuda_stream);
+		Tensor < gpu, 2, DType > qry_hidden      =  in_data[int(EnumOpInputs ::QryHidden)]
+			.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 2, DType > h2s_weight      =  in_data[int(EnumOpInputs ::H2SWeight)]
+			.get < gpu, 2, DType > (cuda_stream);
+
 		Tensor < gpu, 3, DType > src_hidden_grad =  in_grad[int(EnumOpInputs ::SrcHidden)]
 			.get < gpu, 3, DType > (cuda_stream);
 		Tensor < gpu, 2, DType > qry_hidden_grad =  in_grad[int(EnumOpInputs ::QryHidden)]
@@ -321,14 +200,175 @@ public:
 		Tensor < gpu, 3, DType > att_scores_grad = out_grad[int(EnumOpOutputs::AttScores)]
 			.get < gpu, 3, DType > (cuda_stream);
 
+		CHECK_EQ(src_hidden     .CheckContiguous(), true);
+		CHECK_EQ(qry_hidden     .CheckContiguous(), true);
+		CHECK_EQ(h2s_weight     .CheckContiguous(), true);
 		CHECK_EQ(src_hidden_grad.CheckContiguous(), true);
 		CHECK_EQ(qry_hidden_grad.CheckContiguous(), true);
 		CHECK_EQ(h2s_weight_grad.CheckContiguous(), true);
 		CHECK_EQ(att_scores_grad.CheckContiguous(), true);
 
+		// obtain the requested workspace
+		// !Important: Replay the forward pass computation.
+		Tensor < gpu, 3, DType > att_hidden = ctx.requested[int(EnumOpWorkspace::Workspace)]
+			.get_space_typed < gpu, 3, DType > (
+				Shape3(_param.batch_size, 
+				       _param.seq_length,
+				       _param.state_size), cuda_stream);
+		
+		_cuda_fused_mlp_att_nonlin_block__forward < DType >
+			<<<
+				dim3(_param.batch_size,
+				     _param.seq_length),
+				_param.state_size,
+				_param.state_size * sizeof(DType),
+				Stream < gpu > ::GetStream(cuda_stream)
+			>>>
+			(
+				src_hidden.dptr_,
+				qry_hidden.dptr_,
+				att_hidden.dptr_,
+				_param.layer_norm
+			);
+
 		// TODO: Backward kernel goes here.
 	}
 }; // class CUMlpAttNonLinBlockOp
+
+template < typename RealType >
+static __forceinline__ __device__ void __cu_reduce_sum(
+	volatile RealType * const __restrict__ svmem_reduced_sum, 
+	         RealType                      local_value)
+{
+	namespace cg = cooperative_groups;
+
+	RealType local_sum = 0;
+
+	cg::thread_block this_cta = cg::this_thread_block();
+
+	svmem_reduced_sum[threadIdx.x] = local_value;
+	cg::sync(this_cta); // up to this point, the content of shared memory has been initialized with local variable
+	// =========================================================================================
+	// do reduction in shared memory
+	if ((blockDim.x > 512) && (threadIdx.x < 512))
+		svmem_reduced_sum[threadIdx.x] = local_sum += (threadIdx.x + 512) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x + 512];
+	cg::sync(this_cta);
+	if ((blockDim.x > 256) && (threadIdx.x < 256)) 
+		svmem_reduced_sum[threadIdx.x] = local_sum += (threadIdx.x + 256) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x + 256];
+	cg::sync(this_cta);
+    	if ((blockDim.x > 128) && (threadIdx.x < 128))
+		svmem_reduced_sum[threadIdx.x] = local_sum += (threadIdx.x + 128) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x + 128];
+	cg::sync(this_cta);
+	if ((blockDim.x >  64) && (threadIdx.x <  64))
+		svmem_reduced_sum[threadIdx.x] = local_sum += (threadIdx.x +  64) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x +  64];
+	cg::sync(this_cta);
+	// =========================================================================================
+	// further reduction will be done within a wrap, therefore no cta-level synchronization is needed
+	if (threadIdx.x < 32)
+	{
+		cg::coalesced_group active_threads = cg::coalesced_threads();
+
+		if (blockDim.x > 32) local_sum += (threadIdx.x + 32) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x + 32];
+
+#pragma unroll
+		for (int offset = warpSize / 2; offset > 0; offset /= 2)
+		{
+			local_sum += active_threads.shfl_down(local_sum, offset);
+		}
+	}
+	if (threadIdx.x == 0) svmem_reduced_sum[0] = local_sum;
+	cg::sync(this_cta);
+}
+
+template < typename RealType >
+__global__ void _cuda_fused_mlp_att_nonlin_block__forward(
+	const RealType * const __restrict__ src_hidden,
+	const RealType * const __restrict__ qry_hidden,
+	      RealType * const __restrict__ att_hidden, const bool layer_norm)
+{
+	/*
+            # (batch_size, seq_len, attention_num_hidden)
+            attention_hidden = mx.sym.broadcast_add(lhs=attention_hidden_lhs, rhs=query_hidden,
+                                                    name="%squery_plus_input" % self.prefix)
+	 */
+	const unsigned g_threadIdx = blockIdx.y *  gridDim.x *  blockDim.x + 
+	                                          blockIdx.x *  blockDim.x + 
+						               threadIdx.x;
+
+	RealType att_hidden_reg = src_hidden[g_threadIdx] + 
+	                          qry_hidden[blockIdx.y * blockDim.x + threadIdx.x];
+	
+	/*
+            if self._ln is not None:
+                attention_hidden = self._ln.normalize(attention_hidden)
+	 */
+	// declaring dynamic shared memory in templated CUDA kernel is tricky
+	// please refer to this StackOverflow thread: 
+	// https://stackoverflow.com/questions/27570552/templated-cuda-kernel-with-dynamic-shared-memory
+	extern __shared__ volatile unsigned char svmem[];
+
+	volatile RealType * svmem_reduced_sum = reinterpret_cast < volatile RealType * > (svmem);
+
+	if (layer_norm)
+	{
+		__cu_reduce_sum (svmem_reduced_sum,  att_hidden_reg);
+		RealType exp_X = svmem_reduced_sum[0] / blockDim.x; // EXP[X]
+		__cu_reduce_sum (svmem_reduced_sum, (att_hidden_reg - exp_X) *
+		                                    (att_hidden_reg - exp_X));
+		RealType var_X = svmem_reduced_sum[0] / blockDim.x; // VAR[X]
+	
+		// perform layer normalization
+		att_hidden_reg = att_hidden_reg - exp_X;
+#define VARIANCE_EPSILON 0.000001 // avoid the case when the variance is exactly 0
+		att_hidden_reg = att_hidden_reg / sqrt(var_X + VARIANCE_EPSILON);
+#undef  VARIANCE_EPSILON
+	}
+
+	/*
+            # (batch_size, seq_len, attention_num_hidden)
+            attention_hidden = mx.sym.Activation(attention_hidden, act_type="tanh",
+                                                 name="%shidden" % self.prefix)
+	 */
+	att_hidden[g_threadIdx] = tanh(att_hidden_reg);
+}
+
+template <>
+inline void FullyConnected < float  > (cublasHandle_t cublas_handle,
+	const float  * const __restrict__ X,
+	const float  * const __restrict__ W,
+	      float  * const __restrict__ O,
+	const unsigned batch_size, const unsigned input_dim, const unsigned num_hidden)
+{
+	float  alpha = 1.0, beta = 0.0;
+
+	CUBLAS_CALL(cublasSgemm(cublas_handle, // cublas Handle
+	                        CUBLAS_OP_T, // W.T
+				CUBLAS_OP_N, // X
+				num_hidden,  // Y.shape[1]
+				batch_size,  // Y.shape[0]
+				input_dim,   // W.shape[1]
+				&alpha, W, input_dim, X, input_dim,
+				& beta, O, num_hidden));
+}
+
+template <>
+inline void FullyConnected < double > (cublasHandle_t cublas_handle,
+	const double * const __restrict__ X,
+	const double * const __restrict__ W,
+	      double * const __restrict__ O,
+	const unsigned batch_size, const unsigned input_dim, const unsigned num_hidden)
+{
+	double alpha = 1.0, beta = 0.0;
+
+	CUBLAS_CALL(cublasDgemm(cublas_handle, // cublas Handle
+	                        CUBLAS_OP_T, // W.T
+				CUBLAS_OP_N, // X
+				num_hidden,  // Y.shape[1]
+				batch_size,  // Y.shape[0]
+				input_dim,   // W.shape[1]
+				&alpha, W, input_dim, X, input_dim,
+				& beta, O, num_hidden));
+}
 
 #endif // __CUDACC__
 
