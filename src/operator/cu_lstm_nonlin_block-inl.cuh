@@ -283,7 +283,14 @@ __global__ void _cuda_fused_lstm_nonlin_block__forward(
 /**
  * Backward Pass of the LSTM Nonlinear Block
  * This kernel shall be launched using the parameter <<< ceil(BxH / 128), 128 >>>.
- * All the parameters are the same as the forward kernel, except that the input now becomes output and vice versa.
+ * @param1   i_cell_input_grad [B x 4H]: (Output) Gradient of Input to the LSTM Cell from the Previous Layer
+ * @param2 i_hidden_state_grad [B x 4H]: (Output) Gradient of Hidden State from the Previous Time Step
+ * @param3   i_cell_state_grad [B x  H]: (Output) Gradient of   Cell State from the Previous Time Step
+ * @param4 reserved_space      [B x 4H]: (Output) Space reserved by the Forward Pass to facilitate Backward Pass Compute
+ * @param5 o_hidden_state_grad [B x  H]:  (Input) Gradient of Hidden State Output that goes to the Next Time Step and/or Layer
+ * @param6   o_cell_state_grad [B x  H]:  (Input) Gradient of   Cell State Output that goes to the Next Time Step and/or Layer
+ * @param7 batch_size: (Parameter) Batch Size
+ * @param8 state_size: (Parameter) State Size
  */
 template < typename RealType >
 __global__ void _cuda_fused_lstm_nonlin_block_backward(
