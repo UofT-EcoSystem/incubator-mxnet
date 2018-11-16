@@ -26,6 +26,25 @@ static __global__ void _cuda_fused_mlp_att_nonlin_block__forward(
 	const RealType * const __restrict__ qry_hidden,
 	      RealType * const __restrict__ att_hidden, const bool layer_norm);
 
+/**
+ * Backward Pass of the MLP Attention Layer Nonlinear Block
+ * This kernel shall be launched using the parameter TODO: 
+ * @param1 src_hidden_grad [B x T x H]: (Output) Gradient of Source Hidden State
+ * @param2 qry_hidden_grad [B     x H]: (Output) Gradient of  Query Hidden State
+ * @param3 att_hidden      [B x T x H]:  (Input) Attention Hidden State (reserved by Forward Pass)
+ * @param4 att_hidden_grad [B x T x H]:  (Input) Gradient of Attention Hidden State
+ * @param5 src_hidden_grad_req: (Parameter) Gradient Request of Source Hidden State
+ * @param6 qry_hidden_grad_req: (Parameter) Gradient Request of  Query Hidden State
+ * @param7 layer_norm: (Parameter) Whether Layer Normalization is performed in the Forward Pass
+ */
+template < typename RealType >
+static __global__ void _cuda_fused_mlp_att_nonlin_block_backward(
+	      RealType * const __restrict__ src_hidden_grad,
+	      RealType * const __restrict__ qry_hidden_grad,
+	const RealType * const __restrict__ att_hidden, 
+	const RealType * const __restrict__ att_hidden_grad,
+	const OpReqType src_hidden_grad_req, const OpReqType qry_hidden_grad_req, const bool layer_norm);
+
 // FullyConnected Layer Y = XW^T Forward Pass
 // @param1 X [batch_size x input_dim] :  (Input) Input  Variable  `X`
 // @param2 W [num_hidden x input_dim] :  (Input) Weight Parameter `W`
@@ -209,11 +228,11 @@ public:
 		// Those three inputs should ONLY be used within the attention layer, 
 		// but since they are reused across different time steps, 
 		// therefore the gradient request for those variables must be `AddTo`.
-		CHECK_EQ(req[int(EnumOpInputs::SrcHidden)], kAddTo) << // "AddTo is not supported for " "source hidden state.";
-			"The gradient request for " "source hidden" " must be AddTo.";
-		CHECK_EQ(req[int(EnumOpInputs::QryHidden)], kAddTo) << // "AddTo is not supported for "  "query hidden state.";
-			"The gradient request for "  "query hidden" " must be AddTo.";
-		CHECK_EQ(req[int(EnumOpInputs::H2SWeight)], kAddTo) << // "AddTo is not supported for " "hidden-to-score weight.";
+		CHECK_EQ(req[int(EnumOpInputs::SrcHidden)], kAddTo  ) << // "AddTo is not supported for " "source hidden state.";
+			"The gradient request for " "source hidden" " must be "   "AddTo.";
+		CHECK_EQ(req[int(EnumOpInputs::QryHidden)], kWriteTo) << // "AddTo is not supported for "  "query hidden state.";
+			"The gradient request for "  "query hidden" " must be " "WriteTo.";
+		CHECK_EQ(req[int(EnumOpInputs::H2SWeight)], kAddTo  ) << // "AddTo is not supported for " "hidden-to-score weight.";
 			"The gradient request for " "hidden-to-score weight" " must be AddTo.";
 		
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
@@ -388,7 +407,6 @@ __global__ void _cuda_fused_mlp_att_nonlin_block__forward(
 		att_hidden_reg = att_hidden_reg - exp_X;
 #define VARIANCE_EPSILON 0.000001 // avoid the case when the variance is exactly 0
 		att_hidden_reg = att_hidden_reg / sqrt(var_X + VARIANCE_EPSILON);
-#undef  VARIANCE_EPSILON
 	}
 
 	/*
@@ -397,6 +415,37 @@ __global__ void _cuda_fused_mlp_att_nonlin_block__forward(
                                                  name="%shidden" % self.prefix)
 	 */
 	att_hidden[g_threadIdx] = tanh(att_hidden_reg);
+}
+
+template < typename RealType >
+__global__ void _cuda_fused_mlp_att_nonlin_block_backward(
+	      RealType * const __restrict__ src_hidden_grad,
+	      RealType * const __restrict__ qry_hidden_grad,
+	const RealType * const __restrict__ att_hidden,
+	const RealType * const __restrict__ att_hidden_grad,
+	const OpReqType src_hidden_grad_req, const OpReqType qry_hidden_Grad_req, const bool layer_norm)
+{
+	const unsigned g_threadIdx = blockIdx.y *  gridDim.x *  blockDim.x + 
+	                                          blockIdx.x *  blockDim.x + 
+						               threadIdx.x;
+	
+	// att_hidden[g_threadIdx] = tanh(att_hidden_reg);
+	RealType att_hidden_reg      = att_hidden     [g_threadIdx];
+	RealType att_hidden_reg_grad = att_hidden_grad[g_threadIdx] * (1 - att_hidden_reg * att_hidden_reg);
+
+	if (layer_norm)
+	{
+
+#undef  VARIANCE_EPSILON
+	}
+
+	/*
+	RealType att_hidden_reg = src_hidden[g_threadIdx] + 
+	                          qry_hidden[blockIdx.y * blockDim.x + threadIdx.x];
+	 */
+
+	src_hidden_grad[g_threadIdx] += att_hidden_reg_grad;
+	atomicAdd(&qry_hidden_grad[blockIdx.y * blockDim.x + threadIdx.x], att_hidden_reg_grad);
 }
 
 template <>
