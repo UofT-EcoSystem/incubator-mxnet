@@ -13,7 +13,7 @@ namespace mxnet {
 
 /**
  * Forward Pass of the LSTM Nonlinear Block
- * This kernel shall be launched using the parameter <<< ceil(BxH / 128), 128 >>>.
+ * This kernel shall be launched using the parameter <<< ceil(BxH / 128), 128, 0, cuda_stream >>>.
  * @param1   i_cell_input [B x 4H]:  (Input) Input to the LSTM Cell from the Previous Layer
  * @param2 i_hidden_state [B x 4H]:  (Input) Hidden State from the Previous Time Step
  * @param3   i_cell_state [B x  H]:  (Input)   Cell State from the Previous Time Step
@@ -35,7 +35,7 @@ static __global__ void _cuda_fused_lstm_nonlin_block__forward(
 
 /**
  * Backward Pass of the LSTM Nonlinear Block
- * This kernel shall be launched using the parameter <<< ceil(BxH / 128), 128 >>>.
+ * This kernel shall be launched using the parameter <<< ceil(BxH / 128), 128, 0, cuda_stream >>>.
  * All the parameters are the same as the forward kernel, except that the input now becomes output and vice versa.
  */
 template < typename RealType >
