@@ -71,32 +71,32 @@ static inline void FullyConnectedFW(cublasHandle_t cublas_handle,
 	const unsigned batch_size, const unsigned input_dim, const unsigned num_hidden);
 
 // FullyConnected Layer Y = XW^T Backward Pass on Weight (dW = dY^T X)
-// @param1 dY [batch_size x num_hidden]:  (Input) Output Gradient `dY`
-// @param2  X [batch_size x input_dim] :  (Input)  Input Variable  `X`
-// @param3 dW [num_hidden x input_dim] : (Output) Weight Parameter Gradient `dW`
+// @param1  X [batch_size x input_dim] :  (Input)  Input Variable  `X`
+// @param2 dW [num_hidden x input_dim] : (Output) Weight Parameter Gradient `dW`
+// @param3 dY [batch_size x num_hidden]:  (Input) Output Gradient `dY`
 // @param4 batch_size: (Parameter) Batch Size
 // @param5 input_dim : (Parameter) Input Dimension
 // @param6 num_hidden: (Parameter) Number of Hidden Units
 template < typename RealType >
 static inline void FullyConnectedBWWeight(cublasHandle_t cublas_handle,
-	const RealType * const __restrict__ dY,
 	const RealType * const __restrict__  X,
 	      RealType * const __restrict__ dW,
+	const RealType * const __restrict__ dY,
 	const OpReqType grad_req, const unsigned batch_size, 
 	const unsigned input_dim, const unsigned num_hidden);
 
 // FullyConnected Layer Y = XW^T Backward Pass on Data (dX = dY W)
-// @param1 dY [batch_size x num_hidden]:  (Input) Output Gradient `dY`
+// @param1 dX [batch_size x input_dim] : (Output)  Input Gradient `dX`
 // @param2  W [num_hidden x input_dim] :  (Input) Weight Parameter `W`
-// @param3 dX [batch_size x input_dim] : (Output)  Input Gradient `dX`
+// @param3 dY [batch_size x num_hidden]:  (Input) Output Gradient `dY`
 // @param4 batch_size: (Parameter) Batch Size
 // @param5 input_dim : (Parameter) Input Dimension
 // @param6 num_hidden: (Parameter) Number of Hidden Units
 template < typename RealType >
 static inline void FullyConnectedBWData  (cublasHandle_t cublas_handle,
-	const RealType * const __restrict__ dY,
-	const RealType * const __restrict__  W,
 	      RealType * const __restrict__ dX,
+	const RealType * const __restrict__  W,
+	const RealType * const __restrict__ dY,
 	const OpReqType grad_req, const unsigned batch_size, 
 	const unsigned input_dim, const unsigned num_hidden);
 
@@ -337,16 +337,16 @@ public:
 			"Must initialize the cuBLAS handle in CUDA stream.";
 		
 		FullyConnectedBWWeight(Stream < gpu > ::GetBlasHandle(cuda_stream),
-		                       att_scores_grad.dptr_,
 				       att_hidden     .dptr_,
 				       h2s_weight_grad.dptr_,
+				       att_scores_grad.dptr_,
 				       req[int(EnumOpInputs::H2SWeight)],
 				       _param.batch_size * _param.seq_length,
 				       _param.state_size, 1);
 		FullyConnectedBWData  (Stream < gpu > ::GetBlasHandle(cuda_stream),
-		                       att_scores_grad.dptr_,
+		                       att_hidden_grad.dptr_,
 				       h2s_weight     .dptr_,
-				       att_hidden_grad.dptr_,
+				       att_scores_grad.dptr_,
 				       OpReqType::kWriteTo,
 				       _param.batch_size * _param.seq_length,
 				       _param.state_size, 1);
@@ -569,9 +569,9 @@ inline void FullyConnectedFW < double > (cublasHandle_t cublas_handle,
 
 template <>
 inline void FullyConnectedBWWeight < float >  (cublasHandle_t cublas_handle,
-	const float * const __restrict__ dY,
 	const float * const __restrict__  X,
 	      float * const __restrict__ dW,
+	const float * const __restrict__ dY,
 	const OpReqType grad_req, const unsigned batch_size,
 	const unsigned input_dim, const unsigned num_hidden)
 {
@@ -589,9 +589,9 @@ inline void FullyConnectedBWWeight < float >  (cublasHandle_t cublas_handle,
 
 template <>
 inline void FullyConnectedBWWeight < double > (cublasHandle_t cublas_handle,
-	const double * const __restrict__ dY,
 	const double * const __restrict__  X,
 	      double * const __restrict__ dW,
+	const double * const __restrict__ dY,
 	const OpReqType grad_req, const unsigned batch_size,
 	const unsigned input_dim, const unsigned num_hidden)
 {
@@ -609,9 +609,9 @@ inline void FullyConnectedBWWeight < double > (cublasHandle_t cublas_handle,
 
 template <>
 inline void FullyConnectedBWData  (cublasHandle_t cublas_handle,
-	const float * const __restrict__ dY, 
-	const float * const __restrict__  W,
 	      float * const __restrict__ dX,
+	const float * const __restrict__  W,
+	const float * const __restrict__ dY, 
 	const OpReqType grad_req, const unsigned batch_size,
 	const unsigned input_dim, const unsigned num_hidden)
 {
@@ -629,9 +629,9 @@ inline void FullyConnectedBWData  (cublasHandle_t cublas_handle,
 
 template <>
 inline void FullyConnectedBWData  (cublasHandle_t cublas_handle,
-	const double * const __restrict__ dY,
-	const double * const __restrict__  W, 
 	      double * const __restrict__ dX,
+	const double * const __restrict__  W, 
+	const double * const __restrict__ dY,
 	const OpReqType grad_req, const unsigned batch_size,
 	const unsigned input_dim, const unsigned num_hidden)
 {
