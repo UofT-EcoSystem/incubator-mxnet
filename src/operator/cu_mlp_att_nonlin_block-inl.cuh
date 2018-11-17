@@ -35,21 +35,26 @@ static __global__ void _cuda_fused_mlp_att_nonlin_block__forward(
 /**
  * Backward Pass of the MLP Attention Layer Nonlinear Block
  * This kernel shall be launched using the parameter <<< (B, H), H, 0, cuda_stream >>>
- * @param1 src_hidden_grad [B x T x H]: (Output) Gradient of Source Hidden State
- * @param2 qry_hidden_grad [B     x H]: (Output) Gradient of  Query Hidden State
- * @param3 att_hidden      [B x T x H]:  (Input) Attention Hidden State (reserved by Forward Pass)
- * @param4 att_hidden_grad [B x T x H]:  (Input) Gradient of Attention Hidden State
- * @param5 src_hidden_grad_req: (Parameter) Gradient Request of Source Hidden State
- * @param6 qry_hidden_grad_req: (Parameter) Gradient Request of  Query Hidden State
- * @param7 layer_norm: (Parameter) Whether Layer Normalization is performed in the Forward Pass
+ * @param1 src_hidden      [B x T x H]:  (Input) Source Hidden State
+ * @param2 src_hidden_grad [B x T x H]: (Output) Source Hidden State Gradient
+ * @param3 qry_hidden      [B     x H]:  (Input)  Query Hidden State
+ * @param4 qry_hidden_grad [B     x H]: (Output)  Query Hidden State Gradient
+ * @param5 att_hidden      [B x T x H]:  (Input) Attention Hidden State
+ * @param6 att_hidden_grad [B x T x H]:  (Input) Attention Hidden State Gradient
+ * @param7 att_hidden_exp  [B x T]: (Input) EXP_H[Attention Hidden State]
+ * @param8 att_hidden_var  [B x T]: (Input) VAR_H[Attention Hidden State]
+ * @param9 layer_norm: (Parameter) Whether Layer Normalization is performed in the Forward Pass
  */
 template < typename RealType >
 static __global__ void _cuda_fused_mlp_att_nonlin_block_backward(
+	const RealType * const __restrict__ src_hidden,
 	      RealType * const __restrict__ src_hidden_grad,
+	const RealType * const __restrict__ qry_hidden,
 	      RealType * const __restrict__ qry_hidden_grad,
-	const RealType * const __restrict__ att_hidden, 
+	const RealType * const __restrict__ att_hidden,
 	const RealType * const __restrict__ att_hidden_grad,
-	const OpReqType src_hidden_grad_req, const OpReqType qry_hidden_grad_req, const bool layer_norm);
+	const RealType * const __restrict__ att_hidden_exp,
+	const RealType * const __restrict__ att_hidden_var, const bool layer_norm);
 
 // FullyConnected Layer Y = XW^T Forward Pass
 // @param1 X [batch_size x input_dim] :  (Input) Input  Variable  `X`
@@ -246,6 +251,8 @@ public:
 		CHECK_EQ(req[int(EnumOpInputs::H2SWeight)], kAddTo) << 
 			"The gradient request for " "hidden-to-score weight" " must be " "AddTo.";
 		
+		// TODO: Cleanup the value of gradients using memset depending the gradient request type.
+
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 
 		// get the input data in the forward pass
@@ -467,11 +474,14 @@ __global__ void _cuda_fused_mlp_att_nonlin_block__forward(
 
 template < typename RealType >
 __global__ void _cuda_fused_mlp_att_nonlin_block_backward(
+	const RealType * const __restrict__ src_hidden,
 	      RealType * const __restrict__ src_hidden_grad,
+	const RealType * const __restrict__ qry_hidden,
 	      RealType * const __restrict__ qry_hidden_grad,
 	const RealType * const __restrict__ att_hidden,
 	const RealType * const __restrict__ att_hidden_grad,
-	const OpReqType src_hidden_grad_req, const OpReqType qry_hidden_Grad_req, const bool layer_norm)
+	const RealType * const __restrict__ att_hidden_exp,
+	const RealType * const __restrict__ att_hidden_var, const bool layer_norm)
 {
 	const unsigned g_threadIdx = blockIdx.y *  gridDim.x *  blockDim.x + 
 	                                          blockIdx.x *  blockDim.x + 
@@ -479,11 +489,17 @@ __global__ void _cuda_fused_mlp_att_nonlin_block_backward(
 	
 	// att_hidden[g_threadIdx] = tanh(att_hidden_reg);
 	RealType att_hidden_reg      = att_hidden     [g_threadIdx];
-	RealType att_hidden_reg_grad = att_hidden_grad[g_threadIdx] * (1 - att_hidden_reg * att_hidden_reg);
+	RealType att_hidden_grad_reg = att_hidden_grad[g_threadIdx] * (1 - att_hidden_reg * att_hidden_reg);
 
 	if (layer_norm)
 	{
+		// read the expected value and variance from the reserved workspace
+		RealType att_hidden_exp_reg = att_hidden_exp[blockIdx.y * gridDim.x + blockIdx.x];
+		RealType att_hidden_var_reg = att_hidden_var[blockIdx.y * gridDim.x + blockIdx.x];
 
+		RealType rsqrt_var_plus_epsilon = 1.0 / sqrt(att_hidden_var_reg + VARIANCE_EPSILON);
+
+		
 #undef  VARIANCE_EPSILON
 	}
 
@@ -492,8 +508,8 @@ __global__ void _cuda_fused_mlp_att_nonlin_block_backward(
 	                          qry_hidden[blockIdx.y * blockDim.x + threadIdx.x];
 	 */
 
-	src_hidden_grad[g_threadIdx] += att_hidden_reg_grad;
-	atomicAdd(&qry_hidden_grad[blockIdx.y * blockDim.x + threadIdx.x], att_hidden_reg_grad);
+	src_hidden_grad[g_threadIdx] += att_hidden_grad_reg;
+	atomicAdd(&qry_hidden_grad[blockIdx.y * blockDim.x + threadIdx.x], att_hidden_grad_reg);
 }
 
 template <>
