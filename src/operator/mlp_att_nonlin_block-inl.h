@@ -28,8 +28,8 @@ struct MlpAttNonLinBlockParam : public dmlc::Parameter < MlpAttNonLinBlockParam 
 	DMLC_DECLARE_PARAMETER(MlpAttNonLinBlockParam)
 	{
 		DMLC_DECLARE_FIELD(layer_norm).set_default(false)
-			.describe("Whether to perform layer normalization after "
-			          "broadcast add query to source hidden state.");
+			.describe("Whether to perform Layer Normalization after "
+			          "broadcast adding Query to Source hidden state.");
 	}
 };
 
