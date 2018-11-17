@@ -29,12 +29,12 @@ static __global__ void _cuda_fused_mlp_att_nonlin_block__forward(
 	const RealType * const __restrict__ qry_hidden,
 	      RealType * const __restrict__ att_hidden, 
 	      RealType * const __restrict__ att_hidden_exp,
-	      RealType * const __restrict__ att_hidden_var,
+	      RealType * const __restrict__ att_hidden_var, 
 	const bool layer_norm);
 
 /**
  * Backward Pass of the MLP Attention Layer Nonlinear Block
- * This kernel shall be launched using the parameter <<< (B, H), H, 0, cuda_stream >>>
+ * This kernel shall be launched using the parameter <<< (B, T), H, 0, cuda_stream >>>
  * @param1 src_hidden      [B x T x H]:  (Input) Source Hidden State
  * @param2 src_hidden_grad [B x T x H]: (Output) Source Hidden State Gradient
  * @param3 qry_hidden      [B     x H]:  (Input)  Query Hidden State
@@ -54,7 +54,8 @@ static __global__ void _cuda_fused_mlp_att_nonlin_block_backward(
 	const RealType * const __restrict__ att_hidden,
 	const RealType * const __restrict__ att_hidden_grad,
 	const RealType * const __restrict__ att_hidden_exp,
-	const RealType * const __restrict__ att_hidden_var, const bool layer_norm);
+	const RealType * const __restrict__ att_hidden_var,
+	const bool layer_norm);
 
 // FullyConnected Layer Y = XW^T Forward Pass
 // @param1 X [batch_size x input_dim] :  (Input) Input  Variable  `X`
@@ -351,7 +352,23 @@ public:
 				       _param.batch_size * _param.seq_length,
 				       _param.state_size, 1);
 
-		// TODO: Backward kernel goes here.
+		_cuda_fused_mlp_att_nonlin_block_backward
+			<<<
+				dim3(_param.batch_size,
+				     _param.seq_length),
+				_param.state_size, 0, Stream < gpu > ::GetStream(cuda_stream)
+			>>>
+			(
+				_param.layer_norm ? src_hidden.dptr_ : nullptr,
+				src_hidden_grad.dptr_,
+				_param.layer_norm ? qry_hidden.dptr_ : nullptr,
+				qry_hidden_grad.dptr_,
+				att_hidden     .dptr_,
+				att_hidden_grad.dptr_,
+				_param.layer_norm ? att_hidden_exp.dptr_ : nullptr,
+				_param.layer_norm ? att_hidden_var.dptr_ : nullptr,
+				_param.layer_norm
+			);
 	}
 }; // class CUMlpAttNonLinBlockOp
 
@@ -481,7 +498,8 @@ __global__ void _cuda_fused_mlp_att_nonlin_block_backward(
 	const RealType * const __restrict__ att_hidden,
 	const RealType * const __restrict__ att_hidden_grad,
 	const RealType * const __restrict__ att_hidden_exp,
-	const RealType * const __restrict__ att_hidden_var, const bool layer_norm)
+	const RealType * const __restrict__ att_hidden_var,
+	const bool layer_norm)
 {
 	const unsigned g_threadIdx = blockIdx.y *  gridDim.x *  blockDim.x + 
 	                                          blockIdx.x *  blockDim.x + 
