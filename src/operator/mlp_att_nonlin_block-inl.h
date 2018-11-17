@@ -78,7 +78,7 @@ public:
 
 	std::vector < std::string > ListArguments() const override
 	{
-		return {"QryHidden", "SrcHidden"};
+		return {"QryHidden", "SrcHidden", "H2SWeight"};
 	}
 	std::vector < std::string > ListOutputs  () const override 
 	{
