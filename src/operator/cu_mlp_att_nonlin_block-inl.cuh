@@ -14,21 +14,27 @@ namespace mxnet {
 
 /**
  * Forward Pass of the MLP Attention Layer Nonlinear Block
- * This kernel shall be launched using the parameter <<< (B, T), H, H * sizeof(RealType) >>>
+ * This kernel shall be launched using the parameter <<< (B, T), H, H * sizeof(RealType), cuda_stream >>>
  * @param1 src_hidden [B x T x H]:  (Input) Source Hidden State
  * @param2 qry_hidden [B     x H]:  (Input)  Query Hidden State
  * @param3 att_hidden [B x T x H]: (Output) Attention Hidden State
- * @param4 layer_norm: (Parameter) Whether to perform Layer Normalization
+ * @param4 att_hidden_exp [B x T x H]: (Output) EXP_H[Attention Hidden State]
+ * @param5 att_hidden_var [B x T x H]: (Output) VAR_H[Attention Hidden State]
+ * The workspace reserved for EXP and VAR will ONLY be used during backward propagation.
+ * @param6 layer_norm: (Parameter) Whether to perform Layer Normalization
  */
 template < typename RealType >
 static __global__ void _cuda_fused_mlp_att_nonlin_block__forward(
 	const RealType * const __restrict__ src_hidden,
 	const RealType * const __restrict__ qry_hidden,
-	      RealType * const __restrict__ att_hidden, const bool layer_norm);
+	      RealType * const __restrict__ att_hidden, 
+	      RealType * const __restrict__ att_hidden_exp,
+	      RealType * const __restrict__ att_hidden_var,
+	const bool layer_norm);
 
 /**
  * Backward Pass of the MLP Attention Layer Nonlinear Block
- * This kernel shall be launched using the parameter TODO: 
+ * This kernel shall be launched using the parameter <<< (B, H), H, 0, cuda_stream >>>
  * @param1 src_hidden_grad [B x T x H]: (Output) Gradient of Source Hidden State
  * @param2 qry_hidden_grad [B     x H]: (Output) Gradient of  Query Hidden State
  * @param3 att_hidden      [B x T x H]:  (Input) Attention Hidden State (reserved by Forward Pass)
@@ -184,6 +190,7 @@ public:
 				src_hidden.dptr_,
 				qry_hidden.dptr_,
 				att_hidden.dptr_,
+				nullptr, nullptr,
 				_param.layer_norm
 			);
 		
@@ -267,7 +274,7 @@ public:
 		CHECK_EQ(att_scores_grad.CheckContiguous(), true);
 
 		// obtain the requested workspace
-		Tensor < gpu, 3, DType > att_hidden      = ctx.requested[int(EnumOpWorkspace::AttHidden    )]
+		Tensor < gpu, 3, DType > att_hidden      = ctx.requested[int(EnumOpWorkspace::AttHidden)]
 			.get_space_typed < gpu, 3, DType > (
 				Shape3(_param.batch_size, 
 				       _param.seq_length,
@@ -277,6 +284,20 @@ public:
 				Shape3(_param.batch_size,
 				       _param.seq_length,
 				       _param.state_size), cuda_stream);
+
+		Tensor < gpu, 2, DType > att_hidden_exp, att_hidden_var;
+
+		if (_param.layer_norm)
+		{
+			att_hidden_exp = ctx.requested[int(EnumOpWorkspace::AttHiddenEXP)]
+				.get_space_typed < gpu, 2, DType > (
+					Shape2(_param.batch_size,
+					       _param.seq_length), cuda_stream);
+			att_hidden_var = ctx.requested[int(EnumOpWorkspace::AttHiddenVAR)]
+				.get_space_typed < gpu, 2, DType > (
+					Shape2(_param.batch_size,
+					       _param.seq_length), cuda_stream);
+		}
 		
 		// !Important: Replay the forward pass computation.
 		_cuda_fused_mlp_att_nonlin_block__forward < DType >
@@ -291,6 +312,8 @@ public:
 				src_hidden.dptr_,
 				qry_hidden.dptr_,
 				att_hidden.dptr_,
+				_param.layer_norm ? att_hidden_exp.dptr_ : nullptr,
+				_param.layer_norm ? att_hidden_var.dptr_ : nullptr,
 				_param.layer_norm
 			);
 
@@ -325,10 +348,17 @@ public:
 	}
 }; // class CUMlpAttNonLinBlockOp
 
+/**
+ * Perform sum reduction across *this* thread block.
+ * @param1 svmem_reduced_sum: [Shared Memory] Reduction Result
+ * @param2 local_value: [Register]
+ * @param3 gbmem_reduced_sum: [Global Memory] Reduction Result [Optional] 
+ */
 template < typename RealType >
 static __forceinline__ __device__ void __cu_reduce_sum(
 	volatile RealType * const __restrict__ svmem_reduced_sum, 
-	         RealType                      local_value)
+	         RealType                      local_value,
+		 RealType * const __restrict__ gbmem_reduced_sum)
 {
 	namespace cg = cooperative_groups;
 
@@ -366,7 +396,16 @@ static __forceinline__ __device__ void __cu_reduce_sum(
 			local_sum += active_threads.shfl_down(local_sum, offset);
 		}
 	}
-	if (threadIdx.x == 0) svmem_reduced_sum[0] = local_sum;
+	if (threadIdx.x == 0)
+	{
+		svmem_reduced_sum[0] = local_sum;
+		// also write the reduction result to global memory if it is provided
+		if (gbmem_reduced_sum != nullptr)
+		{
+			gbmem_reduced_sum[blockIdx.y *  gridDim.x + 
+			                               blockIdx.x] = local_sum;
+		}
+	}
 	cg::sync(this_cta);
 }
 
@@ -374,7 +413,10 @@ template < typename RealType >
 __global__ void _cuda_fused_mlp_att_nonlin_block__forward(
 	const RealType * const __restrict__ src_hidden,
 	const RealType * const __restrict__ qry_hidden,
-	      RealType * const __restrict__ att_hidden, const bool layer_norm)
+	      RealType * const __restrict__ att_hidden, 
+	      RealType * const __restrict__ att_hidden_exp,
+	      RealType * const __restrict__ att_hidden_var,
+	const bool layer_norm)
 {
 	/*
             # (batch_size, seq_len, attention_num_hidden)
@@ -401,11 +443,13 @@ __global__ void _cuda_fused_mlp_att_nonlin_block__forward(
 
 	if (layer_norm)
 	{
-		__cu_reduce_sum (svmem_reduced_sum,  att_hidden_reg);
-		RealType exp_X = svmem_reduced_sum[0] / blockDim.x; // EXP[X]
+		__cu_reduce_sum (svmem_reduced_sum,  att_hidden_reg / blockDim.x,
+		                 att_hidden_exp);
+		RealType exp_X = svmem_reduced_sum[0]; // EXP[X]
 		__cu_reduce_sum (svmem_reduced_sum, (att_hidden_reg - exp_X) *
-		                                    (att_hidden_reg - exp_X));
-		RealType var_X = svmem_reduced_sum[0] / blockDim.x; // VAR[X]
+		                                    (att_hidden_reg - exp_X) / blockDim.x,
+		                 att_hidden_var);
+		RealType var_X = svmem_reduced_sum[0]; // VAR[X]
 	
 		// perform layer normalization
 		att_hidden_reg = att_hidden_reg - exp_X;
