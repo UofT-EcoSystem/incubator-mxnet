@@ -10,7 +10,7 @@ namespace mxnet {
 	namespace op {
 		namespace {
 
-enum class EnumOpInputs    { SrcHidden, QryHidden, H2SWeight };
+enum class EnumOpInputs    { QryHidden, SrcHidden, H2SWeight };
 enum class EnumOpOutputs   { AttScores };
 enum class EnumOpWorkspace { AttHidden, 
                              AttHiddenGrad, 
@@ -78,7 +78,7 @@ public:
 
 	std::vector < std::string > ListArguments() const override
 	{
-		return {"SrcHidden", "QryHidden"};
+		return {"QryHidden", "SrcHidden"};
 	}
 	std::vector < std::string > ListOutputs  () const override 
 	{
@@ -105,7 +105,7 @@ public:
 	{
 		using namespace mshadow;
 
-		CHECK_EQ(in_shape->size(), 3U); // SrcHidden, QryHidden, H2SWeight
+		CHECK_EQ(in_shape->size(), 3U); // QryHidden, SrcHidden, H2SWeight
 
 		// query the input shape and perform shape inference
 		const TShape & src_hidden_shape = (*in_shape)[int(EnumOpInputs::SrcHidden)];
@@ -122,8 +122,7 @@ public:
 		// According to the documentation provided by MXNet,
 		// `FullyConnected` layers are implemented in $Y = XW^T$, where 
 		// $X$ is of dimension $B\times H$ and $W$ is of dimension $H'\times H$.
-		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::H2SWeight),
-			Shape2(         1, state_size));
+		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::H2SWeight), Shape2(1, state_size));
 		
 		out_shape->clear();
 
@@ -181,8 +180,8 @@ public:
 		const std::vector < int > &  in_data,
 		const std::vector < int > & out_data) const override
 	{
-		return {  in_data[int(EnumOpInputs ::SrcHidden)],
-			  in_data[int(EnumOpInputs ::QryHidden)],
+		return {  in_data[int(EnumOpInputs ::QryHidden)],
+			  in_data[int(EnumOpInputs ::SrcHidden)],
 			  in_data[int(EnumOpInputs ::H2SWeight)],
 			 out_grad[int(EnumOpOutputs::AttScores)] };
 	}

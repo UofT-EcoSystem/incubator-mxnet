@@ -15,8 +15,8 @@ namespace mxnet {
 /**
  * Forward Pass of the MLP Attention Layer Nonlinear Block
  * This kernel shall be launched using the parameter <<< (B, T), H, H * sizeof(RealType), cuda_stream >>>
- * @param1 src_hidden [B x T x H]:  (Input) Source Hidden State
- * @param2 qry_hidden [B     x H]:  (Input)  Query Hidden State
+ * @param1 qry_hidden [B     x H]:  (Input)  Query Hidden State
+ * @param2 src_hidden [B x T x H]:  (Input) Source Hidden State
  * @param3 att_hidden [B x T x H]: (Output) Attention Hidden State
  * @param4 att_hidden_exp [B x T x H]: (Output) EXP_H[Attention Hidden State]
  * @param5 att_hidden_var [B x T x H]: (Output) VAR_H[Attention Hidden State]
@@ -25,8 +25,8 @@ namespace mxnet {
  */
 template < typename RealType >
 static __global__ void _cuda_fused_mlp_att_nonlin_block__forward(
-	const RealType * const __restrict__ src_hidden,
 	const RealType * const __restrict__ qry_hidden,
+	const RealType * const __restrict__ src_hidden,
 	      RealType * const __restrict__ att_hidden, 
 	      RealType * const __restrict__ att_hidden_exp,
 	      RealType * const __restrict__ att_hidden_var, 
@@ -35,10 +35,10 @@ static __global__ void _cuda_fused_mlp_att_nonlin_block__forward(
 /**
  * Backward Pass of the MLP Attention Layer Nonlinear Block
  * This kernel shall be launched using the parameter <<< (B, T), H, 0, cuda_stream >>>
- * @param1 src_hidden      [B x T x H]:  (Input) Source Hidden State
- * @param2 src_hidden_grad [B x T x H]: (Output) Source Hidden State Gradient
- * @param3 qry_hidden      [B     x H]:  (Input)  Query Hidden State
- * @param4 qry_hidden_grad [B     x H]: (Output)  Query Hidden State Gradient
+ * @param1 qry_hidden      [B     x H]:  (Input)  Query Hidden State
+ * @param2 qry_hidden_grad [B     x H]: (Output)  Query Hidden State Gradient
+ * @param3 src_hidden      [B x T x H]:  (Input) Source Hidden State
+ * @param4 src_hidden_grad [B x T x H]: (Output) Source Hidden State Gradient
  * @param5 att_hidden      [B x T x H]:  (Input) Attention Hidden State
  * @param6 att_hidden_grad [B x T x H]:  (Input) Attention Hidden State Gradient
  * @param7 att_hidden_exp  [B x T]: (Input) EXP_H[Attention Hidden State]
@@ -47,10 +47,10 @@ static __global__ void _cuda_fused_mlp_att_nonlin_block__forward(
  */
 template < typename RealType >
 static __global__ void _cuda_fused_mlp_att_nonlin_block_backward(
-	const RealType * const __restrict__ src_hidden,
-	      RealType * const __restrict__ src_hidden_grad,
 	const RealType * const __restrict__ qry_hidden,
 	      RealType * const __restrict__ qry_hidden_grad,
+	const RealType * const __restrict__ src_hidden,
+	      RealType * const __restrict__ src_hidden_grad,
 	const RealType * const __restrict__ att_hidden,
 	const RealType * const __restrict__ att_hidden_grad,
 	const RealType * const __restrict__ att_hidden_exp,
@@ -148,22 +148,22 @@ public:
 
 		std::size_t in_expected = 3, out_expected = 1;
 
-		CHECK_EQ( in_data.size(),  in_expected); // SrcHidden, QryHidden, H2SWeight
+		CHECK_EQ( in_data.size(),  in_expected); // QryHidden, SrcHidden, H2SWeight
 		CHECK_EQ(out_data.size(), out_expected); // AttScores
 
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 
-		Tensor < gpu, 3, DType > src_hidden =  in_data[int(EnumOpInputs ::SrcHidden)]
-			.get < gpu, 3, DType > (cuda_stream);
 		Tensor < gpu, 2, DType > qry_hidden =  in_data[int(EnumOpInputs ::QryHidden)]
 			.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 3, DType > src_hidden =  in_data[int(EnumOpInputs ::SrcHidden)]
+			.get < gpu, 3, DType > (cuda_stream);
 		Tensor < gpu, 2, DType > h2s_weight =  in_data[int(EnumOpInputs ::H2SWeight)]
 			.get < gpu, 2, DType > (cuda_stream);
 		Tensor < gpu, 3, DType > att_scores = out_data[int(EnumOpOutputs::AttScores)]
 			.get < gpu, 3, DType > (cuda_stream);
 
-		CHECK_EQ(src_hidden.CheckContiguous(), true);
 		CHECK_EQ(qry_hidden.CheckContiguous(), true);
+		CHECK_EQ(src_hidden.CheckContiguous(), true);
 		CHECK_EQ(h2s_weight.CheckContiguous(), true);
 		CHECK_EQ(att_scores.CheckContiguous(), true);
 
@@ -171,12 +171,6 @@ public:
 		{
 			_Init(cuda_stream, in_data, out_data);
 		}
-		/*
-		if (ctx.is_train)
-		{
-			// TODO: Allocate training reserved space here.
-		}
-		 */
 		// obtain the requested workspace
 		Tensor < gpu, 3, DType > att_hidden = ctx.requested[int(EnumOpWorkspace::AttHidden)]
 			.get_space_typed < gpu, 3, DType > (
@@ -193,8 +187,8 @@ public:
 				Stream < gpu > ::GetStream(cuda_stream)
 			>>>
 			(
-				src_hidden.dptr_,
 				qry_hidden.dptr_,
+				src_hidden.dptr_,
 				att_hidden.dptr_,
 				nullptr, nullptr,
 				_param.layer_norm
@@ -245,39 +239,39 @@ public:
 		// so their gradient request type must be `AddTo`.
 		// In contrast, each MLP attention operator has exclusive access to `QryHidden`,
 		// so   its gradient request type must be either `WriteTo` or `WriteInplace`.
-		CHECK_EQ(req[int(EnumOpInputs::SrcHidden)], kAddTo) << 
-			"The gradient request for " "source hidden" " must be "     "AddTo.";
 		CHECK_NE(req[int(EnumOpInputs::QryHidden)], kAddTo) << // Note that the condition here is NOT_EQUAL.
-			"The gradient request for "  "query hidden" " must NOT be " "AddTo.";
+			"The gradient request for "  "query hidden" " must NOT be AddTo.";
+		CHECK_EQ(req[int(EnumOpInputs::SrcHidden)], kAddTo) << 
+			"The gradient request for " "source hidden" " must be AddTo.";
 		CHECK_EQ(req[int(EnumOpInputs::H2SWeight)], kAddTo) << 
-			"The gradient request for " "hidden-to-score weight" " must be " "AddTo.";
+			"The gradient request for " "hidden-to-score weight" "must be AddTo.";
 		
 		// TODO: Cleanup the value of gradients using memset depending the gradient request type.
 
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 
 		// get the input data in the forward pass
-		Tensor < gpu, 3, DType > src_hidden      =  in_data[int(EnumOpInputs ::SrcHidden)]
-			.get < gpu, 3, DType > (cuda_stream);
 		Tensor < gpu, 2, DType > qry_hidden      =  in_data[int(EnumOpInputs ::QryHidden)]
 			.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 3, DType > src_hidden      =  in_data[int(EnumOpInputs ::SrcHidden)]
+			.get < gpu, 3, DType > (cuda_stream);
 		Tensor < gpu, 2, DType > h2s_weight      =  in_data[int(EnumOpInputs ::H2SWeight)]
 			.get < gpu, 2, DType > (cuda_stream);
 
-		Tensor < gpu, 3, DType > src_hidden_grad =  in_grad[int(EnumOpInputs ::SrcHidden)]
-			.get < gpu, 3, DType > (cuda_stream);
 		Tensor < gpu, 2, DType > qry_hidden_grad =  in_grad[int(EnumOpInputs ::QryHidden)]
 			.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 3, DType > src_hidden_grad =  in_grad[int(EnumOpInputs ::SrcHidden)]
+			.get < gpu, 3, DType > (cuda_stream);
 		Tensor < gpu, 2, DType > h2s_weight_grad =  in_grad[int(EnumOpInputs ::H2SWeight)]
 			.get < gpu, 2, DType > (cuda_stream);
 		Tensor < gpu, 3, DType > att_scores_grad = out_grad[int(EnumOpOutputs::AttScores)]
 			.get < gpu, 3, DType > (cuda_stream);
 
-		CHECK_EQ(src_hidden     .CheckContiguous(), true);
 		CHECK_EQ(qry_hidden     .CheckContiguous(), true);
+		CHECK_EQ(src_hidden     .CheckContiguous(), true);
 		CHECK_EQ(h2s_weight     .CheckContiguous(), true);
-		CHECK_EQ(src_hidden_grad.CheckContiguous(), true);
 		CHECK_EQ(qry_hidden_grad.CheckContiguous(), true);
+		CHECK_EQ(src_hidden_grad.CheckContiguous(), true);
 		CHECK_EQ(h2s_weight_grad.CheckContiguous(), true);
 		CHECK_EQ(att_scores_grad.CheckContiguous(), true);
 
@@ -317,8 +311,8 @@ public:
 				Stream < gpu > ::GetStream(cuda_stream)
 			>>>
 			(
-				src_hidden.dptr_,
 				qry_hidden.dptr_,
+				src_hidden.dptr_,
 				att_hidden.dptr_,
 				_param.layer_norm ? att_hidden_exp.dptr_ : nullptr,
 				_param.layer_norm ? att_hidden_var.dptr_ : nullptr,
@@ -359,10 +353,10 @@ public:
 				_param.state_size, 0, Stream < gpu > ::GetStream(cuda_stream)
 			>>>
 			(
-				_param.layer_norm ? src_hidden.dptr_ : nullptr,
-				src_hidden_grad.dptr_,
 				_param.layer_norm ? qry_hidden.dptr_ : nullptr,
 				qry_hidden_grad.dptr_,
+				_param.layer_norm ? src_hidden.dptr_ : nullptr,
+				src_hidden_grad.dptr_,
 				att_hidden     .dptr_,
 				att_hidden_grad.dptr_,
 				_param.layer_norm ? att_hidden_exp.dptr_ : nullptr,
@@ -435,8 +429,8 @@ static __forceinline__ __device__ void __cu_reduce_sum(
 
 template < typename RealType >
 __global__ void _cuda_fused_mlp_att_nonlin_block__forward(
-	const RealType * const __restrict__ src_hidden,
 	const RealType * const __restrict__ qry_hidden,
+	const RealType * const __restrict__ src_hidden,
 	      RealType * const __restrict__ att_hidden, 
 	      RealType * const __restrict__ att_hidden_exp,
 	      RealType * const __restrict__ att_hidden_var,
@@ -491,10 +485,10 @@ __global__ void _cuda_fused_mlp_att_nonlin_block__forward(
 
 template < typename RealType >
 __global__ void _cuda_fused_mlp_att_nonlin_block_backward(
-	const RealType * const __restrict__ src_hidden,
-	      RealType * const __restrict__ src_hidden_grad,
 	const RealType * const __restrict__ qry_hidden,
 	      RealType * const __restrict__ qry_hidden_grad,
+	const RealType * const __restrict__ src_hidden,
+	      RealType * const __restrict__ src_hidden_grad,
 	const RealType * const __restrict__ att_hidden,
 	const RealType * const __restrict__ att_hidden_grad,
 	const RealType * const __restrict__ att_hidden_exp,
