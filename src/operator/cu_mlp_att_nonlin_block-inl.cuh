@@ -491,16 +491,33 @@ __global__ void _cuda_fused_mlp_att_nonlin_block_backward(
 	RealType att_hidden_reg      = att_hidden     [g_threadIdx];
 	RealType att_hidden_grad_reg = att_hidden_grad[g_threadIdx] * (1 - att_hidden_reg * att_hidden_reg);
 
+	/*
+            if self._ln is not None:
+                attention_hidden = self._ln.normalize(attention_hidden)
+	 */
 	if (layer_norm)
 	{
 		// read the expected value and variance from the reserved workspace
 		RealType att_hidden_exp_reg = att_hidden_exp[blockIdx.y * gridDim.x + blockIdx.x];
 		RealType att_hidden_var_reg = att_hidden_var[blockIdx.y * gridDim.x + blockIdx.x];
-
-		RealType rsqrt_var_plus_epsilon = 1.0 / sqrt(att_hidden_var_reg + VARIANCE_EPSILON);
-
-		
+		// 1 / sqrt(var + epsilon)
+		RealType rsqrt_var_plus_epsilon = 1.0 / sqrt(att_hidden_var_reg + VARIANCE_EPSILON);		
 #undef  VARIANCE_EPSILON
+		// x - mu
+		RealType att_hidden_minus_exp = src_hidden[g_threadIdx] + 
+		                                qry_hidden[blockIdx.y * blockDim.x + threadIdx.x] - 
+					        att_hidden_exp_reg;
+
+		// dy / dx = 1 / sqrt(var + epsilon) - 
+		//           1 / sqrt(var + epsilon) * 1 / N - 
+		//           1 / sqrt(var + epsilon)^3 * (x - mu)^2 / N
+		att_hidden_grad_reg *= rsqrt_var_plus_epsilon - 
+		                       rsqrt_var_plus_epsilon * 1.0 / blockDim.x - 
+				       rsqrt_var_plus_epsilon * 
+				       rsqrt_var_plus_epsilon * 
+				       rsqrt_var_plus_epsilon * 
+				       att_hidden_minus_exp * 
+				       att_hidden_minus_exp / blockDim.x;
 	}
 
 	/*
