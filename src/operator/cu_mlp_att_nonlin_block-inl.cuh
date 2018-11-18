@@ -34,7 +34,7 @@ static __global__ void _cuda_fused_mlp_att_nonlin_block_forward(
 
 /**
  * Backward Pass of the MLP Attention Layer Nonlinear Block
- * This kernel shall be launched using the parameter <<< (B, T), H, 0, cuda_stream >>>
+ * This kernel shall be launched using the parameter <<< (B, T), H, H * sizeof(RealType), cuda_stream >>>
  * @param1 qry_hidden      [B     x H]:  (Input)  Query Hidden State
  * @param2 qry_hidden_grad [B     x H]: (Output)  Query Hidden State Gradient
  * @param3 src_hidden      [B x T x H]:  (Input) Source Hidden State
@@ -346,12 +346,14 @@ public:
 			<<<
 				dim3(_param.seq_length,
 				     _param.batch_size),
-				_param.state_size, 0, Stream < gpu > ::GetStream(cuda_stream)
+				_param.state_size, 
+				_param.state_size * sizeof(DType), 
+				Stream < gpu > ::GetStream(cuda_stream)
 			>>>
 			(
-				_param.layer_norm ? qry_hidden.dptr_ : nullptr,
+				qry_hidden.dptr_,
 				qry_hidden_grad.dptr_,
-				_param.layer_norm ? src_hidden.dptr_ : nullptr,
+				src_hidden.dptr_,
 				src_hidden_grad.dptr_,
 				ptr_att_hidden,
 				ptr_att_hidden_grad,
@@ -364,18 +366,24 @@ public:
 
 /**
  * Perform sum reduction across *this* thread block.
- * @param1 svmem_reduced_sum: [Shared Memory] Reduction Result
- * @param2 local_value: [Register]
- * @param3 gbmem_reduced_sum: [Global Memory] Reduction Result [Optional] 
+ * @param1 local_value: Local Value that is stored in Register
+ * @param2 gmem_reduced_sum: [Optional] Global Memory for writting back the Result
+ * @return the Result of Reduction across *this* Thread Block
  */
 template < typename RealType >
-static __forceinline__ __device__ void __cu_reduce_sum(
-	volatile RealType * const __restrict__ svmem_reduced_sum, 
-	         RealType                      local_value,
-		 RealType * const __restrict__ gbmem_reduced_sum)
+static __forceinline__ __device__ RealType __cu_reduce_sum( 
+	RealType                      local_value,
+	RealType * const __restrict__ gmem_reduced_sum = nullptr)
 {
 	namespace cg = cooperative_groups;
 	cg::thread_block this_cta = cg::this_thread_block();
+
+	// declaring dynamic shared memory in templated CUDA kernel is tricky
+	// please refer to this StackOverflow thread: 
+	// https://stackoverflow.com/questions/27570552/templated-cuda-kernel-with-dynamic-shared-memory
+	extern __shared__ volatile unsigned char svmem[];
+	volatile RealType * svmem_reduced_sum = 
+		reinterpret_cast < volatile RealType * > (svmem);
 
 	svmem_reduced_sum[threadIdx.x] = local_value;
 
@@ -422,13 +430,14 @@ static __forceinline__ __device__ void __cu_reduce_sum(
 		}
 	}
 	// also write the reduction result to global memory if it is provided
-	if (gbmem_reduced_sum != nullptr)
+	if (gmem_reduced_sum != nullptr)
 	{
 		if (threadIdx.x == 0)
-			gbmem_reduced_sum[blockIdx.y *  gridDim.x + 
-		        	                       blockIdx.x] = local_value;
+			gmem_reduced_sum[blockIdx.y *  gridDim.x + 
+		        	                      blockIdx.x] = local_value;
 		cg::sync(this_cta);
 	}
+	return svmem_reduced_sum[0];
 }
 
 template < typename RealType >
@@ -456,23 +465,14 @@ __global__ void _cuda_fused_mlp_att_nonlin_block_forward(
             if self._ln is not None:
                 attention_hidden = self._ln.normalize(attention_hidden)
 	 */
-	// declaring dynamic shared memory in templated CUDA kernel is tricky
-	// please refer to this StackOverflow thread: 
-	// https://stackoverflow.com/questions/27570552/templated-cuda-kernel-with-dynamic-shared-memory
-	extern __shared__ volatile unsigned char svmem[];
-
-	volatile RealType * svmem_reduced_sum = reinterpret_cast < volatile RealType * > (svmem);
-
+	
 	if (layer_norm)
 	{
-		__cu_reduce_sum (svmem_reduced_sum,  att_hidden_reg / blockDim.x,
-		                 att_hidden_exp);
-		RealType exp_X = svmem_reduced_sum[0]; // EXP[X]
-		__cu_reduce_sum (svmem_reduced_sum, (att_hidden_reg - exp_X) *
-		                                    (att_hidden_reg - exp_X) / blockDim.x,
-		                 att_hidden_var);
-		RealType var_X = svmem_reduced_sum[0]; // VAR[X]
-	
+		RealType exp_X = __cu_reduce_sum( att_hidden_reg / blockDim.x,
+		                                  att_hidden_exp);
+		RealType var_X = __cu_reduce_sum((att_hidden_reg - exp_X) *
+		                                 (att_hidden_reg - exp_X) / blockDim.x,
+		                                  att_hidden_var);
 		// perform layer normalization
 		att_hidden_reg = att_hidden_reg - exp_X;
 #define VARIANCE_EPSILON 0.000001 // avoid the case when the variance is exactly 0
@@ -505,11 +505,9 @@ __global__ void _cuda_fused_mlp_att_nonlin_block_backward(
 	
 	// att_hidden[g_threadIdx] = tanh(att_hidden_reg);
 	RealType att_hidden_reg      = att_hidden     [g_threadIdx];
-	if (threadIdx.x == 0)
-		printf("BlockIdx.x: %d, BlockIdx.y: %d, Att Hidden: %.2f, Att Hidden Grad: %.2f\n", 
-			blockIdx.x, blockIdx.y, att_hidden_reg, att_hidden_grad[g_threadIdx]);
-	__syncthreads();
-	RealType att_hidden_grad_reg = att_hidden_grad[g_threadIdx] * (1 - att_hidden_reg * att_hidden_reg);
+	RealType att_hidden_grad_reg = att_hidden_grad[g_threadIdx] * 
+		(1 - att_hidden_reg * 
+		     att_hidden_reg);
 
 	/*
             if self._ln is not None:
@@ -520,10 +518,6 @@ __global__ void _cuda_fused_mlp_att_nonlin_block_backward(
 		// read the expected value and variance from the reserved workspace
 		RealType att_hidden_exp_reg = att_hidden_exp[blockIdx.y * gridDim.x + blockIdx.x];
 		RealType att_hidden_var_reg = att_hidden_var[blockIdx.y * gridDim.x + blockIdx.x];
-		if (threadIdx.x == 0)
-			printf("BlockIdx.x: %d, BlockIdx.y: %d, Att Hidden Exp: %.2f, Att Hidden Var: %.2f\n", 
-				blockIdx.x, blockIdx.y, att_hidden_exp_reg, att_hidden_var_reg);
-		__syncthreads();
 		// 1 / sqrt(var + epsilon)
 		RealType rsqrt_var_plus_epsilon = 1.0 / sqrt(att_hidden_var_reg + VARIANCE_EPSILON);		
 #undef  VARIANCE_EPSILON
@@ -531,21 +525,16 @@ __global__ void _cuda_fused_mlp_att_nonlin_block_backward(
 		RealType att_hidden_minus_exp = qry_hidden[blockIdx.y * blockDim.x + threadIdx.x] + 
 		                                src_hidden[g_threadIdx] - att_hidden_exp_reg;
 
-		// dy / dx = 1 / sqrt(var + epsilon) - 
-		//           1 / sqrt(var + epsilon) * 1 / N - 
-		//           1 / sqrt(var + epsilon)^3 * (x - mu)^2 / N
-		att_hidden_grad_reg *= rsqrt_var_plus_epsilon - 
-		                       rsqrt_var_plus_epsilon * 1.0 / blockDim.x - 
-				       rsqrt_var_plus_epsilon * 
-				       rsqrt_var_plus_epsilon * 
-				       rsqrt_var_plus_epsilon * 
-				       att_hidden_minus_exp * 
-				       att_hidden_minus_exp / blockDim.x;
-
-		if (threadIdx.x == 0)
-			printf("BlockIdx.x: %d, BlockIdx.y: %d, Rsqrt: %.2f, Minus: %.2f\n", 
-				blockIdx.x, blockIdx.y, rsqrt_var_plus_epsilon, att_hidden_minus_exp);
-		__syncthreads();
+		RealType att_hidden_exp_grad = __cu_reduce_sum(- att_hidden_grad_reg * 
+								 rsqrt_var_plus_epsilon);
+		RealType att_hidden_var_grad = __cu_reduce_sum(- att_hidden_grad_reg * 
+								 rsqrt_var_plus_epsilon * 
+								 rsqrt_var_plus_epsilon *
+								 rsqrt_var_plus_epsilon *
+								 att_hidden_minus_exp / 2.0);
+		att_hidden_grad_reg = att_hidden_grad_reg * rsqrt_var_plus_epsilon + 
+		                      att_hidden_exp_grad / blockDim.x + 
+				      att_hidden_var_grad / blockDim.x * 2 * att_hidden_minus_exp;
 	}
 
 	/*
@@ -553,7 +542,7 @@ __global__ void _cuda_fused_mlp_att_nonlin_block_backward(
 	                          qry_hidden[blockIdx.y * blockDim.x + threadIdx.x];
 	 */
 
-	src_hidden_grad[g_threadIdx] = att_hidden_grad_reg;
+	src_hidden_grad[g_threadIdx] += att_hidden_grad_reg;
 	atomicAdd(&qry_hidden_grad[blockIdx.y * blockDim.x + threadIdx.x], att_hidden_grad_reg);
 }
 
