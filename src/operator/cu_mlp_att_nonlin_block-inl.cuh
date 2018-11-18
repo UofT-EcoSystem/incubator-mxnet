@@ -57,7 +57,7 @@ static __global__ void _cuda_fused_mlp_att_nonlin_block_backward(
 	const RealType * const __restrict__ att_hidden_var,
 	const bool layer_norm);
 
-// FullyConnected Layer Y = XW^T Forward Pass
+// FullyConnected Layer Y = X W^T Forward Pass
 // @param1 X [batch_size x input_dim] :  (Input) Input  Variable  `X`
 // @param2 W [num_hidden x input_dim] :  (Input) Weight Parameter `W`
 // @param3 Y [batch_size x num_hidden]: (Output) Output Variable  `Y`
@@ -172,11 +172,18 @@ public:
 			_Init(cuda_stream, in_data, out_data);
 		}
 		// obtain the requested workspace
+		/*
 		Tensor < gpu, 3, DType > att_hidden = ctx.requested[int(EnumOpWorkspace::AttHidden)]
 			.get_space_typed < gpu, 3, DType > (
 				Shape3(_param.batch_size, 
 				       _param.seq_length,
 				       _param.state_size), cuda_stream);
+		 */
+		Tensor < gpu, 1, DType > workspace = ctx.requested[int(EnumOpWorkspace::TempSpace)]
+			.get_space_typed < gpu, 1, DType > (Shape1(
+				_param.batch_size * _param.seq_length * _param.state_size), cuda_stream);
+		
+		DType * ptr_att_hidden = workspace.dptr_;
 
 		_cuda_fused_mlp_att_nonlin_block_forward < DType >
 			<<<
@@ -189,7 +196,7 @@ public:
 			(
 				qry_hidden.dptr_,
 				src_hidden.dptr_,
-				att_hidden.dptr_,
+				ptr_att_hidden,
 				nullptr, nullptr,
 				_param.layer_norm
 			);
@@ -207,7 +214,7 @@ public:
 			"Must initialize the cuBLAS handle in CUDA stream.";
 		
 		FullyConnectedFW(Stream < gpu > ::GetBlasHandle(cuda_stream),
-		                 att_hidden.dptr_,
+		                 ptr_att_hidden,
 		                 h2s_weight.dptr_,
 			         att_scores.dptr_,
 			         _param.batch_size * _param.seq_length, 
@@ -239,12 +246,12 @@ public:
 		// so their gradient request type must be `AddTo`.
 		// In contrast, each MLP attention operator has exclusive access to `QryHidden`,
 		// so   its gradient request type must be either `WriteTo` or `WriteInplace`.
-		CHECK_NE(req[int(EnumOpInputs::QryHidden)], kAddTo) << // Note that the condition here is NOT_EQUAL.
-			"The gradient request for "  "query hidden" " must NOT be AddTo.";
-		CHECK_EQ(req[int(EnumOpInputs::SrcHidden)], kAddTo) << 
-			"The gradient request for " "source hidden" " must be AddTo.";
-		CHECK_EQ(req[int(EnumOpInputs::H2SWeight)], kAddTo) << 
-			"The gradient request for " "hidden-to-score weight" "must be AddTo.";
+		// CHECK_NE(req[int(EnumOpInputs::QryHidden)], kAddTo) << // Note that the condition here is NOT_EQUAL.
+		// 	"The gradient request for "  "query hidden" " must NOT be AddTo.";
+		// CHECK_EQ(req[int(EnumOpInputs::SrcHidden)], kAddTo) << 
+		// 	"The gradient request for " "source hidden" " must be AddTo.";
+		// CHECK_EQ(req[int(EnumOpInputs::H2SWeight)], kAddTo) << 
+		// 	"The gradient request for " "hidden-to-score weight" "must be AddTo.";
 
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 
@@ -274,31 +281,22 @@ public:
 		CHECK_EQ(att_scores_grad.CheckContiguous(), true);
 
 		// obtain the requested workspace
-		Tensor < gpu, 3, DType > att_hidden      = ctx.requested[int(EnumOpWorkspace::AttHidden)]
-			.get_space_typed < gpu, 3, DType > (
-				Shape3(_param.batch_size, 
-				       _param.seq_length,
-				       _param.state_size), cuda_stream);
-		Tensor < gpu, 3, DType > att_hidden_grad = ctx.requested[int(EnumOpWorkspace::AttHiddenGrad)]
-			.get_space_typed < gpu, 3, DType > (
-				Shape3(_param.batch_size,
-				       _param.seq_length,
-				       _param.state_size), cuda_stream);
-
-		Tensor < gpu, 2, DType > att_hidden_exp, att_hidden_var;
-
-		if (_param.layer_norm)
-		{
-			att_hidden_exp = ctx.requested[int(EnumOpWorkspace::AttHiddenEXP)]
-				.get_space_typed < gpu, 2, DType > (
-					Shape2(_param.batch_size,
-					       _param.seq_length), cuda_stream);
-			att_hidden_var = ctx.requested[int(EnumOpWorkspace::AttHiddenVAR)]
-				.get_space_typed < gpu, 2, DType > (
-					Shape2(_param.batch_size,
-					       _param.seq_length), cuda_stream);
-		}
+		Tensor < gpu, 1, DType > workspace = ctx.requested[int(EnumOpWorkspace::TempSpace)]
+			.get_space_typed < gpu, 1, DType > (Shape1(
+				2 * _param.batch_size * _param.seq_length * _param.state_size + 
+				_param.layer_norm ? 2 * _param.batch_size * _param.seq_length : 0), cuda_stream);
 		
+		DType * ptr_att_hidden      = workspace.dptr_;
+		DType * ptr_att_hidden_grad = workspace.dptr_ + 
+			1 * _param.batch_size * _param.seq_length * _param.state_size;
+		DType * ptr_att_hidden_exp  = 
+			_param.layer_norm ? 
+				workspace.dptr_ + 2 * _param.batch_size * _param.seq_length * _param.state_size : nullptr;
+		DType * ptr_att_hidden_var  = 
+			_param.layer_norm ? 
+				workspace.dptr_ + 2 * _param.batch_size * _param.seq_length * _param.state_size + 
+				                  1 * _param.batch_size * _param.seq_length : nullptr;
+
 		// !Important: Replay the forward pass computation.
 		_cuda_fused_mlp_att_nonlin_block_forward < DType >
 			<<<
@@ -311,9 +309,9 @@ public:
 			(
 				qry_hidden.dptr_,
 				src_hidden.dptr_,
-				att_hidden.dptr_,
-				_param.layer_norm ? att_hidden_exp.dptr_ : nullptr,
-				_param.layer_norm ? att_hidden_var.dptr_ : nullptr,
+				ptr_att_hidden,
+				ptr_att_hidden_exp,
+				ptr_att_hidden_var,
 				_param.layer_norm
 			);
 
@@ -330,14 +328,14 @@ public:
 			"Must initialize the cuBLAS handle in CUDA stream.";
 		
 		FullyConnectedBWWeight(Stream < gpu > ::GetBlasHandle(cuda_stream),
-				       att_hidden     .dptr_,
+				       ptr_att_hidden,
 				       h2s_weight_grad.dptr_,
 				       att_scores_grad.dptr_,
 				       req[int(EnumOpInputs::H2SWeight)],
 				       _param.batch_size * _param.seq_length,
 				       _param.state_size, 1);
 		FullyConnectedBWData  (Stream < gpu > ::GetBlasHandle(cuda_stream),
-		                       att_hidden_grad.dptr_,
+		                       ptr_att_hidden_grad,
 				       h2s_weight     .dptr_,
 				       att_scores_grad.dptr_,
 				       OpReqType::kWriteTo,
@@ -355,10 +353,10 @@ public:
 				qry_hidden_grad.dptr_,
 				_param.layer_norm ? src_hidden.dptr_ : nullptr,
 				src_hidden_grad.dptr_,
-				att_hidden     .dptr_,
-				att_hidden_grad.dptr_,
-				_param.layer_norm ? att_hidden_exp.dptr_ : nullptr,
-				_param.layer_norm ? att_hidden_var.dptr_ : nullptr,
+				ptr_att_hidden,
+				ptr_att_hidden_grad,
+				ptr_att_hidden_exp,
+				ptr_att_hidden_var,
 				_param.layer_norm
 			);
 	}
@@ -507,6 +505,10 @@ __global__ void _cuda_fused_mlp_att_nonlin_block_backward(
 	
 	// att_hidden[g_threadIdx] = tanh(att_hidden_reg);
 	RealType att_hidden_reg      = att_hidden     [g_threadIdx];
+	if (threadIdx.x == 0)
+		printf("BlockIdx.x: %d, BlockIdx.y: %d, Att Hidden: %.2f, Att Hidden Grad: %.2f\n", 
+			blockIdx.x, blockIdx.y, att_hidden_reg, att_hidden_grad[g_threadIdx]);
+	__syncthreads();
 	RealType att_hidden_grad_reg = att_hidden_grad[g_threadIdx] * (1 - att_hidden_reg * att_hidden_reg);
 
 	/*
@@ -518,13 +520,16 @@ __global__ void _cuda_fused_mlp_att_nonlin_block_backward(
 		// read the expected value and variance from the reserved workspace
 		RealType att_hidden_exp_reg = att_hidden_exp[blockIdx.y * gridDim.x + blockIdx.x];
 		RealType att_hidden_var_reg = att_hidden_var[blockIdx.y * gridDim.x + blockIdx.x];
+		if (threadIdx.x == 0)
+			printf("BlockIdx.x: %d, BlockIdx.y: %d, Att Hidden Exp: %.2f, Att Hidden Var: %.2f\n", 
+				blockIdx.x, blockIdx.y, att_hidden_exp_reg, att_hidden_var_reg);
+		__syncthreads();
 		// 1 / sqrt(var + epsilon)
 		RealType rsqrt_var_plus_epsilon = 1.0 / sqrt(att_hidden_var_reg + VARIANCE_EPSILON);		
 #undef  VARIANCE_EPSILON
 		// x - mu
-		RealType att_hidden_minus_exp = src_hidden[g_threadIdx] + 
-		                                qry_hidden[blockIdx.y * blockDim.x + threadIdx.x] - 
-					        att_hidden_exp_reg;
+		RealType att_hidden_minus_exp = qry_hidden[blockIdx.y * blockDim.x + threadIdx.x] + 
+		                                src_hidden[g_threadIdx] - att_hidden_exp_reg;
 
 		// dy / dx = 1 / sqrt(var + epsilon) - 
 		//           1 / sqrt(var + epsilon) * 1 / N - 
@@ -536,6 +541,11 @@ __global__ void _cuda_fused_mlp_att_nonlin_block_backward(
 				       rsqrt_var_plus_epsilon * 
 				       att_hidden_minus_exp * 
 				       att_hidden_minus_exp / blockDim.x;
+
+		if (threadIdx.x == 0)
+			printf("BlockIdx.x: %d, BlockIdx.y: %d, Rsqrt: %.2f, Minus: %.2f\n", 
+				blockIdx.x, blockIdx.y, rsqrt_var_plus_epsilon, att_hidden_minus_exp);
+		__syncthreads();
 	}
 
 	/*
@@ -543,7 +553,7 @@ __global__ void _cuda_fused_mlp_att_nonlin_block_backward(
 	                          qry_hidden[blockIdx.y * blockDim.x + threadIdx.x];
 	 */
 
-	src_hidden_grad[g_threadIdx] += att_hidden_grad_reg;
+	src_hidden_grad[g_threadIdx] = att_hidden_grad_reg;
 	atomicAdd(&qry_hidden_grad[blockIdx.y * blockDim.x + threadIdx.x], att_hidden_grad_reg);
 }
 
