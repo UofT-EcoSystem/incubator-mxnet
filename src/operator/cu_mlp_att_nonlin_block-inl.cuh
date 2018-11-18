@@ -180,8 +180,8 @@ public:
 
 		_cuda_fused_mlp_att_nonlin_block__forward < DType >
 			<<<
-				dim3(_param.batch_size,
-				     _param.seq_length),
+				dim3(_param.seq_length, 
+				     _param.batch_size),
 				_param.state_size,
 				_param.state_size * sizeof(DType),
 				Stream < gpu > ::GetStream(cuda_stream)
@@ -245,8 +245,6 @@ public:
 			"The gradient request for " "source hidden" " must be AddTo.";
 		CHECK_EQ(req[int(EnumOpInputs::H2SWeight)], kAddTo) << 
 			"The gradient request for " "hidden-to-score weight" "must be AddTo.";
-		
-		// TODO: Cleanup the value of gradients using memset depending the gradient request type.
 
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 
@@ -304,8 +302,8 @@ public:
 		// !Important: Replay the forward pass computation.
 		_cuda_fused_mlp_att_nonlin_block__forward < DType >
 			<<<
-				dim3(_param.batch_size,
-				     _param.seq_length),
+				dim3(_param.seq_length,
+				     _param.batch_size),
 				_param.state_size,
 				_param.state_size * sizeof(DType),
 				Stream < gpu > ::GetStream(cuda_stream)
@@ -348,8 +346,8 @@ public:
 
 		_cuda_fused_mlp_att_nonlin_block_backward
 			<<<
-				dim3(_param.batch_size,
-				     _param.seq_length),
+				dim3(_param.seq_length,
+				     _param.batch_size),
 				_param.state_size, 0, Stream < gpu > ::GetStream(cuda_stream)
 			>>>
 			(
@@ -380,25 +378,24 @@ static __forceinline__ __device__ void __cu_reduce_sum(
 {
 	namespace cg = cooperative_groups;
 
-	RealType local_sum = 0;
-
 	cg::thread_block this_cta = cg::this_thread_block();
 
 	svmem_reduced_sum[threadIdx.x] = local_value;
+
 	cg::sync(this_cta); // up to this point, the content of shared memory has been initialized with local variable
 	// =========================================================================================
 	// do reduction in shared memory
 	if ((blockDim.x > 512) && (threadIdx.x < 512))
-		svmem_reduced_sum[threadIdx.x] = local_sum += (threadIdx.x + 512) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x + 512];
+		svmem_reduced_sum[threadIdx.x] = local_value += (threadIdx.x + 512) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x + 512];
 	cg::sync(this_cta);
 	if ((blockDim.x > 256) && (threadIdx.x < 256)) 
-		svmem_reduced_sum[threadIdx.x] = local_sum += (threadIdx.x + 256) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x + 256];
+		svmem_reduced_sum[threadIdx.x] = local_value += (threadIdx.x + 256) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x + 256];
 	cg::sync(this_cta);
     	if ((blockDim.x > 128) && (threadIdx.x < 128))
-		svmem_reduced_sum[threadIdx.x] = local_sum += (threadIdx.x + 128) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x + 128];
+		svmem_reduced_sum[threadIdx.x] = local_value += (threadIdx.x + 128) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x + 128];
 	cg::sync(this_cta);
 	if ((blockDim.x >  64) && (threadIdx.x <  64))
-		svmem_reduced_sum[threadIdx.x] = local_sum += (threadIdx.x +  64) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x +  64];
+		svmem_reduced_sum[threadIdx.x] = local_value += (threadIdx.x +  64) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x +  64];
 	cg::sync(this_cta);
 	// =========================================================================================
 	// further reduction will be done within a wrap, therefore no cta-level synchronization is needed
@@ -406,22 +403,26 @@ static __forceinline__ __device__ void __cu_reduce_sum(
 	{
 		cg::coalesced_group active_threads = cg::coalesced_threads();
 
-		if (blockDim.x > 32) local_sum += (threadIdx.x + 32) >= blockDim.x ? 0 : svmem_reduced_sum[threadIdx.x + 32];
+		if (blockDim.x > 32) 
+			svmem_reduced_sum[threadIdx.x] = 
+				local_value += (threadIdx.x + 32) >= blockDim.x ? 
+					0 : svmem_reduced_sum[threadIdx.x + 32];
 
 #pragma unroll
 		for (int offset = warpSize / 2; offset > 0; offset /= 2)
 		{
-			local_sum += active_threads.shfl_down(local_sum, offset);
+			svmem_reduced_sum[threadIdx.x] = 
+				local_value += (threadIdx.x + offset) >= blockDim.x ? 
+					0 : svmem_reduced_sum[threadIdx.x + offset];
 		}
 	}
 	if (threadIdx.x == 0)
 	{
-		svmem_reduced_sum[0] = local_sum;
 		// also write the reduction result to global memory if it is provided
 		if (gbmem_reduced_sum != nullptr)
 		{
 			gbmem_reduced_sum[blockIdx.y *  gridDim.x + 
-			                               blockIdx.x] = local_sum;
+			                               blockIdx.x] = local_value;
 		}
 	}
 	cg::sync(this_cta);
@@ -445,8 +446,8 @@ __global__ void _cuda_fused_mlp_att_nonlin_block__forward(
 	                                          blockIdx.x *  blockDim.x + 
 						               threadIdx.x;
 
-	RealType att_hidden_reg = src_hidden[g_threadIdx] + 
-	                          qry_hidden[blockIdx.y * blockDim.x + threadIdx.x];
+	RealType att_hidden_reg = qry_hidden[blockIdx.y * blockDim.x + threadIdx.x] + 
+	                          src_hidden[g_threadIdx];
 	
 	/*
             if self._ln is not None:
