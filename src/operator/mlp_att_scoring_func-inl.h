@@ -16,13 +16,13 @@ enum class EnumOpWorkspace { TempSpace };
 
 		} // namespace 
 
-struct MlpAttNonLinBlockParam : public dmlc::Parameter < MlpAttNonLinBlockParam >
+struct MlpAttScoringFuncParam : public dmlc::Parameter < MlpAttScoringFuncParam >
 {
 	unsigned batch_size, seq_length, state_size;
 
 	bool layer_norm;
 
-	DMLC_DECLARE_PARAMETER(MlpAttNonLinBlockParam)
+	DMLC_DECLARE_PARAMETER(MlpAttScoringFuncParam)
 	{
 		DMLC_DECLARE_FIELD(layer_norm).set_default(false)
 			.describe("Whether to perform Layer Normalization after "
@@ -31,12 +31,12 @@ struct MlpAttNonLinBlockParam : public dmlc::Parameter < MlpAttNonLinBlockParam 
 };
 
 template < typename xpu, typename DType >
-class MlpAttNonLinBlockOp : public Operator
+class MlpAttScoringFuncOp : public Operator
 {
 private:
-	MlpAttNonLinBlockParam _param;
+	MlpAttScoringFuncParam _param;
 public:
-	explicit MlpAttNonLinBlockOp(MlpAttNonLinBlockParam param)
+	explicit MlpAttScoringFuncOp(MlpAttScoringFuncParam param)
 	{
 		// empty
 	}
@@ -61,17 +61,17 @@ public:
 };
 
 template<typename xpu>
-Operator * CreateOp(MlpAttNonLinBlockParam param, int dtype);
+Operator * CreateOp(MlpAttScoringFuncParam param, int dtype);
 
 #if DMLC_USE_CXX11
 
-class MlpAttNonLinBlockProp : public OperatorProperty
+class MlpAttScoringFuncProp : public OperatorProperty
 {
 private:
-	MlpAttNonLinBlockParam _param;
+	MlpAttScoringFuncParam _param;
 public:
-	MlpAttNonLinBlockProp() {}
-	explicit MlpAttNonLinBlockProp(MlpAttNonLinBlockParam param) : _param(param) {}
+	MlpAttScoringFuncProp() {}
+	explicit MlpAttScoringFuncProp(MlpAttScoringFuncParam param) : _param(param) {}
 
 	std::vector < std::string > ListArguments() const override
 	{
@@ -164,12 +164,12 @@ public:
 
 	OperatorProperty * Copy() const override 
 	{
-		return new MlpAttNonLinBlockProp(_param);
+		return new MlpAttScoringFuncProp(_param);
 	}
 
 	std::string TypeString() const override
 	{
-		return "MlpAttNonLinBlock";
+		return "MlpAttScoringFunc";
 	}
 
 	std::vector < int > DeclareBackwardDependency(
@@ -213,7 +213,7 @@ public:
 	Operator * CreateOperatorEx(Context ctx, 
 				    std::vector < TShape > * in_shape,
         			    std::vector < int >    * in_type) const override;
-}; // class MlpAttNonLinBlockProp
+}; // class MlpAttScoringFuncProp
 
 #endif // DMLC_USE_CXX11
 

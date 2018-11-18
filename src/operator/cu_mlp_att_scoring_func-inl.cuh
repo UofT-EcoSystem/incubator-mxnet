@@ -5,7 +5,7 @@
 
 #include <mxnet/storage.h>
 
-#include "mlp_att_nonlin_block-inl.h"
+#include "mlp_att_scoring_func-inl.h"
 
 namespace mxnet {
 	namespace op {
@@ -13,7 +13,7 @@ namespace mxnet {
 #if defined(__CUDACC__)
 
 /**
- * Forward Pass of the MLP Attention Layer Nonlinear Block
+ * Forward Pass of the MLP Attention Layer Scoring Function
  * This kernel shall be launched using the parameter <<< (B, T), H, H * sizeof(RealType), cuda_stream >>>
  * @param1 qry_hidden [B     x H]:  (Input)  Query Hidden State
  * @param2 src_hidden [B x T x H]:  (Input) Source Hidden State
@@ -24,7 +24,7 @@ namespace mxnet {
  * @param6 layer_norm: (Parameter) Whether to perform Layer Normalization
  */
 template < typename RealType >
-static __global__ void _cuda_fused_mlp_att_nonlin_block_forward(
+static __global__ void _cuda_fused_mlp_att_scoring_func_forward(
 	const RealType * const __restrict__ qry_hidden,
 	const RealType * const __restrict__ src_hidden,
 	      RealType * const __restrict__ att_hidden, 
@@ -33,7 +33,7 @@ static __global__ void _cuda_fused_mlp_att_nonlin_block_forward(
 	const bool layer_norm);
 
 /**
- * Backward Pass of the MLP Attention Layer Nonlinear Block
+ * Backward Pass of the MLP Attention Layer Scoring Function
  * This kernel shall be launched using the parameter <<< (B, T), H, H * sizeof(RealType), cuda_stream >>>
  * @param1 qry_hidden      [B     x H]:  (Input)  Query Hidden State
  * @param2 qry_hidden_grad [B     x H]: (Output)  Query Hidden State Gradient
@@ -46,7 +46,7 @@ static __global__ void _cuda_fused_mlp_att_nonlin_block_forward(
  * @param9 layer_norm: (Parameter) Whether Layer Normalization is performed in the Forward Pass
  */
 template < typename RealType >
-static __global__ void _cuda_fused_mlp_att_nonlin_block_backward(
+static __global__ void _cuda_fused_mlp_att_scoring_func_backward(
 	const RealType * const __restrict__ qry_hidden,
 	      RealType * const __restrict__ qry_hidden_grad,
 	const RealType * const __restrict__ src_hidden,
@@ -102,21 +102,21 @@ static inline void FullyConnectedBWData  (cublasHandle_t cublas_handle,
 	const unsigned input_dim, const unsigned num_hidden);
 
 template < typename DType >
-class CUMlpAttNonLinBlockOp : public Operator
+class CUMlpAttScoringFuncOp : public Operator
 {
 private:
-	MlpAttNonLinBlockParam _param;
+	MlpAttScoringFuncParam _param;
 
 	bool _initialized = false;
 
 	// ReserveSpace
 	Storage::Handle _reserved_space;
 public:
-	explicit CUMlpAttNonLinBlockOp(MlpAttNonLinBlockParam param)
+	explicit CUMlpAttScoringFuncOp(MlpAttScoringFuncParam param)
 	{
 		_param = param;
 	}
-	~CUMlpAttNonLinBlockOp() {}
+	~CUMlpAttScoringFuncOp() {}
 private:
 	void _Init(mshadow::Stream < gpu > * cuda_stream,
 	           const std::vector < TBlob > &  in_data,
@@ -185,7 +185,7 @@ public:
 		
 		DType * ptr_att_hidden = workspace.dptr_;
 
-		_cuda_fused_mlp_att_nonlin_block_forward < DType >
+		_cuda_fused_mlp_att_scoring_func_forward < DType >
 			<<<
 				dim3(_param.seq_length, 
 				     _param.batch_size),
@@ -298,7 +298,7 @@ public:
 				                  1 * _param.batch_size * _param.seq_length : nullptr;
 
 		// !Important: Replay the forward pass computation.
-		_cuda_fused_mlp_att_nonlin_block_forward < DType >
+		_cuda_fused_mlp_att_scoring_func_forward < DType >
 			<<<
 				dim3(_param.seq_length,
 				     _param.batch_size),
@@ -342,7 +342,7 @@ public:
 				       _param.batch_size * _param.seq_length,
 				       _param.state_size, 1);
 
-		_cuda_fused_mlp_att_nonlin_block_backward
+		_cuda_fused_mlp_att_scoring_func_backward
 			<<<
 				dim3(_param.seq_length,
 				     _param.batch_size),
@@ -362,7 +362,7 @@ public:
 				_param.layer_norm
 			);
 	}
-}; // class CUMlpAttNonLinBlockOp
+}; // class CUMlpAttScoringFuncOp
 
 /**
  * Perform sum reduction across *this* thread block.
@@ -441,7 +441,7 @@ static __forceinline__ __device__ RealType __cu_reduce_sum(
 }
 
 template < typename RealType >
-__global__ void _cuda_fused_mlp_att_nonlin_block_forward(
+__global__ void _cuda_fused_mlp_att_scoring_func_forward(
 	const RealType * const __restrict__ qry_hidden,
 	const RealType * const __restrict__ src_hidden,
 	      RealType * const __restrict__ att_hidden, 
@@ -488,7 +488,7 @@ __global__ void _cuda_fused_mlp_att_nonlin_block_forward(
 }
 
 template < typename RealType >
-__global__ void _cuda_fused_mlp_att_nonlin_block_backward(
+__global__ void _cuda_fused_mlp_att_scoring_func_backward(
 	const RealType * const __restrict__ qry_hidden,
 	      RealType * const __restrict__ qry_hidden_grad,
 	const RealType * const __restrict__ src_hidden,
