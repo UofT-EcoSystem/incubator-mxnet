@@ -347,7 +347,7 @@ public:
 				dim3(_param.seq_length,
 				     _param.batch_size),
 				_param.state_size, 
-				_param.state_size * sizeof(DType), 
+				_param.state_size * sizeof(double), 
 				Stream < gpu > ::GetStream(cuda_stream)
 			>>>
 			(
@@ -474,6 +474,13 @@ __global__ void _cuda_fused_mlp_att_scoring_func_forward(
 		att_hidden_reg = att_hidden_reg - exp_X;
 #define VARIANCE_EPSILON 0.000001 // avoid the case when the variance is exactly 0
 		att_hidden_reg = att_hidden_reg / sqrt(var_X + VARIANCE_EPSILON);
+
+		if (threadIdx.x == 0)
+		{
+			printf("BlockIdx.x: %5d, BlockIdx.y: %5d, EXP: %f, VAR: %f\n",
+				blockIdx.x, blockIdx.y, exp_X, var_X);
+		}
+		__syncthreads();
 	}
 
 	/*
@@ -510,10 +517,31 @@ __global__ void _cuda_fused_mlp_att_scoring_func_backward(
             if self._ln is not None:
                 attention_hidden = self._ln.normalize(attention_hidden)
 	 */
-	extern __shared__ volatile RealType svmem_backward[];
+	extern __shared__ volatile double svmem_backward[];
 
 	if (layer_norm)
 	{
+		RealType att_hidden_exp_reg = att_hidden_exp[blockIdx.y * gridDim.x + blockIdx.x];
+		RealType att_hidden_var_reg = att_hidden_var[blockIdx.y * gridDim.x + blockIdx.x];
+		// 1 / sqrt(var + epsilon)
+		RealType rsqrt_var_plus_epsilon = 1.0 / sqrt(att_hidden_var_reg + VARIANCE_EPSILON);
+		RealType att_hidden_minus_exp = qry_hidden[blockIdx.y * blockDim.x + threadIdx.x] + 
+		                                src_hidden[g_threadIdx] - att_hidden_exp_reg;
+		RealType att_hidden_minus_exp_grad = 
+			att_hidden_grad_reg * rsqrt_var_plus_epsilon - 
+			__cu_reduce_sum < double > (svmem_backward, att_hidden_grad_reg * 
+			                                            att_hidden_minus_exp) * 
+			att_hidden_minus_exp * 
+			rsqrt_var_plus_epsilon * 
+			rsqrt_var_plus_epsilon * 
+			rsqrt_var_plus_epsilon / blockDim.x;
+		RealType att_hidden_grad_reg_pre_ln = 
+			att_hidden_minus_exp_grad - 
+			__cu_reduce_sum < double > (svmem_backward, att_hidden_minus_exp_grad) / blockDim.x;
+		// __syncthreads();
+		// att_hidden_grad_reg = att_hidden_grad_reg_pre_ln;
+		
+		/*
 		// read the expected value and variance from the reserved workspace
 		RealType att_hidden_exp_reg = att_hidden_exp[blockIdx.y * gridDim.x + blockIdx.x];
 		RealType att_hidden_var_reg = att_hidden_var[blockIdx.y * gridDim.x + blockIdx.x];
@@ -525,18 +553,27 @@ __global__ void _cuda_fused_mlp_att_scoring_func_backward(
 		                                src_hidden[g_threadIdx] - 
 						att_hidden_exp_reg;
 
-		RealType att_hidden_exp_grad = __cu_reduce_sum(svmem_backward, 
-		                                             - att_hidden_grad_reg * 
-							       rsqrt_var_plus_epsilon);
-		RealType att_hidden_var_grad = __cu_reduce_sum(svmem_backward,
-		                                             - att_hidden_grad_reg * 
-							       rsqrt_var_plus_epsilon * 
-							       rsqrt_var_plus_epsilon * 
-							       rsqrt_var_plus_epsilon *
-							       att_hidden_minus_exp / 2);
-		att_hidden_grad_reg = att_hidden_grad_reg * rsqrt_var_plus_epsilon + 
-		                      att_hidden_exp_grad / blockDim.x + 
-				      att_hidden_var_grad / blockDim.x * 2 * att_hidden_minus_exp;
+		RealType att_hidden_exp_grad = __cu_reduce_sum <double> (svmem_backward, 
+		                                               att_hidden_grad_reg / blockDim.x);
+		RealType att_hidden_var_grad = __cu_reduce_sum <double> (svmem_backward,
+		                                               att_hidden_grad_reg / blockDim.x *
+							       att_hidden_minus_exp);
+		att_hidden_grad_reg = att_hidden_grad_reg * rsqrt_var_plus_epsilon -
+		                      att_hidden_exp_grad * rsqrt_var_plus_epsilon -
+				      att_hidden_var_grad * 
+				      rsqrt_var_plus_epsilon *
+				      rsqrt_var_plus_epsilon *
+				      rsqrt_var_plus_epsilon *
+				      att_hidden_minus_exp;
+		 */
+		if (threadIdx.x == 0)
+		{
+			printf("BlockIdx.x: %5d, BlockIdx.y: %5d, EXP: %f, VAR: %f, Rsqrt: %f, Minus: %f, Pre Gradient: %f, Post Gradient: %f\n",
+				blockIdx.x, blockIdx.y, att_hidden_exp_reg, att_hidden_var_reg, 
+				rsqrt_var_plus_epsilon, att_hidden_minus_exp, att_hidden_grad_reg, att_hidden_grad_reg_pre_ln);
+		}
+		__syncthreads();
+		att_hidden_grad_reg = att_hidden_grad_reg_pre_ln;
 	}
 
 	/*
