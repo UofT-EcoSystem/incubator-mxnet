@@ -347,7 +347,7 @@ public:
 				dim3(_param.seq_length,
 				     _param.batch_size),
 				_param.state_size, 
-				_param.state_size * sizeof(double), 
+				_param.state_size * sizeof(DType), 
 				Stream < gpu > ::GetStream(cuda_stream)
 			>>>
 			(
@@ -368,14 +368,12 @@ public:
  * Perform sum reduction across *this* thread block.
  * @param1 svmem_reduced_sum: Shared Workspace between Threads within a CTA
  * @param2 local_value: Local Value that is stored in Register
- * @param3 gbmem_reduced_sum: [Optional] Global Memory for writting back the Result
  * @return the Result of Reduction across *this* Thread Block
  */
 template < typename RealType >
 static __forceinline__ __device__ RealType __cu_reduce_sum(
 	volatile RealType * const __restrict__ svmem_reduced_sum,
-	         RealType                      local_value,
-	         RealType * const __restrict__ gbmem_reduced_sum = nullptr)
+	         RealType                      local_value)
 {
 	namespace cg = cooperative_groups;
 	cg::thread_block this_cta = cg::this_thread_block();
@@ -422,13 +420,6 @@ static __forceinline__ __device__ RealType __cu_reduce_sum(
 					0 : svmem_reduced_sum[threadIdx.x + offset];
 		}
 	}
-	// also write the reduction result to global memory if it is provided
-	if (gbmem_reduced_sum != nullptr)
-	{
-		if (threadIdx.x == 0)
-			gbmem_reduced_sum[blockIdx.y *  gridDim.x + 
-		        	                       blockIdx.x] = local_value;
-	}
 	cg::sync(this_cta);
 
 	return svmem_reduced_sum[0];
@@ -464,23 +455,30 @@ __global__ void _cuda_fused_mlp_att_scoring_func_forward(
 	if (layer_norm)
 	{
 		RealType exp_X = __cu_reduce_sum(svmem_forward,
-		                                 att_hidden_reg / blockDim.x,
-		                                 att_hidden_exp);
+		                                 att_hidden_reg / blockDim.x);
 		RealType var_X = __cu_reduce_sum(svmem_forward,
 		                                (att_hidden_reg - exp_X) *
-		                                (att_hidden_reg - exp_X) / blockDim.x,
-		                                 att_hidden_var);
-		// perform layer normalization
-		att_hidden_reg = att_hidden_reg - exp_X;
+		                                (att_hidden_reg - exp_X) / blockDim.x);
 #define VARIANCE_EPSILON 0.000001 // avoid the case when the variance is exactly 0
-		att_hidden_reg = att_hidden_reg / sqrt(var_X + VARIANCE_EPSILON);
-
-		if (threadIdx.x == 0)
+		RealType att_hidden_minus_mean = att_hidden_reg - exp_X;
+		RealType rsqrt_var_plus_epsilon = 1.0 / sqrt(var_X + VARIANCE_EPSILON);
+		// perform layer normalization
+		att_hidden_reg = att_hidden_minus_mean;
+		att_hidden_reg = att_hidden_reg * rsqrt_var_plus_epsilon;
+		
+		if (att_hidden_exp != nullptr && 
+		    att_hidden_var != nullptr)
 		{
-			printf("BlockIdx.x: %5d, BlockIdx.y: %5d, EXP: %f, VAR: %f\n",
-				blockIdx.x, blockIdx.y, exp_X, var_X);
+			// write to global memory for reuse in the backward pass
+			if (threadIdx.x == 0)
+			{
+				att_hidden_exp[blockIdx.y * gridDim.x + blockIdx.x] = 
+					att_hidden_minus_mean;
+				att_hidden_var[blockIdx.y * gridDim.x + blockIdx.x] = 
+					rsqrt_var_plus_epsilon;
+			}
+			__syncthreads();
 		}
-		__syncthreads();
 	}
 
 	/*
@@ -517,63 +515,11 @@ __global__ void _cuda_fused_mlp_att_scoring_func_backward(
             if self._ln is not None:
                 attention_hidden = self._ln.normalize(attention_hidden)
 	 */
-	extern __shared__ volatile double svmem_backward[];
+	extern __shared__ volatile RealType svmem_backward[];
 
 	if (layer_norm)
 	{
-		RealType att_hidden_exp_reg = att_hidden_exp[blockIdx.y * gridDim.x + blockIdx.x];
-		RealType att_hidden_var_reg = att_hidden_var[blockIdx.y * gridDim.x + blockIdx.x];
-		// 1 / sqrt(var + epsilon)
-		RealType rsqrt_var_plus_epsilon = 1.0 / sqrt(att_hidden_var_reg + VARIANCE_EPSILON);
-		RealType att_hidden_minus_exp = qry_hidden[blockIdx.y * blockDim.x + threadIdx.x] + 
-		                                src_hidden[g_threadIdx] - att_hidden_exp_reg;
-		RealType att_hidden_minus_exp_grad = 
-			att_hidden_grad_reg * rsqrt_var_plus_epsilon - 
-			__cu_reduce_sum < double > (svmem_backward, att_hidden_grad_reg * 
-			                                            att_hidden_minus_exp) * 
-			att_hidden_minus_exp * 
-			rsqrt_var_plus_epsilon * 
-			rsqrt_var_plus_epsilon * 
-			rsqrt_var_plus_epsilon / blockDim.x;
-		RealType att_hidden_grad_reg_pre_ln = 
-			att_hidden_minus_exp_grad - 
-			__cu_reduce_sum < double > (svmem_backward, att_hidden_minus_exp_grad) / blockDim.x;
-		// __syncthreads();
-		// att_hidden_grad_reg = att_hidden_grad_reg_pre_ln;
 		
-		/*
-		// read the expected value and variance from the reserved workspace
-		RealType att_hidden_exp_reg = att_hidden_exp[blockIdx.y * gridDim.x + blockIdx.x];
-		RealType att_hidden_var_reg = att_hidden_var[blockIdx.y * gridDim.x + blockIdx.x];
-		// 1 / sqrt(var + epsilon)
-		RealType rsqrt_var_plus_epsilon = 1.0 / sqrt(att_hidden_var_reg + VARIANCE_EPSILON);		
-#undef VARIANCE_EPSILON
-		// x - mu
-		RealType att_hidden_minus_exp = qry_hidden[blockIdx.y * blockDim.x + threadIdx.x] + 
-		                                src_hidden[g_threadIdx] - 
-						att_hidden_exp_reg;
-
-		RealType att_hidden_exp_grad = __cu_reduce_sum <double> (svmem_backward, 
-		                                               att_hidden_grad_reg / blockDim.x);
-		RealType att_hidden_var_grad = __cu_reduce_sum <double> (svmem_backward,
-		                                               att_hidden_grad_reg / blockDim.x *
-							       att_hidden_minus_exp);
-		att_hidden_grad_reg = att_hidden_grad_reg * rsqrt_var_plus_epsilon -
-		                      att_hidden_exp_grad * rsqrt_var_plus_epsilon -
-				      att_hidden_var_grad * 
-				      rsqrt_var_plus_epsilon *
-				      rsqrt_var_plus_epsilon *
-				      rsqrt_var_plus_epsilon *
-				      att_hidden_minus_exp;
-		 */
-		if (threadIdx.x == 0)
-		{
-			printf("BlockIdx.x: %5d, BlockIdx.y: %5d, EXP: %f, VAR: %f, Rsqrt: %f, Minus: %f, Pre Gradient: %f, Post Gradient: %f\n",
-				blockIdx.x, blockIdx.y, att_hidden_exp_reg, att_hidden_var_reg, 
-				rsqrt_var_plus_epsilon, att_hidden_minus_exp, att_hidden_grad_reg, att_hidden_grad_reg_pre_ln);
-		}
-		__syncthreads();
-		att_hidden_grad_reg = att_hidden_grad_reg_pre_ln;
 	}
 
 	/*
