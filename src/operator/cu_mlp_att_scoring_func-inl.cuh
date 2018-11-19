@@ -532,8 +532,6 @@ __global__ void _cuda_fused_mlp_att_scoring_func_backward(
 		                                             - att_hidden_grad_reg * 
 							       rsqrt_var_plus_epsilon * 
 							       rsqrt_var_plus_epsilon * 
-							       rsqrt_var_plus_epsilon * 
-							       rsqrt_var_plus_epsilon *
 							       rsqrt_var_plus_epsilon *
 							       att_hidden_minus_exp / 2);
 		att_hidden_grad_reg = att_hidden_grad_reg * rsqrt_var_plus_epsilon + 
