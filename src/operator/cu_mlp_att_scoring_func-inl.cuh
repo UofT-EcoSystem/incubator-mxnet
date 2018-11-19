@@ -584,26 +584,7 @@ inline void FullyConnectedFW < float > (cublasHandle_t cublas_handle,
 				&alpha, W, input_dim, X, input_dim,
 				& beta, Y, num_hidden));
 }
-/*
-template <>
-inline void FullyConnectedFW < double > (cublasHandle_t cublas_handle,
-	const double * const __restrict__ X,
-	const double * const __restrict__ W,
-	      double * const __restrict__ Y,
-	const unsigned batch_size, const unsigned input_dim, const unsigned num_hidden)
-{
-	double alpha = 1.0, beta = 0.0;
 
-	CUBLAS_CALL(cublasDgemm(cublas_handle, // cuBLAS Handle
-	                        CUBLAS_OP_T, // W.T
-				CUBLAS_OP_N, // X
-				num_hidden,  // Y.shape[1]
-				batch_size,  // Y.shape[0]
-				input_dim,   // W.shape[1]
-				&alpha, W, input_dim, X, input_dim,
-				& beta, Y, num_hidden));
-}
- */
 template <>
 inline void FullyConnectedBWWeight < float >  (cublasHandle_t cublas_handle,
 	const float * const __restrict__  X,
@@ -623,27 +604,7 @@ inline void FullyConnectedBWWeight < float >  (cublasHandle_t cublas_handle,
 	                        &alpha,  X, input_dim, dY, num_hidden,
 				& beta, dW, input_dim));
 }
-/*
-template <>
-inline void FullyConnectedBWWeight < double > (cublasHandle_t cublas_handle,
-	const double * const __restrict__  X,
-	      double * const __restrict__ dW,
-	const double * const __restrict__ dY,
-	const OpReqType grad_req, const unsigned batch_size,
-	const unsigned input_dim, const unsigned num_hidden)
-{
-	double alpha = 1.0, beta = double(grad_req == kAddTo);
 
-	CUBLAS_CALL(cublasDgemm(cublas_handle, // cuBLAS Handle
-	                        CUBLAS_OP_N, //  X
-				CUBLAS_OP_T, // dY^T
-				input_dim,   // dW.shape[1]
-				num_hidden,  // dW.shape[0]
-				batch_size,  //  X.shape[0]
-	                        &alpha,  X, input_dim, dY, num_hidden,
-				& beta, dW, input_dim));
-}
- */
 template <>
 inline void FullyConnectedBWData  (cublasHandle_t cublas_handle,
 	      float * const __restrict__ dX,
@@ -663,27 +624,7 @@ inline void FullyConnectedBWData  (cublasHandle_t cublas_handle,
 				&alpha,  W, input_dim, dY, num_hidden,
 				& beta, dX, input_dim));
 }
-/*
-template <>
-inline void FullyConnectedBWData  (cublasHandle_t cublas_handle,
-	      double * const __restrict__ dX,
-	const double * const __restrict__  W, 
-	const double * const __restrict__ dY,
-	const OpReqType grad_req, const unsigned batch_size,
-	const unsigned input_dim, const unsigned num_hidden)
-{
-	double alpha = 1.0, beta = double(grad_req == kAddTo);
 
-	CUBLAS_CALL(cublasDgemm(cublas_handle, //cuBLAS Handle
-	                        CUBLAS_OP_N, //  W
-				CUBLAS_OP_N, // dY
-				input_dim,   // dX.shape[1]
-				batch_size,  // dX.shape[0]
-				num_hidden,  //  W.shape[0]
-				&alpha,  W, input_dim, dY, num_hidden,
-				& beta, dX, input_dim));
-}
- */
 #endif // __CUDACC__
 
 	} // namespace op
