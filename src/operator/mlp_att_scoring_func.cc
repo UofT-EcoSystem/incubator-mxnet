@@ -25,7 +25,7 @@ Operator * MlpAttScoringFuncProp::CreateOperatorEx(Context ctx,
 DMLC_REGISTER_PARAMETER(MlpAttScoringFuncParam);
 
 MXNET_REGISTER_OP_PROPERTY(MlpAttScoringFunc, MlpAttScoringFuncProp)
-	.describe("Applied the MLP attention non-linear block to the source and query hidden state.")
+	.describe("Applied the MLP attention scoring function to the query and source hidden state.")
 	.add_argument("QryHidden", "NDArray-or-Symbol",  "Query Hidden State")
 	.add_argument("SrcHidden", "NDArray-or-Symbol", "Source Hidden State")
 	.add_argument("H2SWeight", "NDArray-or-Symbol", "Hidden-to-Score Weight")
