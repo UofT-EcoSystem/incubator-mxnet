@@ -8,7 +8,7 @@ Operator * CreateOp < gpu > (MlpAttScoringFuncParam param, int dtype)
 {
 	Operator * op = nullptr;
 
-	MSHADOW_SGL_DBL_TYPE_SWITCH(dtype, DType, { op = new CUMlpAttScoringFuncOp < DType > (param); });
+	MSHADOW_SGL_DBL_TYPE_SWITCH(dtype, DType, { op = new CUMlpAttScoringFuncOp < float > (param); });
 
 	return op;
 }
