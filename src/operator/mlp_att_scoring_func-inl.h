@@ -41,8 +41,8 @@ public:
 		// empty
 	}
 	virtual void  Forward(const OpContext & ctx,
-	                      const std::vector < TBlob > & in_data,
-			      const std::vector < OpReqType > & req,
+	                      const std::vector < TBlob > &  in_data,
+			      const std::vector < OpReqType > &  req,
 			      const std::vector < TBlob > & out_data,
 			      const std::vector < TBlob > & aux_data)
 	{
@@ -75,11 +75,11 @@ public:
 
 	std::vector < std::string > ListArguments() const override
 	{
-		return {"QryHidden", "SrcHidden", "H2SWeight"};
+		return { "QryHidden", "SrcHidden", "H2SWeight" };
 	}
 	std::vector < std::string > ListOutputs  () const override 
 	{
-		return {"AttScores"};
+		return { "AttScores" };
 	}
 	int NumOutputs() const override 
 	{
@@ -125,7 +125,8 @@ public:
 
 		TShape att_scores_shape = src_hidden_shape;
 
-		att_scores_shape[2] = 1; // [batch_size x seq_length x 1]
+		// TODO: Changed back to the original shape.
+		// att_scores_shape[2] = 1; // [batch_size x seq_length x 1]
 
 		out_shape->push_back(att_scores_shape); // AttScores
 
@@ -177,10 +178,13 @@ public:
 		const std::vector < int > &  in_data,
 		const std::vector < int > & out_data) const override
 	{
+		/* @ArmageddonKnight Only requires the output gradient.
 		return {  in_data[int(EnumOpInputs ::QryHidden)],
 			  in_data[int(EnumOpInputs ::SrcHidden)],
 			  in_data[int(EnumOpInputs ::H2SWeight)],
 			 out_grad[int(EnumOpOutputs::AttScores)] };
+		 */
+		return { out_grad[int(EnumOpOutputs::AttScores)] };
 	}
 
 	std::vector < ResourceRequest >  ForwardResource(
@@ -191,16 +195,6 @@ public:
 	std::vector < ResourceRequest > BackwardResource(
 		const std::vector < TShape > & in_shape) const override
 	{
-		/*
-		if (_param.layer_norm)
-			return { ResourceRequest::kTempSpace,   // EnumOpWorkspace::AttHidden
-		        	 ResourceRequest::kTempSpace,   // EnumOpWorkspace::AttHiddenGrad
-				 ResourceRequest::kTempSpace,   // EnumOpWorkpsace::AttHiddenEXP
-				 ResourceRequest::kTempSpace }; // EnumOpWorkspace::AttHiddenVAR
-		else
-			return { ResourceRequest::kTempSpace,   // EnumOpWorkspace::AttHidden
-				 ResourceRequest::kTempSpace }; // EnumOpWorkspace::AttHiddenGrad
-		 */
 		return { ResourceRequest::kTempSpace }; // EnumOpWorkspace::AttHidden
 	}
 
