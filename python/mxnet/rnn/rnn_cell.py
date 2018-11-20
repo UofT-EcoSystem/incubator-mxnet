@@ -448,25 +448,24 @@ class LSTMCell(BaseRNNCell):
                                     num_hidden=self._num_hidden*4,
                                     name='%sh2h'%name)
 
-        next_h, next_c = symbol.LSTMNonLinBlock(CellInput=i2h, HiddenState=h2h,
-                                                CellState=states[1])
-        # """
-        # gates = i2h + h2h
-        # slice_gates = symbol.SliceChannel(gates, num_outputs=4,
-        #                                   name="%sslice"%name)
-        # in_gate = symbol.Activation(slice_gates[0], act_type="sigmoid",
-        #                             name='%si'%name)
-        # forget_gate = symbol.Activation(slice_gates[1], act_type="sigmoid",
-        #                                 name='%sf'%name)
-        # in_transform = symbol.Activation(slice_gates[2], act_type="tanh",
-        #                                  name='%sc'%name)
-        # out_gate = symbol.Activation(slice_gates[3], act_type="sigmoid",
-        #                              name='%so'%name)
-        # next_c = symbol._internal._plus(forget_gate * states[1], in_gate * in_transform,
-        #                                 name='%sstate'%name)
-        # next_h = symbol._internal._mul(out_gate, symbol.Activation(next_c, act_type="tanh"),
-        #                                name='%sout'%name)
-        # """
+        # next_h, next_c = symbol.LSTMNonLinBlock(CellInput=i2h, HiddenState=h2h,
+        #                                         CellState=states[1])
+        
+        gates = i2h + h2h
+        slice_gates = symbol.SliceChannel(gates, num_outputs=4,
+                                          name="%sslice"%name)
+        in_gate = symbol.Activation(slice_gates[0], act_type="sigmoid",
+                                    name='%si'%name)
+        forget_gate = symbol.Activation(slice_gates[1], act_type="sigmoid",
+                                        name='%sf'%name)
+        in_transform = symbol.Activation(slice_gates[2], act_type="tanh",
+                                         name='%sc'%name)
+        out_gate = symbol.Activation(slice_gates[3], act_type="sigmoid",
+                                     name='%so'%name)
+        next_c = symbol._internal._plus(forget_gate * states[1], in_gate * in_transform,
+                                        name='%sstate'%name)
+        next_h = symbol._internal._mul(out_gate, symbol.Activation(next_c, act_type="tanh"),
+                                       name='%sout'%name)
 
         return next_h, [next_h, next_c]
 
