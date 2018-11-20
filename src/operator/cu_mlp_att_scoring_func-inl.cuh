@@ -175,17 +175,12 @@ public:
 			_Init(cuda_stream, in_data, out_data);
 		}
 		// obtain the requested workspace
-		/*
-		Tensor < gpu, 3, DType > att_hidden = ctx.requested[int(EnumOpWorkspace::AttHidden)]
-			.get_space_typed < gpu, 3, DType > (
-				Shape3(_param.batch_size, 
-				       _param.seq_length,
-				       _param.state_size), cuda_stream);
-		 */
 		Tensor < gpu, 1, DType > workspace = ctx.requested[int(EnumOpWorkspace::TempSpace)]
 			.get_space_typed < gpu, 1, DType > (Shape1(_temp_space_size), cuda_stream);
 		
-		DType * ptr_att_hidden = workspace.dptr_;
+		// DType * ptr_att_hidden = workspace.dptr_;
+		// FIXME:
+		DType * ptr_att_hidden = att_scores.dptr_; 
 
 		_cuda_fused_mlp_att_scoring_func_forward < DType >
 			<<<
@@ -193,13 +188,12 @@ public:
 				     _param.batch_size),
 				_param.state_size,
 				_param.state_size * sizeof(DType),
-				cuda_stream->stream_
+				Stream < gpu > ::GetStream(cuda_stream)
 			>>>
 			(
 				qry_hidden.dptr_,
 				src_hidden.dptr_,
-				// ptr_att_hidden,
-				att_scores.dptr_,
+				ptr_att_hidden,
 				nullptr, nullptr,
 				_param.layer_norm
 			);
@@ -213,15 +207,17 @@ public:
                                                      flatten=False,
                                                      name="%sraw_att_score_fc" % self.prefix)
 		 */
-		// CHECK_EQ(cuda_stream->blas_handle_ownership_, Stream < gpu > ::OwnHandle) << 
-		// 	"Must initialize the cuBLAS handle in CUDA stream.";
+		/* FIXME:
+		CHECK_EQ(cuda_stream->blas_handle_ownership_, Stream < gpu > ::OwnHandle) << 
+			"Must initialize the cuBLAS handle in CUDA stream.";
 		
-		// FullyConnectedFW(Stream < gpu > ::GetBlasHandle(cuda_stream),
-		//                  ptr_att_hidden,
-		//                  h2s_weight.dptr_,
-		// 	            att_scores.dptr_,
-		// 	            _param.batch_size * _param.seq_length, 
-		// 	            _param.state_size, 1);
+		FullyConnectedFW(Stream < gpu > ::GetBlasHandle(cuda_stream),
+		                 ptr_att_hidden,
+		                 h2s_weight.dptr_,
+			         att_scores.dptr_,
+			         _param.batch_size * _param.seq_length, 
+			         _param.state_size, 1);
+		 */
 	}
 
 	virtual void Backward(const OpContext & ctx,
@@ -242,19 +238,8 @@ public:
 		CHECK_EQ(out_data.size(), out_expected);
 		CHECK_EQ(out_grad.size(), out_expected);
 
-		// The gradient request type is automatically determined by the `graph_executor`.
-		// For variables that are exclusive to *this* operator, its gradient request type will be `WriteTo` (or `WriteInplace`).
-		// Otherwise, its gradient request type will be `AddTo`.
-		// In our case, `SrcHidden` and `H2SWeight` are both shared across multiple time steps,
-		// so their gradient request type must be `AddTo`.
-		// In contrast, each MLP attention operator has exclusive access to `QryHidden`,
-		// so its gradient request type must be either `WriteTo` or `WriteInplace`.
-		// CHECK_NE(req[int(EnumOpInputs::QryHidden)], kAddTo) << // Note that the condition here is NOT_EQUAL.
-		//	"The gradient request for "  "query hidden" " must NOT be AddTo.";
-		// CHECK_NE(req[int(EnumOpInputs::SrcHidden)], kAddTo) << 
-		//	"The gradient request for " "source hidden" " must be AddTo.";
-		// CHECK_EQ(req[int(EnumOpInputs::H2SWeight)], kAddTo) << 
-		// 	"The gradient request for " "hidden-to-score weight" " must be AddTo.";
+		CHECK_NE(req[int(EnumOpInputs::QryHidden)], kAddTo) <<
+			"The gradient request for "  "query hidden" " must NOT be AddTo.";
 
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 
@@ -274,6 +259,18 @@ public:
 			.get < gpu, 2, DType > (cuda_stream);
 		Tensor < gpu, 3, DType > att_scores_grad = out_grad[int(EnumOpOutputs::AttScores)]
 			.get < gpu, 3, DType > (cuda_stream);
+
+		if (req[int(EnumOpInputs::QryHidden)] == OpReqType::kWriteTo)
+			CUDA_CALL(cudaMemsetAsync(qry_hidden_grad.dptr_, 0, 
+				_param.batch_size * 
+				_param.state_size * sizeof(DType), 
+				Stream < gpu > ::GetStream(cuda_stream)));
+		if (req[int(EnumOpInputs::SrcHidden)] == OpReqType::kWriteTo)
+			CUDA_CALL(cudaMemsetAsync(src_hidden_grad.dptr_, 0, 
+				_param.batch_size * 
+				_param.seq_length *
+				_param.state_size * sizeof(DType), 
+				Stream < gpu > ::GetStream(cuda_stream)));
 
 		CHECK_EQ(qry_hidden     .CheckContiguous(), true);
 		CHECK_EQ(src_hidden     .CheckContiguous(), true);
@@ -295,23 +292,27 @@ public:
 		DType * ptr_att_hidden_var  = _param.layer_norm ? 
 			workspace.dptr_ + 3 * _param.batch_size * _param.seq_length * _param.state_size : nullptr;
 
+		ptr_att_hidden_grad = att_scores_grad.dptr_;
+
+		/* FIXME:
 		// !Important: Replay the forward pass computation.
-		// _cuda_fused_mlp_att_scoring_func_forward < DType >
-		// 	<<<
-		// 		dim3(_param.seq_length,
-		// 		     _param.batch_size),
-		// 		_param.state_size,
-		// 		_param.state_size * sizeof(DType),
-		// 		Stream < gpu > ::GetStream(cuda_stream)
-		// 	>>>
-		// 	(
-		// 		qry_hidden.dptr_,
-		// 		src_hidden.dptr_,
-		// 		ptr_att_hidden,
-		// 		ptr_att_hidden_exp,
-		// 		ptr_att_hidden_var,
-		// 		_param.layer_norm
-		// 	);
+		_cuda_fused_mlp_att_scoring_func_forward < DType >
+			<<<
+				dim3(_param.seq_length,
+				     _param.batch_size),
+				_param.state_size,
+				_param.state_size * sizeof(DType),
+				Stream < gpu > ::GetStream(cuda_stream)
+			>>>
+			(
+				qry_hidden.dptr_,
+				src_hidden.dptr_,
+				ptr_att_hidden,
+				ptr_att_hidden_exp,
+				ptr_att_hidden_var,
+				_param.layer_norm
+			);
+		 */
 
 		/*
             # (batch_size, seq_len, 1)
@@ -322,32 +323,32 @@ public:
                                                      flatten=False,
                                                      name="%sraw_att_score_fc" % self.prefix)
 		 */
-		// CHECK_EQ(cuda_stream->blas_handle_ownership_, Stream < gpu > ::OwnHandle) << 
-		// 	"Must initialize the cuBLAS handle in CUDA stream.";
+		/* FIXME:
+		CHECK_EQ(cuda_stream->blas_handle_ownership_, Stream < gpu > ::OwnHandle) << 
+			"Must initialize the cuBLAS handle in CUDA stream.";
 		
-		// FullyConnectedBWWeight(Stream < gpu > ::GetBlasHandle(cuda_stream),
-		// 		       ptr_att_hidden,
-		// 		       h2s_weight_grad.dptr_,
-		// 		       att_scores_grad.dptr_,
-		// 		       req[int(EnumOpInputs::H2SWeight)],
-		// 		       _param.batch_size * _param.seq_length,
-		// 		       _param.state_size, 1);
-		// FullyConnectedBWData  (Stream < gpu > ::GetBlasHandle(cuda_stream),
-		//                        ptr_att_hidden_grad,
-		// 		       h2s_weight     .dptr_,
-		// 		       att_scores_grad.dptr_,
-		// 		       OpReqType::kWriteTo,
-		// 		       _param.batch_size * _param.seq_length,
-		// 		       _param.state_size, 1);
-
-		CUDA_CALL(cudaDeviceSynchronize());
+		FullyConnectedBWWeight(Stream < gpu > ::GetBlasHandle(cuda_stream),
+				       ptr_att_hidden,
+				       h2s_weight_grad.dptr_,
+				       att_scores_grad.dptr_,
+				       req[int(EnumOpInputs::H2SWeight)],
+				       _param.batch_size * _param.seq_length,
+				       _param.state_size, 1);
+		FullyConnectedBWData  (Stream < gpu > ::GetBlasHandle(cuda_stream),
+		                       ptr_att_hidden_grad,
+				       h2s_weight     .dptr_,
+				       att_scores_grad.dptr_,
+				       OpReqType::kWriteTo,
+				       _param.batch_size * _param.seq_length,
+				       _param.state_size, 1);
+		 */
 		_cuda_fused_mlp_att_scoring_func_backward
 			<<<
 				dim3(_param.seq_length,
 				     _param.batch_size),
 				_param.state_size, 
 				_param.state_size * sizeof(DType), 
-				cuda_stream->stream_
+				Stream < gpu > ::GetStream(cuda_stream)
 			>>>
 			(
 				qry_hidden.dptr_,
@@ -355,8 +356,7 @@ public:
 				src_hidden.dptr_,
 				src_hidden_grad.dptr_,
 				ptr_att_hidden,
-				// ptr_att_hidden_grad,
-				att_scores_grad.dptr_,
+				ptr_att_hidden_grad,
 				ptr_att_hidden_exp,
 				ptr_att_hidden_var,
 				_param.layer_norm
@@ -466,17 +466,11 @@ __global__ void _cuda_fused_mlp_att_scoring_func_forward(
 		att_hidden_reg = att_hidden_minus_mean;
 		att_hidden_reg = att_hidden_reg * rsqrt_var_plus_epsilon;
 		
-		if (att_hidden_exp != nullptr && 
-		    att_hidden_var != nullptr)
+		if (att_hidden_exp != nullptr && att_hidden_var != nullptr)
 		{
 			// write to global memory for reuse in the backward pass
 			att_hidden_exp[g_threadIdx] = att_hidden_minus_mean;
 			att_hidden_var[g_threadIdx] = rsqrt_var_plus_epsilon;
-			/*
-			printf("blockIdx.x: %5d, blockIdx.y: %5d, EXP: %f, VAR: %f\n", 
-				blockIdx.x, blockIdx.y, att_hidden_minus_mean, rsqrt_var_plus_epsilon);
-			__syncthreads();
-			 */
 		}
 	}
 
@@ -485,13 +479,9 @@ __global__ void _cuda_fused_mlp_att_scoring_func_forward(
             attention_hidden = mx.sym.Activation(attention_hidden, act_type="tanh",
                                                  name="%shidden" % self.prefix)
 	 */
-	// att_hidden[g_threadIdx] = tanh(att_hidden_reg);
+	// FIXME:
+	// att_hidden[g_threadIdx] = tanh(att_hidden_reg); 
 	att_hidden[g_threadIdx] = att_hidden_reg;
-
-	// if (threadIdx.x == 0)
-	// 	printf("BlockIdx.x: %d, BlockIdx.y: %d, Att Hidden: %f\n", 
-	// 		blockIdx.x, blockIdx.y, att_hidden[g_threadIdx]);
-	// __syncthreads();
 }
 
 template < typename RealType >
@@ -510,11 +500,12 @@ __global__ void _cuda_fused_mlp_att_scoring_func_backward(
 	                                          blockIdx.x *  blockDim.x + 
 						               threadIdx.x;
 	RealType att_hidden_grad_reg = att_hidden_grad[g_threadIdx];
-	// att_hidden[g_threadIdx] = tanh(att_hidden_reg);
-	// RealType att_hidden_reg      = att_hidden     [g_threadIdx];
-	// RealType att_hidden_grad_reg = att_hidden_grad[g_threadIdx] * 
-	// 	(1 - att_hidden_reg * 
-	// 	     att_hidden_reg);
+	/* FIXME:
+	RealType att_hidden_reg      = att_hidden     [g_threadIdx];
+	RealType att_hidden_grad_reg = att_hidden_grad[g_threadIdx] * 
+		(1 - att_hidden_reg * 
+		     att_hidden_reg);
+	 */
 
 	/*
             if self._ln is not None:
@@ -524,46 +515,30 @@ __global__ void _cuda_fused_mlp_att_scoring_func_backward(
 
 	if (layer_norm)
 	{
-		// // read the value that was stored during the forward pass
-		// RealType att_hidden_minus_mean  = att_hidden_exp[g_threadIdx];
-		// RealType rsqrt_var_plus_epsilon = att_hidden_var[g_threadIdx];
-		// /*
-		// if (threadIdx.x == 0)
-		// {
-		// 	printf("blockIdx.x: %5d, blockIdx.y: %5d, EXP: %f, VAR: %f\n", 
-		// 		blockIdx.x, blockIdx.y, att_hidden_minus_mean, rsqrt_var_plus_epsilon);
-		// }
-		// __syncthreads();
-		//  */
-		// RealType att_hidden_var_grad =
-		// 	- 0.5 * __cu_reduce_sum(svmem_backward, att_hidden_minus_mean *
-		// 				        	att_hidden_grad_reg) * 
-		// 	                                        rsqrt_var_plus_epsilon * 
-		// 			        		rsqrt_var_plus_epsilon * 
-		// 				        	rsqrt_var_plus_epsilon;
-		// __syncthreads();
-		// RealType att_hidden_exp_grad = 
-		// 	- 1.0 * __cu_reduce_sum(svmem_backward, att_hidden_grad_reg) * rsqrt_var_plus_epsilon;
-		// __syncthreads();
-		//          att_hidden_exp_grad += 
-		// 	- 2.0 * __cu_reduce_sum(svmem_backward, att_hidden_minus_mean * 
-		// 	                                        att_hidden_var_grad / blockDim.x);
-		// __syncthreads();
-		// att_hidden_grad_reg = att_hidden_grad_reg * rsqrt_var_plus_epsilon + 
-		//                       att_hidden_var_grad * 2.0 * att_hidden_minus_mean / blockDim.x + 
-		// 		      att_hidden_exp_grad / blockDim.x;
+		// read the value that was stored during the forward pass
+		RealType att_hidden_minus_mean  = att_hidden_exp[g_threadIdx];
+		RealType rsqrt_var_plus_epsilon = att_hidden_var[g_threadIdx];
+		RealType att_hidden_var_grad =
+			- 0.5 * __cu_reduce_sum(svmem_backward, att_hidden_minus_mean *
+						        	att_hidden_grad_reg) * 
+			                                        rsqrt_var_plus_epsilon * 
+					        		rsqrt_var_plus_epsilon * 
+						        	rsqrt_var_plus_epsilon;
+		RealType att_hidden_exp_grad = 
+			- 1.0 * __cu_reduce_sum(svmem_backward, att_hidden_grad_reg) * rsqrt_var_plus_epsilon
+			- 2.0 * __cu_reduce_sum(svmem_backward, att_hidden_minus_mean * 
+			                                        att_hidden_var_grad / blockDim.x);
+		att_hidden_grad_reg = att_hidden_grad_reg * rsqrt_var_plus_epsilon + 
+		                      att_hidden_var_grad * 2.0 * att_hidden_minus_mean / blockDim.x + 
+				      att_hidden_exp_grad / blockDim.x;
 	}
 
 	/*
 	RealType att_hidden_reg = src_hidden[g_threadIdx] + 
 	                          qry_hidden[blockIdx.y * blockDim.x + threadIdx.x];
 	 */
-	// if (threadIdx.x == 0)
-	// 	printf("BlockIdx.x: %d, BlockIdx.y: %d, SRC Hidden: %f, Hidden Grad: %f\n", 
-	// 		blockIdx.x, blockIdx.y, src_hidden_grad[g_threadIdx], att_hidden_grad[g_threadIdx]);
-	// __syncthreads();
-	src_hidden_grad[g_threadIdx] += att_hidden_grad[g_threadIdx];
-	atomicAdd(&qry_hidden_grad[blockIdx.y * blockDim.x + threadIdx.x], att_hidden_grad[g_threadIdx]);
+	atomicAdd(&src_hidden_grad[g_threadIdx], att_hidden_grad_reg);
+	atomicAdd(&qry_hidden_grad[blockIdx.y * blockDim.x + threadIdx.x], att_hidden_grad_reg);
 }
 
 template <>
