@@ -178,9 +178,7 @@ public:
 		Tensor < gpu, 1, DType > workspace = ctx.requested[int(EnumOpWorkspace::TempSpace)]
 			.get_space_typed < gpu, 1, DType > (Shape1(_temp_space_size), cuda_stream);
 		
-		// DType * ptr_att_hidden = workspace.dptr_;
-		// FIXME:
-		DType * ptr_att_hidden = att_scores.dptr_; 
+		DType * ptr_att_hidden = workspace.dptr_;
 
 		_cuda_fused_mlp_att_scoring_func_forward < DType >
 			<<<
@@ -207,7 +205,6 @@ public:
                                                      flatten=False,
                                                      name="%sraw_att_score_fc" % self.prefix)
 		 */
-		/* FIXME:
 		CHECK_EQ(cuda_stream->blas_handle_ownership_, Stream < gpu > ::OwnHandle) << 
 			"Must initialize the cuBLAS handle in CUDA stream.";
 		
@@ -217,7 +214,6 @@ public:
 			         att_scores.dptr_,
 			         _param.batch_size * _param.seq_length, 
 			         _param.state_size, 1);
-		 */
 	}
 
 	virtual void Backward(const OpContext & ctx,
@@ -239,7 +235,7 @@ public:
 		CHECK_EQ(out_grad.size(), out_expected);
 
 		CHECK_NE(req[int(EnumOpInputs::QryHidden)], kAddTo) <<
-			"The gradient request for "  "query hidden" " must NOT be AddTo.";
+			"The gradient request for query hidden must NOT be AddTo.";
 
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 
@@ -260,12 +256,14 @@ public:
 		Tensor < gpu, 3, DType > att_scores_grad = out_grad[int(EnumOpOutputs::AttScores)]
 			.get < gpu, 3, DType > (cuda_stream);
 
-		if (req[int(EnumOpInputs::QryHidden)] == OpReqType::kWriteTo)
+		if (req[int(EnumOpInputs::QryHidden)] == OpReqType::kWriteTo ||
+		    req[int(EnumOpInputs::QryHidden)] == OpReqType::kWriteInplace)
 			CUDA_CALL(cudaMemsetAsync(qry_hidden_grad.dptr_, 0, 
 				_param.batch_size * 
 				_param.state_size * sizeof(DType), 
 				Stream < gpu > ::GetStream(cuda_stream)));
-		if (req[int(EnumOpInputs::SrcHidden)] == OpReqType::kWriteTo)
+		if (req[int(EnumOpInputs::SrcHidden)] == OpReqType::kWriteTo || 
+		    req[int(EnumOpInputs::SrcHidden)] == OpReqType::kWriteInplace)
 			CUDA_CALL(cudaMemsetAsync(src_hidden_grad.dptr_, 0, 
 				_param.batch_size * 
 				_param.seq_length *
@@ -284,7 +282,7 @@ public:
 		Tensor < gpu, 1, DType > workspace = ctx.requested[int(EnumOpWorkspace::TempSpace)]
 			.get_space_typed < gpu, 1, DType > (Shape1(_temp_space_size), cuda_stream);
 		
-		DType * ptr_att_hidden      = workspace.dptr_;
+		DType * ptr_att_hidden = workspace.dptr_;
 		DType * ptr_att_hidden_grad = 
 			workspace.dptr_ + 1 * _param.batch_size * _param.seq_length * _param.state_size;
 		DType * ptr_att_hidden_exp  = _param.layer_norm ? 
@@ -292,9 +290,6 @@ public:
 		DType * ptr_att_hidden_var  = _param.layer_norm ? 
 			workspace.dptr_ + 3 * _param.batch_size * _param.seq_length * _param.state_size : nullptr;
 
-		ptr_att_hidden_grad = att_scores_grad.dptr_;
-
-		/* FIXME:
 		// !Important: Replay the forward pass computation.
 		_cuda_fused_mlp_att_scoring_func_forward < DType >
 			<<<
@@ -312,7 +307,6 @@ public:
 				ptr_att_hidden_var,
 				_param.layer_norm
 			);
-		 */
 
 		/*
             # (batch_size, seq_len, 1)
@@ -323,7 +317,6 @@ public:
                                                      flatten=False,
                                                      name="%sraw_att_score_fc" % self.prefix)
 		 */
-		/* FIXME:
 		CHECK_EQ(cuda_stream->blas_handle_ownership_, Stream < gpu > ::OwnHandle) << 
 			"Must initialize the cuBLAS handle in CUDA stream.";
 		
@@ -341,7 +334,7 @@ public:
 				       OpReqType::kWriteTo,
 				       _param.batch_size * _param.seq_length,
 				       _param.state_size, 1);
-		 */
+		
 		_cuda_fused_mlp_att_scoring_func_backward
 			<<<
 				dim3(_param.seq_length,
@@ -479,9 +472,7 @@ __global__ void _cuda_fused_mlp_att_scoring_func_forward(
             attention_hidden = mx.sym.Activation(attention_hidden, act_type="tanh",
                                                  name="%shidden" % self.prefix)
 	 */
-	// FIXME:
-	// att_hidden[g_threadIdx] = tanh(att_hidden_reg); 
-	att_hidden[g_threadIdx] = att_hidden_reg;
+	att_hidden[g_threadIdx] = tanh(att_hidden_reg); 
 }
 
 template < typename RealType >
@@ -499,13 +490,11 @@ __global__ void _cuda_fused_mlp_att_scoring_func_backward(
 	const unsigned g_threadIdx = blockIdx.y *  gridDim.x *  blockDim.x + 
 	                                          blockIdx.x *  blockDim.x + 
 						               threadIdx.x;
-	RealType att_hidden_grad_reg = att_hidden_grad[g_threadIdx];
-	/* FIXME:
+	
 	RealType att_hidden_reg      = att_hidden     [g_threadIdx];
 	RealType att_hidden_grad_reg = att_hidden_grad[g_threadIdx] * 
 		(1 - att_hidden_reg * 
 		     att_hidden_reg);
-	 */
 
 	/*
             if self._ln is not None:
@@ -537,7 +526,7 @@ __global__ void _cuda_fused_mlp_att_scoring_func_backward(
 	RealType att_hidden_reg = src_hidden[g_threadIdx] + 
 	                          qry_hidden[blockIdx.y * blockDim.x + threadIdx.x];
 	 */
-	atomicAdd(&src_hidden_grad[g_threadIdx], att_hidden_grad_reg);
+	src_hidden_grad[g_threadIdx] = att_hidden_grad_reg;
 	atomicAdd(&qry_hidden_grad[blockIdx.y * blockDim.x + threadIdx.x], att_hidden_grad_reg);
 }
 
@@ -568,7 +557,7 @@ inline void FullyConnectedBWWeight < float >  (cublasHandle_t cublas_handle,
 	const OpReqType grad_req, const unsigned batch_size,
 	const unsigned input_dim, const unsigned num_hidden)
 {
-	float alpha = 1.0, beta = 1.0; // float(grad_req == kAddTo);
+	float alpha = 1.0, beta = float(grad_req == kAddTo);
 
 	CUBLAS_CALL(cublasSgemm(cublas_handle, // cuBLAS Handle
 	                        CUBLAS_OP_N, //  X

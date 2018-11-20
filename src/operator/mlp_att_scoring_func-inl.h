@@ -125,8 +125,7 @@ public:
 
 		TShape att_scores_shape = src_hidden_shape;
 
-		// FIXME:
-		// att_scores_shape[2] = 1; // [batch_size x seq_length x 1]
+		att_scores_shape[2] = 1; // [batch_size x seq_length x 1]
 
 		out_shape->push_back(att_scores_shape); // AttScores
 
@@ -178,13 +177,10 @@ public:
 		const std::vector < int > &  in_data,
 		const std::vector < int > & out_data) const override
 	{
-		/* FIXME:
 		return {  in_data[int(EnumOpInputs ::QryHidden)],
 			  in_data[int(EnumOpInputs ::SrcHidden)],
 			  in_data[int(EnumOpInputs ::H2SWeight)],
 			 out_grad[int(EnumOpOutputs::AttScores)] };
-		 */
-		return { out_grad[int(EnumOpOutputs::AttScores)] };
 	}
 
 	std::vector < ResourceRequest >  ForwardResource(
