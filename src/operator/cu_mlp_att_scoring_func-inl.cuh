@@ -491,6 +491,11 @@ __global__ void _cuda_fused_mlp_att_scoring_func_backward(
 	                                          blockIdx.x *  blockDim.x + 
 						               threadIdx.x;
 	
+	/*
+            # (batch_size, seq_len, attention_num_hidden)
+            attention_hidden = mx.sym.Activation(attention_hidden, act_type="tanh",
+                                                 name="%shidden" % self.prefix)
+	 */
 	RealType att_hidden_reg      = att_hidden     [g_threadIdx];
 	RealType att_hidden_grad_reg = att_hidden_grad[g_threadIdx] * 
 		(1 - att_hidden_reg * 
