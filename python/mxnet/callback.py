@@ -173,7 +173,7 @@ class Speedometer(object):
             self.tic = time.time()
 
 
-class MXBoardSpeedometer(object):
+class TensorboardSpeedometer(object):
     """
     Log 
       - Training Throughput (Samples per Second), 
@@ -219,6 +219,11 @@ class MXBoardSpeedometer(object):
                 # Here, I simplied the query a little bit by assuming that we are running on SINGLE GPU.
                 import subprocess
 
+                try:
+                    import tensorflow as tf
+                except ImportError:
+                    logging.error("Please install tensorboard using `pip install tensorflow`.")
+
                 sp = subprocess.Popen(['nvidia-smi', 
                                        '--query-compute-apps=gpu_name,process_name,pid,used_gpu_memory', 
                                        '--format=csv,noheader,nounits'],
@@ -238,9 +243,12 @@ class MXBoardSpeedometer(object):
 
                     memory_usage.append((process_uid, used_gpu_memory))
                     
-                    self.summary_writer.add_scalar(tag='Memory_Usage-%s' % process_uid,
-                                                   value=used_gpu_memory,
-                                                   global_step=self.global_step)
+                    # self.summary_writer.add_scalar(tag='Memory_Usage-%s' % process_uid,
+                    #                                value=used_gpu_memory,
+                    #                                global_step=self.global_step)
+                    self.summary_writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='Memory_Usage-%s' % process_uid,
+                                                                                       simple_value=used_gpu_memory)]),
+                                                    global_step=self.global_step)
                 
                 # Evaluation Metrics
                 if param.eval_metric is not None:
@@ -249,8 +257,11 @@ class MXBoardSpeedometer(object):
                         param.eval_metric.reset()
 
                     for name, value in dict(name_value).items():
-                        self.summary_writer.add_scalar(tag=name, value=value,
-                                                       global_step=self.global_step)
+                        # self.summary_writer.add_scalar(tag=name, value=value,
+                        #                                global_step=self.global_step)
+                        self.summary_writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag=name,
+                                                                                           simple_value=value)]),
+                                                        global_step=self.global_step)
 
                     msg  = 'Global Step[%d] Epoch[%d] Batch [%d]\tSpeed: %.2f samples/sec'
                     msg += '\t%s=%f' * len(name_value)
@@ -263,8 +274,12 @@ class MXBoardSpeedometer(object):
                     logging.info("Iter[%d] Batch [%d]\tSpeed: %.2f samples/sec",
                                  param.epoch, count, speed)
 
-                self.summary_writer.add_scalar(tag='Speed', value=speed,
-                                               global_step=self.global_step)
+                # self.summary_writer.add_scalar(tag='Speed', value=speed,
+                #                                global_step=self.global_step)
+                self.summary_writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='Speed',
+                                                                                   simple_value=speed)]),
+                                                global_step=self.global_step)
+                logging.info((speed, self.global_step))
 
                 self.tic = time.time()
         else:
