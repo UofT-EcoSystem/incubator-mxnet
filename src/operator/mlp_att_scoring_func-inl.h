@@ -116,9 +116,6 @@ public:
 
 		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::QryHidden),
 			Shape2(batch_size, state_size));
-		// According to the documentation provided by MXNet,
-		// `FullyConnected` layers are implemented in $Y = XW^T$, where 
-		// $X$ is of dimension $B\times H$ and $W$ is of dimension $H'\times H$.
 		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::H2SWeight), Shape2(1, state_size));
 		
 		out_shape->clear();
@@ -186,12 +183,12 @@ public:
 	std::vector < ResourceRequest >  ForwardResource(
 		const std::vector < TShape > & in_shape) const override
 	{
-		return { ResourceRequest::kTempSpace }; // EnumOpWorkspace::AttHidden
+		return { ResourceRequest::kTempSpace };
 	}
 	std::vector < ResourceRequest > BackwardResource(
 		const std::vector < TShape > & in_shape) const override
 	{
-		return { ResourceRequest::kTempSpace }; // EnumOpWorkspace::AttHidden
+		return { ResourceRequest::kTempSpace };
 	}
 
 	Operator * CreateOperator  (Context ctx) const override
