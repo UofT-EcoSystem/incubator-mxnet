@@ -173,6 +173,107 @@ class Speedometer(object):
             self.tic = time.time()
 
 
+class MXBoardSpeedometer(object):
+    """
+    Log 
+      - Training Throughput (Samples per Second), 
+      - Memory Usage (from `nvidia-smi`)
+      - Evaluation Metrics 
+    periodically, and at the same time, dump the results using **Tensorboard**.
+    :param summary_writer: Tensorboard Summary Writer
+    :param batch_size: Training Batch Size, used for computing Throughput
+    :param frequency : How frequent will those aforementioned Metrics be Logged
+    :param auto_reset: Whether to reset the Evaluation Metrics after each Log
+    """
+    def __init__(self, summary_writer, batch_size, frequent=50, auto_reset=True):
+        self.summary_writer = summary_writer
+
+        self.batch_size = batch_size
+        self.frequent = frequent
+        self.init = False
+        self.tic = 0
+        self.last_count = 0
+        self.auto_reset = auto_reset
+        # `global_step` records the number of training batches.
+        # It is incremented every time the `Speedometer` is called.
+        self.global_step = 0
+
+    def __call__(self, param):
+        """
+        Callback to show Training Throughput, Memory Usage, Evaluation Metrics
+        """
+        count = param.nbatch
+
+        if self.last_count > count:
+            self.init = False
+        self.last_count = count
+
+        if self.init:
+            if count % self.frequent == 0:
+                # Training Throughput
+                speed = self.frequent * self.batch_size / (time.time() - self.tic)
+
+                # Memory Usage
+                # The following GPU query was learned from Sockeye developers:
+                # https://github.com/awslabs/sockeye/blob/arxiv_1217/sockeye/utils.py#L376
+                # Here, I simplied the query a little bit by assuming that we are running on SINGLE GPU.
+                import subprocess
+
+                sp = subprocess.Popen(['nvidia-smi', 
+                                       '--query-compute-apps=gpu_name,process_name,pid,used_gpu_memory', 
+                                       '--format=csv,noheader,nounits'],
+                                       stdout=subprocess.PIPE, 
+                                       stderr=subprocess.PIPE)
+                query_result = sp.communicate()[0].decode("utf-8").rstrip().split("\n")
+                memory_usage = []
+
+                if len(query_result) > 1:
+                    logging.info("There are more than 1 compute application running on the GPU.")
+
+                for line in query_result:
+                    _, process_name, pid, used_gpu_memory = line.split(", ")
+                    pid, used_gpu_memory = int(pid), int(used_gpu_memory)
+
+                    process_uid = "%s-pid_%d" % (process_name, pid)
+
+                    memory_usage.append((process_uid, used_gpu_memory))
+                    
+                    self.summary_writer.add_scalar(tag='Memory_Usage-%s' % process_uid,
+                                                   value=used_gpu_memory,
+                                                   global_step=self.global_step)
+                
+                # Evaluation Metrics
+                if param.eval_metric is not None:
+                    name_value = param.eval_metric.get_name_value()
+                    if self.auto_reset:
+                        param.eval_metric.reset()
+
+                    for name, value in dict(name_value).items():
+                        self.summary_writer.add_scalar(tag=name, value=value,
+                                                       global_step=self.global_step)
+
+                    msg  = 'Global Step[%d] Epoch[%d] Batch [%d]\tSpeed: %.2f samples/sec'
+                    msg += '\t%s=%f' * len(name_value)
+                    msg += '\tMemory Usage: '
+                    msg += '\t%s=%d' * len(memory_usage)
+                    logging.info(msg, self.global_step, param.epoch, count, speed,
+                                 *sum(name_value + memory_usage, ()))
+
+                else:
+                    logging.info("Iter[%d] Batch [%d]\tSpeed: %.2f samples/sec",
+                                 param.epoch, count, speed)
+
+                self.summary_writer.add_scalar(tag='Speed', value=speed,
+                                               global_step=self.global_step)
+
+                self.tic = time.time()
+        else:
+            self.init = True
+            self.tic = time.time()
+
+        self.global_step += 1 # increase `global_Step` by 1
+
+
 class ProgressBar(object):
     """Displays a progress bar, indicating the percentage of batches processed within each epoch.
 
