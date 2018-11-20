@@ -279,7 +279,6 @@ class TensorboardSpeedometer(object):
                 self.summary_writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='Speed',
                                                                                    simple_value=speed)]),
                                                 global_step=self.global_step)
-                logging.info((speed, self.global_step))
 
                 self.tic = time.time()
         else:
