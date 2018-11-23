@@ -531,7 +531,7 @@ __global__ void _cuda_fused_mlp_att_scoring_func_backward(
 	RealType att_hidden_reg = src_hidden[g_threadIdx] + 
 	                          qry_hidden[blockIdx.y * blockDim.x + threadIdx.x];
 	 */
-	src_hidden_grad[g_threadIdx] = att_hidden_grad_reg;
+	src_hidden_grad[g_threadIdx] += att_hidden_grad_reg;
 	atomicAdd(&qry_hidden_grad[blockIdx.y * blockDim.x + threadIdx.x], att_hidden_grad_reg);
 }
 
