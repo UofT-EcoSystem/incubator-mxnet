@@ -3,7 +3,7 @@
 // #include <vector>
 #include <cooperative_groups.h>
 
-#include <mxnet/storage.h>
+// #include <mxnet/storage.h>
 
 #include "mlp_att_scoring_func-inl.h"
 
