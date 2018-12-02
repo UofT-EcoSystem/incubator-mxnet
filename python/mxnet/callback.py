@@ -250,6 +250,19 @@ class TensorboardSpeedometer(object):
                                                                                        simple_value=used_gpu_memory)]),
                                                     global_step=self.global_step)
                 
+                sp = subprocess.Popen(['nvidia-smi', 
+                                       '--query-gpu=power.draw',
+                                       '--format=csv,noheader,nounits'],
+                                       stdout=subprocess.PIPE, 
+                                       stderr=subprocess.PIPE)
+                query_result = sp.communicate()[0].decode("utf-8").rstrip().split("\n")
+
+                power = float(query_result[0])
+
+                self.summary_writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='Power',
+                                                                                   simple_value=power)]),
+                                                global_step=self.global_step)
+
                 # Evaluation Metrics
                 if param.eval_metric is not None:
                     name_value = param.eval_metric.get_name_value()
@@ -267,8 +280,9 @@ class TensorboardSpeedometer(object):
                     msg += '\t%s=%f' * len(name_value)
                     msg += '\tMemory Usage: '
                     msg += '\t%s=%d' * len(memory_usage)
+                    msg += '\tPower: %.2f'
                     logging.info(msg, self.global_step, param.epoch, count, speed,
-                                 *sum(name_value + memory_usage, ()))
+                                 *sum(name_value + memory_usage, ()), power)
 
                 else:
                     logging.info("Iter[%d] Batch [%d]\tSpeed: %.2f samples/sec",
