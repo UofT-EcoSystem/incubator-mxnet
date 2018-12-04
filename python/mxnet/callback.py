@@ -197,6 +197,7 @@ class TensorboardSpeedometer(object):
         # `global_step` records the number of training batches.
         # It is incremented every time the `Speedometer` is called.
         self.global_step = 0
+        self.energy = 0
 
     def __call__(self, param):
         """
@@ -211,7 +212,8 @@ class TensorboardSpeedometer(object):
         if self.init:
             if count % self.frequent == 0:
                 # Training Throughput
-                speed = self.frequent * self.batch_size / (time.time() - self.tic)
+                time_diff = time.time() - self.tic
+                speed = self.frequent * self.batch_size / time_diff
 
                 # Memory Usage
                 # The following GPU query was learned from Sockeye developers:
@@ -262,6 +264,12 @@ class TensorboardSpeedometer(object):
                 self.summary_writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='Power',
                                                                                    simple_value=power)]),
                                                 global_step=self.global_step)
+                
+                self.energy += power * time_diff
+
+                self.summary_writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='Energy',
+                                                                                   simple_value=self.energy)]),
+                                                global_step=self.global_step)
 
                 # Evaluation Metrics
                 if param.eval_metric is not None:
@@ -280,9 +288,10 @@ class TensorboardSpeedometer(object):
                     msg += '\t%s=%f' * len(name_value)
                     msg += '\tMemory Usage: '
                     msg += '\t%s=%d' * len(memory_usage)
-                    msg += '\tPower: %.2f'
+                    msg += '\tPower: %.2f W'
+                    msg += '\tEnergy: %.2f J'
                     logging.info(msg, self.global_step, param.epoch, count, speed,
-                                 *sum(name_value + memory_usage, ()), power)
+                                 *sum(name_value + memory_usage, ()), power, energy)
 
                 else:
                     logging.info("Iter[%d] Batch [%d]\tSpeed: %.2f samples/sec",
