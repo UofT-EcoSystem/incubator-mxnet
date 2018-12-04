@@ -291,7 +291,7 @@ class TensorboardSpeedometer(object):
                     msg += '\tPower: %.2f W'
                     msg += '\tEnergy: %.2f J'
                     logging.info(msg, self.global_step, param.epoch, count, speed,
-                                 *sum(name_value + memory_usage, ()), power, energy)
+                                 *sum(name_value + memory_usage, ()), power, self.energy)
 
                 else:
                     logging.info("Iter[%d] Batch [%d]\tSpeed: %.2f samples/sec",
