@@ -6,7 +6,7 @@ namespace mxnet {
 template <>
 Operator * CreateOp < cpu > (ParSequenceReverseParam param, int dtype)
 {
-	LOG(FATAL) << "Parallel sequence reverse layer implemention is only available for GPU at the moment.";
+	LOG(FATAL) << "Parallel Sequence Reverse layer implemention is only available for GPU at the moment.";
 
 	Operator * op = nullptr;
   	
@@ -25,10 +25,9 @@ Operator * ParSequenceReverseProp::CreateOperatorEx(Context ctx,
 DMLC_REGISTER_PARAMETER(ParSequenceReverseParam);
 
 MXNET_REGISTER_OP_PROPERTY(ParSequenceReverse, ParSequenceReverseProp)
-	.describe("Applied parallel sequence reverse to the input sequence.")
-	.add_argument("IData", "NDArray-or-Symbol",  "Input Data")
-	.add_argument("SequenceLength", "NDArray-or-Symbol", "Sequence Length")
-	.add_argument("OData", "NDArray-or-Symbol", "Output Data")
+	.describe("Apply parallel sequence reverse to the input sequence.")
+	.add_argument("data",            "NDArray-or-Symbol", "Input Data")
+	.add_argument("sequence_length", "NDArray-or-Symbol", "Sequence Length")
 	.add_arguments(ParSequenceReverseParam::__FIELDS__());
 
 	} // namespace op

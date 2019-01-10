@@ -10,8 +10,8 @@ namespace mxnet {
 	namespace op {
 		namespace {
 
-enum class EnumOpInputs  { IData, SequenceLength };
-enum class EnumOpOutputs { OData };
+enum class EnumOpInputs  { data, sequence_length };
+enum class EnumOpOutputs { data_rev };
 
 		} // namespace
 
@@ -76,16 +76,16 @@ public:
 	{
 		if (_param.use_sequence_length)
 		{
-			return { "IData", "SequenceLength" };
+			return { "data", "sequence_length" };
 		}
 		else 
 		{
-			return { "IData" };
+			return { "data" };
 		}
 	}
 	std::vector < std::string > ListOutputs  () const override
 	{
-		return { "OData" };
+		return { "data_rev" };
 	}
 	int NumOutputs() const override
 	{
@@ -110,32 +110,30 @@ public:
 
 		if (_param.use_sequence_length)
 		{
-			CHECK_EQ(in_shape->size(), 2U); // IData, SequenceLength
+			CHECK_EQ(in_shape->size(), 2U); // data, sequence_length
 		}
 		else
 		{
-			CHECK_EQ(in_shape->size(), 1U); // IData
+			CHECK_EQ(in_shape->size(), 1U); // data
 		}
 
 		// query the input shape and perform shape inference
-		const TShape & idata_shape = (*in_shape)[int(EnumOpInputs::IData)];
+		const TShape & data_shape = (*in_shape)[int(EnumOpInputs::data)];
 
-		CHECK_EQ(idata_shape.ndim(), 3U) << "Input Data should be rank-3 tensor of dim"
+		CHECK_EQ(data_shape.ndim(), 3U) << "Input Data should be rank-3 tensor of dim"
 			"[seq length, batch size, state size].";
 
 		if (_param.use_sequence_length)
 		{
-			// unsigned seq_length = idata_shape[0];
-			unsigned batch_size = idata_shape[1];
-			// unsigned state_size = idata_shape[2];
+			unsigned batch_size = data_shape[1];
 
-			SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::SequenceLength),
+			SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::sequence_length),
 				Shape1(batch_size));
 		}
 		
 		out_shape->clear();
 
-		out_shape->push_back(idata_shape); // OData
+		out_shape->push_back(data_shape); // data_rev
 
 		return true;
 	}
@@ -145,27 +143,27 @@ public:
 	{
 		CHECK_GE(in_type->size(), 1U);
 
-		int idata_type = (*in_type)[0];
+		int data_type = (*in_type)[0];
 
-		CHECK_NE(idata_type, -1) << "First input must have specified type.";
+		CHECK_NE(data_type, -1) << "First input must have specified type.";
 
 		for (std::size_t i = 1; i < in_type->size(); ++i)
 		{
 			if ((*in_type)[i] == -1) 
 			{
-				(*in_type)[i] = idata_type;
+				(*in_type)[i] = data_type;
 			}
 			else
 			{
-				CHECK_EQ((*in_type)[i], idata_type) << "This layer requires uniform type. " << 
-					"Expected " << idata_type << " v.s. given " << 
+				CHECK_EQ((*in_type)[i], data_type) << "This layer requires uniform type. " << 
+					"Expected " << data_type << " v.s. given " << 
 					(*in_type)[i] << " at " << ListArguments()[i];
 			}
 		}
 
 		out_type->clear();
 
-		out_type->push_back(idata_type); // OData
+		out_type->push_back(data_type); // OData
 		
 		return true;
 	}
@@ -186,10 +184,10 @@ public:
 		const std::vector < int > & out_data) const override
 	{
 		if (_param.use_sequence_length)
-			return {  in_data[int(EnumOpInputs ::SequenceLength)],
-				 out_grad[int(EnumOpOutputs::OData)] };
+			return {  in_data[int(EnumOpInputs ::sequence_rev)],
+				 out_grad[int(EnumOpOutputs::data_rev)] };
 		else
-			return { out_grad[int(EnumOpOutputs::OData)] };
+			return { out_grad[int(EnumOpOutputs::data_rev)] };
 	}
 
 	Operator * CreateOperator  (Context ctx) const override

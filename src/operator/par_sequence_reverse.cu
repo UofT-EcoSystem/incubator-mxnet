@@ -1,4 +1,4 @@
-#include "cu_par_sequence_reverse-inl.cuh"
+#include "par_sequence_reverse-cu_inl.cuh"
 
 namespace mxnet {
 	namespace op {
