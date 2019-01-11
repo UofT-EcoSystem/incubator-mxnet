@@ -43,7 +43,7 @@ private:
 
 		CHECK_EQ(_initialized, false);
 
-		Tensor < gpu, 3, DType > data = in_data[int(EnumOpInputs::data)].
+		Tensor < gpu, 3, DType > data = in_data[int(EnumOpInputs::Data)].
 			get < gpu, 3, DType > (cuda_stream);
 		
 		// infer the parameters from the input data
@@ -69,9 +69,9 @@ public:
 
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 
-		Tensor < gpu, 3, DType > data     =  in_data[int(EnumOpInputs ::data)]
+		Tensor < gpu, 3, DType > data     =  in_data[int(EnumOpInputs ::Data)]
 			.get < gpu, 3, DType > (cuda_stream);
-		Tensor < gpu, 3, DType > data_rev = out_data[int(EnumOpOutputs::data_Rev)]
+		Tensor < gpu, 3, DType > data_rev = out_data[int(EnumOpOutputs::DataRev)]
 			.get < gpu, 3, DType > (cuda_stream);
 
 		CHECK_EQ(data    .CheckContiguous(), true);
@@ -127,9 +127,9 @@ public:
 
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 		
-		Tensor < gpu, 3, DType > data_grad     =  in_grad[int(EnumOpInputs ::data)]
+		Tensor < gpu, 3, DType > data_grad     =  in_grad[int(EnumOpInputs ::Data)]
 			.get < gpu, 3, DType > (cuda_stream);
-		Tensor < gpu, 3, DType > data_rev_grad = out_grad[int(EnumOpOutputs::data_rev)]
+		Tensor < gpu, 3, DType > data_rev_grad = out_grad[int(EnumOpOutputs::DataRev)]
 			.get < gpu, 3, DType > (cuda_stream);
 		
 		CHECK_EQ(data_grad    .CheckContiguous(), true);
@@ -157,7 +157,7 @@ public:
 				data_rev_grad.dptr_,
 				data_grad    .dptr_,
 				ptr_sequence_length,
-				req[int(EnumOpInputs::data)]
+				req[int(EnumOpInputs::Data)]
 			);
 	}
 }; // class CUParSequenceReverseOp

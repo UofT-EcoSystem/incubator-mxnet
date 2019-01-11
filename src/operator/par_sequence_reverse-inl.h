@@ -10,8 +10,8 @@ namespace mxnet {
 	namespace op {
 		namespace {
 
-enum class EnumOpInputs  { data, sequence_length };
-enum class EnumOpOutputs { data_rev };
+enum class EnumOpInputs  { Data, SequenceLength };
+enum class EnumOpOutputs { DataRev };
 
 		} // namespace
 
@@ -110,15 +110,15 @@ public:
 
 		if (_param.use_sequence_length)
 		{
-			CHECK_EQ(in_shape->size(), 2U); // data, sequence_length
+			CHECK_EQ(in_shape->size(), 2U); // Data, SequenceLength
 		}
 		else
 		{
-			CHECK_EQ(in_shape->size(), 1U); // data
+			CHECK_EQ(in_shape->size(), 1U); // DataRev
 		}
 
 		// query the input shape and perform shape inference
-		const TShape & data_shape = (*in_shape)[int(EnumOpInputs::data)];
+		const TShape & data_shape = (*in_shape)[int(EnumOpInputs::Data)];
 
 		CHECK_EQ(data_shape.ndim(), 3U) << "Input Data should be rank-3 tensor of dim"
 			"[seq length, batch size, state size].";
@@ -127,13 +127,13 @@ public:
 		{
 			unsigned batch_size = data_shape[1];
 
-			SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::sequence_length),
+			SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::SequenceLength),
 				Shape1(batch_size));
 		}
 		
 		out_shape->clear();
 
-		out_shape->push_back(data_shape); // data_rev
+		out_shape->push_back(data_shape); // DataRev
 
 		return true;
 	}
@@ -163,7 +163,7 @@ public:
 
 		out_type->clear();
 
-		out_type->push_back(data_type); // OData
+		out_type->push_back(data_type); // DataRev
 		
 		return true;
 	}
@@ -184,10 +184,10 @@ public:
 		const std::vector < int > & out_data) const override
 	{
 		if (_param.use_sequence_length)
-			return {  in_data[int(EnumOpInputs ::sequence_rev)],
-				 out_grad[int(EnumOpOutputs::data_rev)] };
+			return {  in_data[int(EnumOpInputs ::SequenceLength)],
+				 out_grad[int(EnumOpOutputs::DataRev)] };
 		else
-			return { out_grad[int(EnumOpOutputs::data_rev)] };
+			return { out_grad[int(EnumOpOutputs::DataRev)] };
 	}
 
 	Operator * CreateOperator  (Context ctx) const override
