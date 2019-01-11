@@ -290,19 +290,19 @@ __global__ void _cuda_fused_lstm_nonlin_block_backward(
 	// state_c_out[g_threadIdx] =      state_c_out_reg;
 	// state_h_out[g_threadIdx] = tanh(state_c_out_reg) * output_gate;
 
-	RealType o_hidden_state_grad_reg = o_hidden_state_grad[g_threadIdx];
+	RealType state_h_out_grad_reg = state_h_out_grad[g_threadIdx];
 
-	RealType     output_gate_grad = o_hidden_state_grad_reg * cell_state_actv;
-	RealType cell_state_actv_grad = o_hidden_state_grad_reg * output_gate;
+	RealType  output_gate_grad = state_h_out_grad_reg * state_c_actv;
+	RealType state_c_actv_grad = state_h_out_grad_reg * output_gate;
 	
-	RealType cell_state_grad = o_cell_state_grad[g_threadIdx] + cell_state_actv_grad * (1 - cell_state_actv * cell_state_actv);
+	RealType state_c_out_grad_reg = state_c_out_grad[g_threadIdx] + state_c_actv_grad * (1 - state_c_actv * state_c_actv);
 
-	// cell_state = forget_gate * i_cell_state[g_threadIdx] + input_actv * input_gate;
-	RealType  forget_gate_grad = state_c_grad * i_cell_state;
-	RealType   input_actv_grad = state_c_grad * input_gate;
-	RealType   input_gate_grad = state_c_grad * input_actv;
+	// state_c_out_reg = forget_gate * state_c[g_threadIdx] + input_actv * input_gate;
+	RealType  forget_gate_grad = state_c_out_grad_reg * i_cell_state;
+	RealType   input_actv_grad = state_c_out_grad_reg * input_gate;
+	RealType   input_gate_grad = state_c_out_grad_reg * input_actv;
 
-	state_c_grad[g_threadIdx]  = state_c_grad * forget_gate;
+	state_c_grad[g_threadIdx]  = state_c_out_grad_reg * forget_gate;
 
 	// RealType  input_gate = __cu_sigmoid(input  [0 * BxH + g_threadIdx] + 
 	//                                     state_h[0 * BxH + g_threadIdx]);

@@ -115,8 +115,8 @@ public:
 
 		out_shape->clear();
 
-		out_shape->push_back((*in_shape)[int(EnumOpInputs::StateHOut)]); // state_h_out
-		out_shape->push_back((*in_shape)[int(EnumOpInputs::StateCOut)]); // state_c_out
+		out_shape->push_back((*in_shape)[int(EnumOpInputs::StateH)]); // state_h_out
+		out_shape->push_back((*in_shape)[int(EnumOpInputs::StateC)]); // state_c_out
 
 		return true;
 	}
