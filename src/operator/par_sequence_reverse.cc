@@ -6,7 +6,7 @@ namespace mxnet {
 template <>
 Operator * CreateOp < cpu > (ParSequenceReverseParam param, int dtype)
 {
-	LOG(FATAL) << "Parallel Sequence Reverse layer implemention is only available for GPU at the moment.";
+	LOG(FATAL) << "Parallel Sequence Reverse operator is only available for GPU at the moment.";
 
 	Operator * op = nullptr;
   	
