@@ -102,7 +102,7 @@ public:
 	{
 		using namespace mshadow;
 
-		CHECK_EQ(in_shape->size(), 3U); // QryHidden, SrcHidden, H2SWeight
+		CHECK_EQ(in_shape->size(), 3U); // qry_hidden, src_hidden, h2s_weight
 
 		// query the input shape and perform shape inference
 		const TShape & src_hidden_shape = (*in_shape)[int(EnumOpInputs::SrcHidden)];
@@ -123,7 +123,7 @@ public:
 
 		att_scores_shape[2] = 1; // [batch_size x seq_length x 1]
 
-		out_shape->push_back(att_scores_shape); // AttScores
+		out_shape->push_back(att_scores_shape); // att_scores
 
 		return true;
 	}
@@ -153,7 +153,7 @@ public:
 
 		out_type->clear();
 
-		out_type->push_back(src_hidden_type); // AttScores
+		out_type->push_back(src_hidden_type); // att_scores
 		
 		return true;
 	}

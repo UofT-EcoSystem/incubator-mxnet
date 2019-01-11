@@ -110,11 +110,11 @@ public:
 
 		if (_param.use_sequence_length)
 		{
-			CHECK_EQ(in_shape->size(), 2U); // Data, SequenceLength
+			CHECK_EQ(in_shape->size(), 2U); // data, sequence_length
 		}
 		else
 		{
-			CHECK_EQ(in_shape->size(), 1U); // DataRev
+			CHECK_EQ(in_shape->size(), 1U); // data
 		}
 
 		// query the input shape and perform shape inference
@@ -133,7 +133,7 @@ public:
 		
 		out_shape->clear();
 
-		out_shape->push_back(data_shape); // DataRev
+		out_shape->push_back(data_shape); // data_rev
 
 		return true;
 	}
@@ -163,7 +163,7 @@ public:
 
 		out_type->clear();
 
-		out_type->push_back(data_type); // DataRev
+		out_type->push_back(data_type); // data_rev
 		
 		return true;
 	}
