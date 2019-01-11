@@ -12,8 +12,8 @@ namespace mxnet {
 	namespace op {
 		namespace {
 
-enum class EnumOpInputs  { CellInput, HiddenState, CellState };
-enum class EnumOpOutputs            { HiddenState, CellState };
+enum class EnumOpInputs { Input, StateH, StateC };
+enum class EnumOpOutputs { StateHOut, StateCOut };
 // NO Need for Temporary Workspace
 
 		} // anonymous namespace
@@ -70,11 +70,11 @@ public:
 
 	std::vector < std::string > ListArguments() const override
 	{
-		return {"CellInput", "HiddenState", "CellState"};
+		return {"input", "state_h", "state_c"};
 	}
 	std::vector < std::string > ListOutputs  () const override
 	{
-		return {"HiddenState", "CellState"};
+		return {"state_h_out", "state_c_out"};
 	}
 	int NumOutputs() const override 
 	{
@@ -97,10 +97,10 @@ public:
 	{
 		using namespace mshadow;
 
-		CHECK_EQ(in_shape->size(), 3U); // CellInput, HiddenState, CellState
+		CHECK_EQ(in_shape->size(), 3U); // input, state_h, state_c
 
 		// query the input shape and perform shape inference
-		const TShape & ishape = (*in_shape)[int(EnumOpInputs::CellInput)];
+		const TShape & ishape = (*in_shape)[int(EnumOpInputs::Input)];
 
 		CHECK_EQ(ishape.ndim(), 2U) << "Input data should be rank-2 tensor of dim "
 			"[batch size, 4 * state size].";
@@ -108,15 +108,15 @@ public:
 		unsigned batch_size = ishape[0];
 		unsigned state_size = ishape[1] / 4;
 
-		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::HiddenState), 
+		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::StateH), 
 			Shape2(batch_size, 4 * state_size));
-		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::  CellState),
+		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::StateC),
 			Shape2(batch_size,     state_size));
 
 		out_shape->clear();
 
-		out_shape->push_back((*in_shape)[int(EnumOpInputs::CellState)]); // HiddenState
-		out_shape->push_back((*in_shape)[int(EnumOpInputs::CellState)]); //   CellState
+		out_shape->push_back((*in_shape)[int(EnumOpInputs::StateHOut)]); // state_h_out
+		out_shape->push_back((*in_shape)[int(EnumOpInputs::StateCOut)]); // state_c_out
 
 		return true;
 	}
@@ -126,7 +126,7 @@ public:
 	{
 		CHECK_GE(in_type->size(), 1U);
 
-		int itype = (*in_type)[0]; // query the input data type
+		int itype = (*in_type)[0];
 
 		CHECK_NE(itype, -1) << "First input must have specified type.";
 
@@ -146,8 +146,8 @@ public:
 
 		out_type->clear();
 
-		out_type->push_back(itype); // HiddenState
-		out_type->push_back(itype); //   CellState
+		out_type->push_back(itype); // state_h_out
+		out_type->push_back(itype); // state_c_out
 		
 		return true;
 	}
@@ -167,42 +167,10 @@ public:
 		const std::vector < int > &  in_data,
 		const std::vector < int > & out_data) const override
 	{
-		/**
-		 * According to the documentation description 
-		 * 	Available here: https://mxnet.incubator.apache.org/doxygen/classmxnet_1_1OperatorProperty.html#abf9e6a8d40750f3ee81fe30cbe3e2aae
-		 * It can be inferred that this method is used for memory optimization purpose,
-		 * that is, ONLY variables that are returned in the list of dependencies
-		 * will be preserved by the forward pass for use in the backward pass.
-		 */
-		return {
-			// in_data[int(EnumOpInputs ::  CellState)],
-			out_grad[int(EnumOpOutputs::HiddenState)],
-			out_grad[int(EnumOpOutputs::  CellState)]};
+		return { in_data[int(EnumOpInputs ::StateC)],
+			out_grad[int(EnumOpOutputs::StateHOut)],
+			out_grad[int(EnumOpOutputs::StateCOut)] };
 	}
-
-	/*
-	std::vector < std::pair < int, void * > >  ForwardInplaceOption(
-		const std::vector < int >    &  in_data, 
-		const std::vector < void * > & out_data) const override
-	{
-		return {std::make_pair(in_data[int(EnumOpInputs ::HiddenState)], 
-		                      out_data[int(EnumOpOutputs::HiddenState)]),
-			std::make_pair(in_data[int(EnumOpInputs ::  CellState)],
-			              out_data[int(EnumOpOutputs::  CellState)])};
-	}
-
-	std::vector < std::pair < int, void * > > BackwardInplaceOption(
-		const std::vector < int >    & out_grad,
-		const std::vector < int >    &  in_data,
-		const std::vector < int >    & out_data,
-		const std::vector < void * > &  in_grad) const override
-	{
-		return {std::make_pair(out_grad[int(EnumOpOutputs::HiddenState)],
-		                        in_grad[int(EnumOpInputs ::HiddenState)]),
-			std::make_pair(out_grad[int(EnumOpOutputs::  CellState)],
-			                in_grad[int(EnumOpInputs ::  CellState)])};
-	}
-	 */
 
 	std::vector < ResourceRequest >  ForwardResource(
 		const std::vector < TShape > & in_shape) const override

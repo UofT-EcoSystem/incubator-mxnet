@@ -6,7 +6,7 @@ namespace mxnet {
 template <>
 Operator * CreateOp < cpu > (LSTMNonLinBlockParam param, int dtype) 
 {
-	LOG(FATAL) << "LSTM cell implementation is only available for GPU at the moment.";
+	LOG(FATAL) << "LSTM Non-Linear Block is only available for GPU at the moment.";
 
 	Operator * op = nullptr;
   	
@@ -26,9 +26,9 @@ DMLC_REGISTER_PARAMETER(LSTMNonLinBlockParam);
 
 MXNET_REGISTER_OP_PROPERTY(LSTMNonLinBlock, LSTMNonLinBlockProp)
 	.describe("Applies the LSTM non-linear block to the input and hidden state.")
-	.add_argument (  "CellInput", "NDArray-or-Symbol", "Input to the LSTM Cell")
-	.add_argument ("HiddenState", "NDArray-or-Symbol", "Hidden State of the previous Time Step")
-	.add_argument (  "CellState", "NDArray-or-Symbol",   "Cell State of the previous Time Step")
+	.add_argument ("input"  , "NDArray-or-Symbol", "Input to the LSTM Cell")
+	.add_argument ("state_h", "NDArray-or-Symbol", "Hidden State of the Previous Time Step")
+	.add_argument ("state_c", "NDArray-or-Symbol",   "Cell State of the Previous Time Step")
 	.add_arguments(LSTMNonLinBlockParam::__FIELDS__());
 
 	} // namespace op
