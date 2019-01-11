@@ -14,23 +14,23 @@ namespace mxnet {
 /**
  * Forward Pass of the LSTM Nonlinear Block
  * This kernel shall be launched using the parameter <<< ceil(BxH / 128), 128, 0, cuda_stream >>>.
- * @param1   i_cell_input [B x 4H]:  (Input) Input to the LSTM Cell from the Previous Layer
- * @param2 i_hidden_state [B x 4H]:  (Input) Hidden State from the Previous Time Step
- * @param3   i_cell_state [B x  H]:  (Input)   Cell State from the Previous Time Step
+ * @param1 i_input   [B x 4H]:  (Input) Input to the LSTM Cell from the Previous Layer
+ * @param2 i_state_h [B x 4H]:  (Input) Hidden State from the Previous Time Step
+ * @param3 i_state_c [B x  H]:  (Input)   Cell State from the Previous Time Step
  * @param4 reserved_space [B x 4H]: (Output) Space reserved by the Forward Pass to facilitate Backward Pass Compute
- * @param5 o_hidden_state [B x  H]: (Output) Hidden State Output that goes to the Next Time Step and/or Layer
- * @param6   o_cell_state [B x  H]: (Output)   Cell State Output that goes to the Next Time Step and/or Layer
+ * @param5 o_state_h [B x  H]: (Output) Hidden State Output that goes to the Next Time Step and/or Layer
+ * @param6 o_state_c [B x  H]: (Output)   Cell State Output that goes to the Next Time Step and/or Layer
  * @param7 batch_size: (Parameter) Batch Size
  * @param8 state_size: (Parameter) State Size
  */
 template < typename RealType >
 static __global__ void _cuda_fused_lstm_nonlin_block__forward(
-	const RealType * const __restrict__   i_cell_input,
-	const RealType * const __restrict__ i_hidden_state,
-	const RealType * const __restrict__   i_cell_state,
+	const RealType * const __restrict__ i_input,
+	const RealType * const __restrict__ i_state_h,
+	const RealType * const __restrict__ i_state_c,
 	      RealType * const __restrict__ reserved_space,
-	      RealType * const __restrict__ o_hidden_state,
-	      RealType * const __restrict__   o_cell_state, 
+	      RealType * const __restrict__ o_state_h,
+	      RealType * const __restrict__ o_state_c, 
 	const unsigned batch_size, const unsigned state_size);
 
 /**
@@ -40,13 +40,12 @@ static __global__ void _cuda_fused_lstm_nonlin_block__forward(
  */
 template < typename RealType >
 static __global__ void _cuda_fused_lstm_nonlin_block_backward(
-	      RealType * const __restrict__   i_cell_input_grad,
-	      RealType * const __restrict__ i_hidden_state_grad,
-	// const RealType * const __restrict__   i_cell_state,
-	      RealType * const __restrict__   i_cell_state_grad,
+	      RealType * const __restrict__ i_input_grad,
+	      RealType * const __restrict__ i_state_h_grad,
+	      RealType * const __restrict__ i_state_c_grad,
 	const RealType * const __restrict__ reserved_space,
-	const RealType * const __restrict__ o_hidden_state_grad,
-	const RealType * const __restrict__   o_cell_state_grad,
+	const RealType * const __restrict__ o_state_h_grad,
+	const RealType * const __restrict__ o_state_c_grad,
 	const unsigned batch_size, const unsigned state_size);
 
 template < typename DType >
@@ -66,7 +65,7 @@ public:
 	}
 	~CULSTMNonLinBlockOp()
 	{
-		// Storage::Get()->Free(_reserved_space);
+		Storage::Get()->Free(_reserved_space);
 	}
 
 private:
@@ -78,16 +77,16 @@ private:
 
 		CHECK_EQ(_initialized, false);
 
-		Tensor < gpu, 2, DType > i_cell_input = in_data[int(EnumOpInputs::CellInput)].
+		Tensor < gpu, 2, DType > input = in_data[int(EnumOpInputs::Input)].
 			get < gpu, 2, DType > (cuda_stream);
 		
 		// infer the parameters from the cell input
-		_param.batch_size = i_cell_input.shape_[0];
-		_param.state_size = i_cell_input.shape_[1] / 4;
+		_param.batch_size = input.shape_[0];
+		_param.state_size = input.shape_[1] / 4;
 		
-		// allocate the reserve space
-		// _reserved_space = Storage::Get()->Alloc(_param.batch_size * 4 * _param.state_size * sizeof(DType), 
-		//                                         Context::GPU());
+		// allocate the reserve space [B x 4 x H]
+		_reserved_space = Storage::Get()->Alloc(_param.batch_size * 5 * _param.state_size * sizeof(DType), 
+		                                        Context::GPU());
 		_initialized = true;
 	}
 public:
@@ -101,37 +100,31 @@ public:
 
 		std::size_t in_expected = 3, out_expected = 2;
 
-		CHECK_EQ( in_data.size(),  in_expected); // CellInput, HiddenState, CellState
-		CHECK_EQ(out_data.size(), out_expected); //            HiddenState, CellState
+		CHECK_EQ( in_data.size(),  in_expected); // Input, StateH, StateC
+		CHECK_EQ(out_data.size(), out_expected); // StateHOut, StateCOut
 
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 
-		Tensor < gpu, 2, DType >   i_cell_input =  in_data[int(EnumOpInputs ::  CellInput)]
+		Tensor < gpu, 2, DType > input       =  in_data[int(EnumOpInputs ::Input)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType > i_hidden_state =  in_data[int(EnumOpInputs ::HiddenState)]
+		Tensor < gpu, 2, DType > state_h     =  in_data[int(EnumOpInputs ::StateH)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType >   i_cell_state =  in_data[int(EnumOpInputs ::  CellState)]
+		Tensor < gpu, 2, DType > state_c     =  in_data[int(EnumOpInputs ::StateC)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType > o_hidden_state = out_data[int(EnumOpOutputs::HiddenState)]
+		Tensor < gpu, 2, DType > state_h_out = out_data[int(EnumOpOutputs::StateHOut)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType >   o_cell_state = out_data[int(EnumOpOutputs::  CellState)]
+		Tensor < gpu, 2, DType > state_c_out = out_data[int(EnumOpOutputs::StateCOut)]
 			.get < gpu, 2, DType > (cuda_stream);
 
-		CHECK_EQ(  i_cell_input.CheckContiguous(), true);
-		CHECK_EQ(i_hidden_state.CheckContiguous(), true);
-		CHECK_EQ(  i_cell_state.CheckContiguous(), true);
-		CHECK_EQ(o_hidden_state.CheckContiguous(), true);
-		CHECK_EQ(  o_cell_state.CheckContiguous(), true);
+		CHECK_EQ(input      .CheckContiguous(), true);
+		CHECK_EQ(state_h    .CheckContiguous(), true);
+		CHECK_EQ(state_c    .CheckContiguous(), true);
+		CHECK_EQ(state_h_out.CheckContiguous(), true);
+		CHECK_EQ(state_c_out.CheckContiguous(), true);
 
 		if (!_initialized)
 		{
 			_Init(cuda_stream, in_data, out_data);
-		}
-
-		if (ctx.is_train)
-		{
-			_reserved_space = Storage::Get()->Alloc(_param.batch_size * 5 * _param.state_size * sizeof(DType), 
-		                                                Context::GPU());
 		}
 
 		const unsigned BxH = _param.batch_size * _param.state_size;
@@ -141,13 +134,13 @@ public:
 				(BxH - 1) / 128 + 1, 128, 0, Stream < gpu > ::GetStream(cuda_stream)
 			>>> 
 			(
-				  i_cell_input.dptr_, 
-				i_hidden_state.dptr_,
-				  i_cell_state.dptr_,
+				input  .dptr_, 
+				state_h.dptr_,
+				state_c.dptr_,
 				ctx.is_train ? 
 					reinterpret_cast < DType * > (_reserved_space.dptr) : nullptr,
-				o_hidden_state.dptr_,
-				  o_cell_state.dptr_,
+				state_h_out.dptr_,
+				state_c_out.dptr_,
 				_param.batch_size, _param.state_size
 			);
 	}
@@ -170,30 +163,33 @@ public:
 		CHECK_EQ(out_data.size(), out_expected);
 		CHECK_EQ(out_grad.size(), out_expected);
 
-		CHECK_NE(req[int(EnumOpInputs::  CellInput)], kAddTo) << "AddTo is not supported for "   "cell input.";
-		CHECK_NE(req[int(EnumOpInputs::HiddenState)], kAddTo) << "AddTo is not supported for " "hidden state.";
-		CHECK_NE(req[int(EnumOpInputs::  CellState)], kAddTo) << "AddTo is not supported for "   "cell state.";	
+		CHECK_NE(req[int(EnumOpInputs::Input)], kAddTo) << "AddTo is not supported for "   "cell input.";
+		CHECK_NE(req[int(EnumOpInputs::StateH)], kAddTo) << "AddTo is not supported for " "hidden state.";
+		CHECK_NE(req[int(EnumOpInputs::StateC)], kAddTo) << "AddTo is not supported for "   "cell state.";	
 
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 	
-		Tensor < gpu, 2, DType >   i_cell_input_grad =  in_grad[int(EnumOpInputs ::  CellInput)]
+		Tensor < gpu, 2, DType > input_grad       =  in_grad[int(EnumOpInputs ::Input)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType > i_hidden_state_grad =  in_grad[int(EnumOpInputs ::HiddenState)]
+		Tensor < gpu, 2, DType > state_h_grad     =  in_grad[int(EnumOpInputs ::StateH)]
 			.get < gpu, 2, DType > (cuda_stream);
-		// Tensor < gpu, 2, DType >   i_cell_state      =  in_data[int(EnumOpInputs ::  CellState)]
-		// 	.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType >   i_cell_state_grad =  in_grad[int(EnumOpInputs ::  CellState)]
+		Tensor < gpu, 2, DType > state_c_grad     =  in_grad[int(EnumOpInputs ::StateC)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType > o_hidden_state_grad = out_grad[int(EnumOpOutputs::HiddenState)]
-			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType >   o_cell_state_grad = out_grad[int(EnumOpOutputs::  CellState)]
+		
+		Tensor < gpu, 2, DType > state_c          =  in_data[int(EnumOpInputs ::StateC)]
 			.get < gpu, 2, DType > (cuda_stream);
 
-		CHECK_EQ(  i_cell_input_grad.CheckContiguous(), true);
-		CHECK_EQ(i_hidden_state_grad.CheckContiguous(), true);
-		CHECK_EQ(  i_cell_state_grad.CheckContiguous(), true);
-		CHECK_EQ(o_hidden_state_grad.CheckContiguous(), true);
-		CHECK_EQ(  o_cell_state_grad.CheckContiguous(), true);
+		Tensor < gpu, 2, DType > state_h_out_grad = out_grad[int(EnumOpOutputs::StateHOut)]
+			.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 2, DType > state_c_out_grad = out_grad[int(EnumOpOutputs::StateHOut)]
+			.get < gpu, 2, DType > (cuda_stream);
+
+		CHECK_EQ(input_grad      .CheckContiguous(), true);
+		CHECK_EQ(state_h_grad    .CheckContiguous(), true);
+		CHECK_EQ(state_c_grad    .CheckContiguous(), true);
+		CHECK_EQ(state_c         .CheckContiguous(), true);
+		CHECK_EQ(state_h_out_grad.CheckContiguous(), true);
+		CHECK_EQ(state_c_out_grad.CheckContiguous(), true);
 
 		const unsigned BxH = _param.batch_size * _param.state_size;
 
@@ -202,13 +198,13 @@ public:
 				(BxH - 1) / 128 + 1, 128, 0, Stream < gpu > ::GetStream(cuda_stream)
 			>>> 
 			(
-				  i_cell_input_grad.dptr_,
-				i_hidden_state_grad.dptr_,
-				//   i_cell_state     .dptr_,
-				  i_cell_state_grad.dptr_,
+				input_grad  .dptr_,
+				state_h_grad.dptr_,
+				state_c     .dptr_,
+				state_c_grad.dptr_,
 				reinterpret_cast < DType * > (_reserved_space.dptr),
-				o_hidden_state_grad.dptr_,
-				  o_cell_state_grad.dptr_,
+				state_h_out_grad.dptr_,
+				state_c_out_grad.dptr_,
 				_param.batch_size, _param.state_size
 			);
 		
@@ -222,26 +218,14 @@ static __forceinline__ __device__ RealType __cu_sigmoid(RealType i)
 	return 1.0 / (1.0 + exp(-i));
 }
 
-/**
- * Forward Pass of the LSTM Nonlinear Block
- * This kernel shall be launched using the parameter <<< ceil(BxH / 128), 128 >>>.
- * @param1   i_cell_input [B x 4H]:  (Input) Input to the LSTM Cell from the Previous Layer
- * @param2 i_hidden_state [B x 4H]:  (Input) Hidden State from the Previous Time Step
- * @param3   i_cell_state [B x  H]:  (Input)   Cell State from the Previous Time Step
- * @param4 reserved_space [B x 4H]: (Output) Space reserved by the Forward Pass to facilitate Backward Pass Compute
- * @param5 o_hidden_state [B x  H]: (Output) Hidden State Output that goes to the Next Time Step and/or Layer
- * @param6   o_cell_state [B x  H]: (Output)   Cell State Output that goes to the Next Time Step and/or Layer
- * @param7 batch_size: (Parameter) Batch Size
- * @param8 state_size: (Parameter) State Size
- */
 template < typename RealType >
 __global__ void _cuda_fused_lstm_nonlin_block__forward(
-	const RealType * const __restrict__   i_cell_input,
-	const RealType * const __restrict__ i_hidden_state,
-	const RealType * const __restrict__   i_cell_state,
+	const RealType * const __restrict__ input,
+	const RealType * const __restrict__ state_h,
+	const RealType * const __restrict__ state_c,
 	      RealType * const __restrict__ reserved_space,
-	      RealType * const __restrict__ o_hidden_state,
-	      RealType * const __restrict__   o_cell_state, 
+	      RealType * const __restrict__ state_h_out,
+	      RealType * const __restrict__ state_c_out, 
 	const unsigned batch_size, const unsigned state_size)
 {
 	const unsigned g_threadIdx = threadIdx.x + blockIdx.x * blockDim.x,
@@ -251,56 +235,40 @@ __global__ void _cuda_fused_lstm_nonlin_block__forward(
 
 	const unsigned batch_idx_x4H_plus_state_idx = (g_threadIdx / state_size) * 4 * state_size + 
 	                                               g_threadIdx % state_size;
-	const unsigned batch_idx_x5H_plus_state_idx = (g_threadIdx / state_size) * 5 * state_size + 
-	                                               g_threadIdx % state_size;
 
-	RealType  input_gate = __cu_sigmoid(i_cell_input[batch_idx_x4H_plus_state_idx + 0 * state_size] + 
-	                                  i_hidden_state[batch_idx_x4H_plus_state_idx + 0 * state_size]);
-	RealType forget_gate = __cu_sigmoid(i_cell_input[batch_idx_x4H_plus_state_idx + 1 * state_size] + 
-	                                  i_hidden_state[batch_idx_x4H_plus_state_idx + 1 * state_size]);
-	RealType  input_actv =         tanh(i_cell_input[batch_idx_x4H_plus_state_idx + 2 * state_size] + 
-	                                  i_hidden_state[batch_idx_x4H_plus_state_idx + 2 * state_size]);
-	RealType output_gate = __cu_sigmoid(i_cell_input[batch_idx_x4H_plus_state_idx + 3 * state_size] + 
-	                                  i_hidden_state[batch_idx_x4H_plus_state_idx + 3 * state_size]);
+	RealType  input_gate = __cu_sigmoid(input  [batch_idx_x4H_plus_state_idx + 0 * state_size] + 
+	                                    state_h[batch_idx_x4H_plus_state_idx + 0 * state_size]);
+	RealType forget_gate = __cu_sigmoid(input  [batch_idx_x4H_plus_state_idx + 1 * state_size] + 
+	                                    state_h[batch_idx_x4H_plus_state_idx + 1 * state_size]);
+	RealType  input_actv =         tanh(input  [batch_idx_x4H_plus_state_idx + 2 * state_size] + 
+	                                    state_h[batch_idx_x4H_plus_state_idx + 2 * state_size]);
+	RealType output_gate = __cu_sigmoid(input  [batch_idx_x4H_plus_state_idx + 3 * state_size] + 
+	                                    state_h[batch_idx_x4H_plus_state_idx + 3 * state_size]);
 
-	RealType i_cell_state_reg = i_cell_state[g_threadIdx];
-	RealType o_cell_state_reg = forget_gate * i_cell_state_reg + input_actv * input_gate;
+	RealType state_c_out_reg = forget_gate * state_c[g_threadIdx] + input_actv * input_gate;
 
-	  o_cell_state[g_threadIdx] =      o_cell_state_reg;
-	o_hidden_state[g_threadIdx] = tanh(o_cell_state_reg) * output_gate;
+	state_c_out[g_threadIdx] =      state_c_out_reg;
+	state_h_out[g_threadIdx] = tanh(state_c_out_reg) * output_gate;
 
 	if (reserved_space != nullptr)
 	{
-		// reserve the gates to be used in the backward pass
-		reserved_space[batch_idx_x5H_plus_state_idx + 0 * state_size] =  input_gate;
-		reserved_space[batch_idx_x5H_plus_state_idx + 1 * state_size] = forget_gate;
-		reserved_space[batch_idx_x5H_plus_state_idx + 2 * state_size] =  input_actv;
-		reserved_space[batch_idx_x5H_plus_state_idx + 3 * state_size] = output_gate;
-		reserved_space[batch_idx_x5H_plus_state_idx + 4 * state_size] = i_cell_state_reg;
+		// preserve the gates to be used in the backward pass
+		reserved_space[batch_idx_x4H_plus_state_idx + 0 * state_size] =  input_gate;
+		reserved_space[batch_idx_x4H_plus_state_idx + 1 * state_size] = forget_gate;
+		reserved_space[batch_idx_x4H_plus_state_idx + 2 * state_size] =  input_actv;
+		reserved_space[batch_idx_x4H_plus_state_idx + 3 * state_size] = output_gate;
 	}
 }
 
-/**
- * Backward Pass of the LSTM Nonlinear Block
- * This kernel shall be launched using the parameter <<< ceil(BxH / 128), 128 >>>.
- * @param1   i_cell_input_grad [B x 4H]: (Output) Gradient of Input to the LSTM Cell from the Previous Layer
- * @param2 i_hidden_state_grad [B x 4H]: (Output) Gradient of Hidden State from the Previous Time Step
- * @param3   i_cell_state_grad [B x  H]: (Output) Gradient of   Cell State from the Previous Time Step
- * @param4 reserved_space      [B x 4H]: (Output) Space reserved by the Forward Pass to facilitate Backward Pass Compute
- * @param5 o_hidden_state_grad [B x  H]:  (Input) Gradient of Hidden State Output that goes to the Next Time Step and/or Layer
- * @param6   o_cell_state_grad [B x  H]:  (Input) Gradient of   Cell State Output that goes to the Next Time Step and/or Layer
- * @param7 batch_size: (Parameter) Batch Size
- * @param8 state_size: (Parameter) State Size
- */
 template < typename RealType >
 __global__ void _cuda_fused_lstm_nonlin_block_backward(
-	      RealType * const __restrict__   i_cell_input_grad,
-	      RealType * const __restrict__ i_hidden_state_grad,
-	// const RealType * const __restrict__   i_cell_state,
-	      RealType * const __restrict__   i_cell_state_grad,
+	      RealType * const __restrict__ input_grad,
+	      RealType * const __restrict__ state_h_grad,
+	const RealType * const __restrict__ state_c,
+	      RealType * const __restrict__ state_c_grad,
 	const RealType * const __restrict__ reserved_space,
-	const RealType * const __restrict__ o_hidden_state_grad,
-	const RealType * const __restrict__   o_cell_state_grad,
+	const RealType * const __restrict__ state_h_out_grad,
+	const RealType * const __restrict__ state_c_out_grad,
 	const unsigned batch_size, const unsigned state_size)
 {
 	const unsigned g_threadIdx = threadIdx.x + blockIdx.x * blockDim.x,
@@ -310,19 +278,17 @@ __global__ void _cuda_fused_lstm_nonlin_block_backward(
 
 	const unsigned batch_idx_x4H_plus_state_idx = (g_threadIdx / state_size) * 4 * state_size + 
 	                                               g_threadIdx % state_size;
-	const unsigned batch_idx_x5H_plus_state_idx = (g_threadIdx / state_size) * 5 * state_size + 
-	                                               g_threadIdx % state_size;
 
 	// read the activations stored in the forward pass
-	RealType   input_gate = reserved_space[batch_idx_x5H_plus_state_idx + 0 * state_size];
-	RealType  forget_gate = reserved_space[batch_idx_x5H_plus_state_idx + 1 * state_size];
-	RealType   input_actv = reserved_space[batch_idx_x5H_plus_state_idx + 2 * state_size];
-	RealType  output_gate = reserved_space[batch_idx_x5H_plus_state_idx + 3 * state_size];
-	RealType i_cell_state = reserved_space[batch_idx_x5H_plus_state_idx + 4 * state_size];
-	RealType   cell_state_actv = tanh(i_cell_state);
+	RealType   input_gate = reserved_space[batch_idx_x4H_plus_state_idx + 0 * state_size];
+	RealType  forget_gate = reserved_space[batch_idx_x4H_plus_state_idx + 1 * state_size];
+	RealType   input_actv = reserved_space[batch_idx_x4H_plus_state_idx + 2 * state_size];
+	RealType  output_gate = reserved_space[batch_idx_x4H_plus_state_idx + 3 * state_size];
 
-	//   o_cell_state[g_threadIdx] =      cell_state;
-	// o_hidden_state[g_threadIdx] = tanh(cell_state) * output_gate;
+	RealType state_c_actv = tanh(state_c[g_threadIdx]);
+
+	// state_c_out[g_threadIdx] =      state_c_out_reg;
+	// state_h_out[g_threadIdx] = tanh(state_c_out_reg) * output_gate;
 
 	RealType o_hidden_state_grad_reg = o_hidden_state_grad[g_threadIdx];
 
@@ -332,29 +298,29 @@ __global__ void _cuda_fused_lstm_nonlin_block_backward(
 	RealType cell_state_grad = o_cell_state_grad[g_threadIdx] + cell_state_actv_grad * (1 - cell_state_actv * cell_state_actv);
 
 	// cell_state = forget_gate * i_cell_state[g_threadIdx] + input_actv * input_gate;
-	RealType  forget_gate_grad = cell_state_grad * i_cell_state;
-	RealType   input_actv_grad = cell_state_grad * input_gate;
-	RealType   input_gate_grad = cell_state_grad * input_actv;
+	RealType  forget_gate_grad = state_c_grad * i_cell_state;
+	RealType   input_actv_grad = state_c_grad * input_gate;
+	RealType   input_gate_grad = state_c_grad * input_actv;
 
-	i_cell_state_grad[g_threadIdx] = cell_state_grad * forget_gate;
+	state_c_grad[g_threadIdx]  = state_c_grad * forget_gate;
 
-	// RealType  input_gate = __cu_sigmoid(i_cell_input[0 * BxH + g_threadIdx] + 
-	//                                   i_hidden_state[0 * BxH + g_threadIdx]);
-	// RealType forget_gate = __cu_sigmoid(i_cell_input[1 * BxH + g_threadIdx] + 
-	//                                   i_hidden_state[1 * BxH + g_threadIdx]);
-	// RealType  input_actv =         tanh(i_cell_input[2 * BxH + g_threadIdx] + 
-	//                                   i_hidden_state[2 * BxH + g_threadIdx]);
-	// RealType output_gate = __cu_sigmoid(i_cell_input[3 * BxH + g_threadIdx] + 
-	//                                   i_hidden_state[3 * BxH + g_threadIdx]);
+	// RealType  input_gate = __cu_sigmoid(input  [0 * BxH + g_threadIdx] + 
+	//                                     state_h[0 * BxH + g_threadIdx]);
+	// RealType forget_gate = __cu_sigmoid(input  [1 * BxH + g_threadIdx] + 
+	//                                     state_h[1 * BxH + g_threadIdx]);
+	// RealType  input_actv =         tanh(input  [2 * BxH + g_threadIdx] + 
+	//                                     state_h[2 * BxH + g_threadIdx]);
+	// RealType output_gate = __cu_sigmoid(input  [3 * BxH + g_threadIdx] + 
+	//                                     state_h[3 * BxH + g_threadIdx]);
 
-	  i_cell_input_grad[batch_idx_x4H_plus_state_idx + 0 * state_size] = 
-	i_hidden_state_grad[batch_idx_x4H_plus_state_idx + 0 * state_size] =  input_gate_grad *  input_gate * (1 -  input_gate);
-	  i_cell_input_grad[batch_idx_x4H_plus_state_idx + 1 * state_size] = 
-	i_hidden_state_grad[batch_idx_x4H_plus_state_idx + 1 * state_size] = forget_gate_grad * forget_gate * (1 - forget_gate);
-	  i_cell_input_grad[batch_idx_x4H_plus_state_idx + 2 * state_size] = 
-	i_hidden_state_grad[batch_idx_x4H_plus_state_idx + 2 * state_size] =  input_actv_grad * (1 - input_actv * input_actv);
-	  i_cell_input_grad[batch_idx_x4H_plus_state_idx + 3 * state_size] = 
-	i_hidden_state_grad[batch_idx_x4H_plus_state_idx + 3 * state_size] = output_gate_grad * output_gate * (1 - output_gate);
+	input_grad  [batch_idx_x4H_plus_state_idx + 0 * state_size] = 
+	state_h_grad[batch_idx_x4H_plus_state_idx + 0 * state_size] =  input_gate_grad *  input_gate * (1 -  input_gate);
+	input_grad  [batch_idx_x4H_plus_state_idx + 1 * state_size] = 
+	state_h_grad[batch_idx_x4H_plus_state_idx + 1 * state_size] = forget_gate_grad * forget_gate * (1 - forget_gate);
+	input_grad  [batch_idx_x4H_plus_state_idx + 2 * state_size] = 
+	state_h_grad[batch_idx_x4H_plus_state_idx + 2 * state_size] =  input_actv_grad * (1 - input_actv * input_actv);
+	input_grad  [batch_idx_x4H_plus_state_idx + 3 * state_size] = 
+	state_h_grad[batch_idx_x4H_plus_state_idx + 3 * state_size] = output_gate_grad * output_gate * (1 - output_gate);
 }
 
 #endif // __CUDACC__
