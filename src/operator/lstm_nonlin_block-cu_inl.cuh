@@ -14,23 +14,23 @@ namespace mxnet {
 /**
  * Forward Pass of the LSTM Nonlinear Block
  * This kernel shall be launched using the parameter <<< ceil(BxH / 128), 128, 0, cuda_stream >>>.
- * @param1 i_input   [B x 4H]:  (Input) Input to the LSTM Cell from the Previous Layer
- * @param2 i_state_h [B x 4H]:  (Input) Hidden State from the Previous Time Step
- * @param3 i_state_c [B x  H]:  (Input)   Cell State from the Previous Time Step
+ * @param1 input   [B x 4H]:  (Input) Input to the LSTM Cell from the Previous Layer
+ * @param2 state_h [B x 4H]:  (Input) Hidden State from the Previous Time Step
+ * @param3 state_c [B x  H]:  (Input)   Cell State from the Previous Time Step
  * @param4 reserved_space [B x 4H]: (Output) Space reserved by the Forward Pass to facilitate Backward Pass Compute
- * @param5 o_state_h [B x  H]: (Output) Hidden State Output that goes to the Next Time Step and/or Layer
- * @param6 o_state_c [B x  H]: (Output)   Cell State Output that goes to the Next Time Step and/or Layer
+ * @param5 state_h_out [B x  H]: (Output) Hidden State Output that goes to the Next Time Step and/or Layer
+ * @param6 state_c_out [B x  H]: (Output)   Cell State Output that goes to the Next Time Step and/or Layer
  * @param7 batch_size: (Parameter) Batch Size
  * @param8 state_size: (Parameter) State Size
  */
 template < typename RealType >
 static __global__ void _cuda_fused_lstm_nonlin_block__forward(
-	const RealType * const __restrict__ i_input,
-	const RealType * const __restrict__ i_state_h,
-	const RealType * const __restrict__ i_state_c,
+	const RealType * const __restrict__ input,
+	const RealType * const __restrict__ state_h,
+	const RealType * const __restrict__ state_c,
 	      RealType * const __restrict__ reserved_space,
-	      RealType * const __restrict__ o_state_h,
-	      RealType * const __restrict__ o_state_c, 
+	      RealType * const __restrict__ state_h_out,
+	      RealType * const __restrict__ state_c_out, 
 	const unsigned batch_size, const unsigned state_size);
 
 /**
@@ -40,12 +40,13 @@ static __global__ void _cuda_fused_lstm_nonlin_block__forward(
  */
 template < typename RealType >
 static __global__ void _cuda_fused_lstm_nonlin_block_backward(
-	      RealType * const __restrict__ i_input_grad,
-	      RealType * const __restrict__ i_state_h_grad,
-	      RealType * const __restrict__ i_state_c_grad,
+	      RealType * const __restrict__ input_grad,
+	      RealType * const __restrict__ state_h_grad,
+	const RealType * const __restrict__ state_c,
+	      RealType * const __restrict__ state_c_grad,
 	const RealType * const __restrict__ reserved_space,
-	const RealType * const __restrict__ o_state_h_grad,
-	const RealType * const __restrict__ o_state_c_grad,
+	const RealType * const __restrict__ state_h_out_grad,
+	const RealType * const __restrict__ state_c_out_grad,
 	const unsigned batch_size, const unsigned state_size);
 
 template < typename DType >
@@ -285,7 +286,8 @@ __global__ void _cuda_fused_lstm_nonlin_block_backward(
 	RealType   input_actv = reserved_space[batch_idx_x4H_plus_state_idx + 2 * state_size];
 	RealType  output_gate = reserved_space[batch_idx_x4H_plus_state_idx + 3 * state_size];
 
-	RealType state_c_actv = tanh(state_c[g_threadIdx]);
+	RealType state_c_reg = state_c[g_threadIdx];
+	RealType state_c_actv = tanh(state_c_reg);
 
 	// state_c_out[g_threadIdx] =      state_c_out_reg;
 	// state_h_out[g_threadIdx] = tanh(state_c_out_reg) * output_gate;
@@ -298,7 +300,7 @@ __global__ void _cuda_fused_lstm_nonlin_block_backward(
 	RealType state_c_out_grad_reg = state_c_out_grad[g_threadIdx] + state_c_actv_grad * (1 - state_c_actv * state_c_actv);
 
 	// state_c_out_reg = forget_gate * state_c[g_threadIdx] + input_actv * input_gate;
-	RealType  forget_gate_grad = state_c_out_grad_reg * i_cell_state;
+	RealType  forget_gate_grad = state_c_out_grad_reg * state_c_reg;
 	RealType   input_actv_grad = state_c_out_grad_reg * input_gate;
 	RealType   input_gate_grad = state_c_out_grad_reg * input_actv;
 
