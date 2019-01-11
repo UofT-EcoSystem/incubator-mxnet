@@ -1,4 +1,4 @@
-#include "cu_mlp_att_scoring_func-inl.cuh"
+#include "mlp_att_scoring_func-cu_inl.cuh"
 
 namespace mxnet {
 	namespace op {

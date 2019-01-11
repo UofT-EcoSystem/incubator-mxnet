@@ -75,11 +75,11 @@ public:
 
 	std::vector < std::string > ListArguments() const override
 	{
-		return { "QryHidden", "SrcHidden", "H2SWeight" };
+		return { "qry_hidden", "src_hidden", "h2s_weight" };
 	}
 	std::vector < std::string > ListOutputs  () const override 
 	{
-		return { "AttScores" };
+		return { "att_scores" };
 	}
 	int NumOutputs() const override 
 	{
@@ -111,7 +111,6 @@ public:
 			"[batch size, seq length, state size].";
 
 		unsigned batch_size = src_hidden_shape[0];
-		// unsigned seq_length = src_hidden_shape[1];
 		unsigned state_size = src_hidden_shape[2];
 
 		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::QryHidden),

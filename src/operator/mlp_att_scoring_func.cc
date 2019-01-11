@@ -6,7 +6,7 @@ namespace mxnet {
 template <>
 Operator * CreateOp < cpu > (MlpAttScoringFuncParam param, int dtype) 
 {
-	LOG(FATAL) << "MLP attention layer implemention is only available for GPU at the moment.";
+	LOG(FATAL) << "MLP Attention Scoring Function is only available for GPU at the moment.";
 
 	Operator * op = nullptr;
   	
@@ -26,9 +26,9 @@ DMLC_REGISTER_PARAMETER(MlpAttScoringFuncParam);
 
 MXNET_REGISTER_OP_PROPERTY(MlpAttScoringFunc, MlpAttScoringFuncProp)
 	.describe("Applied the MLP attention scoring function to the query and source hidden state.")
-	.add_argument("QryHidden", "NDArray-or-Symbol",  "Query Hidden State")
-	.add_argument("SrcHidden", "NDArray-or-Symbol", "Source Hidden State")
-	.add_argument("H2SWeight", "NDArray-or-Symbol", "Hidden-to-Score Weight")
+	.add_argument("qry_hidden", "NDArray-or-Symbol",  "Query Hidden State")
+	.add_argument("src_hidden", "NDArray-or-Symbol", "Source Hidden State")
+	.add_argument("h2s_weight", "NDArray-or-Symbol", "Hidden-to-Score Weight")
 	.add_arguments(MlpAttScoringFuncParam::__FIELDS__());
 
 	} // namespace op
