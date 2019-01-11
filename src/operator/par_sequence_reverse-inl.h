@@ -190,6 +190,8 @@ public:
 			return { out_grad[int(EnumOpOutputs::DataRev)] };
 	}
 
+	// @TODO Check what are the effects of using inplace options.
+
 	Operator * CreateOperator  (Context ctx) const override
 	{
 		LOG(FATAL) << "Not Implemented";
