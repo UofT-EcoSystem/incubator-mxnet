@@ -16,13 +16,13 @@ enum class EnumOpWorkspace { TempSpace };
 
 		} // namespace 
 
-struct MlpAttScoringFuncParam : public dmlc::Parameter < MlpAttScoringFuncParam >
+struct MLPAttScoringFuncParam : public dmlc::Parameter < MLPAttScoringFuncParam >
 {
 	unsigned batch_size, seq_length, state_size;
 
 	bool layer_norm;
 
-	DMLC_DECLARE_PARAMETER(MlpAttScoringFuncParam)
+	DMLC_DECLARE_PARAMETER(MLPAttScoringFuncParam)
 	{
 		DMLC_DECLARE_FIELD(layer_norm).set_default(false)
 			.describe("Whether to perform Layer Normalization after "
@@ -31,12 +31,12 @@ struct MlpAttScoringFuncParam : public dmlc::Parameter < MlpAttScoringFuncParam 
 };
 
 template < typename xpu, typename DType >
-class MlpAttScoringFuncOp : public Operator
+class MLPAttScoringFuncOp : public Operator
 {
 private:
-	MlpAttScoringFuncParam _param;
+	MLPAttScoringFuncParam _param;
 public:
-	explicit MlpAttScoringFuncOp(MlpAttScoringFuncParam param)
+	explicit MLPAttScoringFuncOp(MLPAttScoringFuncParam param)
 	{
 		// empty
 	}
@@ -61,17 +61,17 @@ public:
 };
 
 template<typename xpu>
-Operator * CreateOp(MlpAttScoringFuncParam param, int dtype);
+Operator * CreateOp(MLPAttScoringFuncParam param, int dtype);
 
 #if DMLC_USE_CXX11
 
-class MlpAttScoringFuncProp : public OperatorProperty
+class MLPAttScoringFuncProp : public OperatorProperty
 {
 private:
-	MlpAttScoringFuncParam _param;
+	MLPAttScoringFuncParam _param;
 public:
-	MlpAttScoringFuncProp() {}
-	explicit MlpAttScoringFuncProp(MlpAttScoringFuncParam param) : _param(param) {}
+	MLPAttScoringFuncProp() {}
+	explicit MLPAttScoringFuncProp(MLPAttScoringFuncParam param) : _param(param) {}
 
 	std::vector < std::string > ListArguments() const override
 	{
@@ -160,12 +160,12 @@ public:
 
 	OperatorProperty * Copy() const override 
 	{
-		return new MlpAttScoringFuncProp(_param);
+		return new MLPAttScoringFuncProp(_param);
 	}
 
 	std::string TypeString() const override
 	{
-		return "MlpAttScoringFunc";
+		return "MLPAttScoringFunc";
 	}
 
 	std::vector < int > DeclareBackwardDependency(
@@ -199,7 +199,7 @@ public:
 	Operator * CreateOperatorEx(Context ctx, 
 				    std::vector < TShape > * in_shape,
         			    std::vector < int >    * in_type) const override;
-}; // class MlpAttScoringFuncProp
+}; // class MLPAttScoringFuncProp
 
 #endif // DMLC_USE_CXX11
 

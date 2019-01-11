@@ -102,20 +102,20 @@ static inline void FullyConnectedBWData  (cublasHandle_t cublas_handle,
 	const unsigned input_dim, const unsigned num_hidden);
 
 template < typename DType >
-class CUMlpAttScoringFuncOp : public Operator
+class CUMLPAttScoringFuncOp : public Operator
 {
 private:
-	MlpAttScoringFuncParam _param;
+	MLPAttScoringFuncParam _param;
 
 	bool _initialized = false;
 
 	unsigned _temp_space_size;
 public:
-	explicit CUMlpAttScoringFuncOp(MlpAttScoringFuncParam param)
+	explicit CUMLPAttScoringFuncOp(MLPAttScoringFuncParam param)
 	{
 		_param = param;
 	}
-	~CUMlpAttScoringFuncOp() {}
+	~CUMLPAttScoringFuncOp() {}
 private:
 	void _Init(mshadow::Stream < gpu > * cuda_stream,
 	           const std::vector < TBlob > &  in_data,
@@ -355,7 +355,7 @@ public:
 				_param.layer_norm
 			);
 	}
-}; // class CUMlpAttScoringFuncOp
+}; // class CUMLPAttScoringFuncOp
 
 /**
  * Perform sum reduction across *this* thread block.
