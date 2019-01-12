@@ -58,7 +58,7 @@ private:
 	bool _initialized = false;
 
 	// ReserveSpace
-	Storage::Handle _reserved_space;
+	Storage::Handle _reserved_space, _state_c_out_actv;
 public:
 	explicit CULSTMNonLinBlockOp(LSTMNonLinBlockParam param)
 	{
@@ -167,9 +167,9 @@ public:
 		CHECK_EQ(out_data.size(), out_expected);
 		CHECK_EQ(out_grad.size(), out_expected);
 
-		CHECK_NE(req[int(EnumOpInputs::Input)], kAddTo) << "AddTo is not supported for "   "cell input.";
-		CHECK_NE(req[int(EnumOpInputs::StateH)], kAddTo) << "AddTo is not supported for " "hidden state.";
-		CHECK_NE(req[int(EnumOpInputs::StateC)], kAddTo) << "AddTo is not supported for "   "cell state.";	
+		CHECK_NE(req[int(EnumOpInputs::Input )], kAddTo) << "AddTo is not supported for input.";
+		CHECK_NE(req[int(EnumOpInputs::StateH)], kAddTo) << "AddTo is not supported for state_h.";
+		CHECK_NE(req[int(EnumOpInputs::StateC)], kAddTo) << "AddTo is not supported for state_c.";	
 
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 	
@@ -185,7 +185,7 @@ public:
 
 		Tensor < gpu, 2, DType > state_h_out_grad = out_grad[int(EnumOpOutputs::StateHOut)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType > state_c_out_grad = out_grad[int(EnumOpOutputs::StateHOut)]
+		Tensor < gpu, 2, DType > state_c_out_grad = out_grad[int(EnumOpOutputs::StateCOut)]
 			.get < gpu, 2, DType > (cuda_stream);
 
 		CHECK_EQ(input_grad      .CheckContiguous(), true);
@@ -288,17 +288,18 @@ __global__ void _cuda_fused_lstm_nonlin_block_backward(
 	RealType  output_gate = reserved_space[batch_idx_x4H_plus_state_idx + 3 * state_size];
 
 	RealType state_c_reg = state_c[g_threadIdx];
-	RealType state_c_actv = tanh(state_c_reg);
+
+	RealType state_c_out_actv = tanh(forget_gate * state_c_reg + input_actv * input_gate);
 
 	// state_c_out[g_threadIdx] =      state_c_out_reg;
 	// state_h_out[g_threadIdx] = tanh(state_c_out_reg) * output_gate;
 
 	RealType state_h_out_grad_reg = state_h_out_grad[g_threadIdx];
 
-	RealType  output_gate_grad = state_h_out_grad_reg * state_c_actv;
+	RealType  output_gate_grad = state_h_out_grad_reg * state_c_out_actv;
 	RealType state_c_actv_grad = state_h_out_grad_reg * output_gate;
 	
-	RealType state_c_out_grad_reg = state_c_out_grad[g_threadIdx] + state_c_actv_grad * (1 - state_c_actv * state_c_actv);
+	RealType state_c_out_grad_reg = state_c_out_grad[g_threadIdx] + state_c_actv_grad * (1 - state_c_out_actv * state_c_out_actv);
 
 	// state_c_out_reg = forget_gate * state_c[g_threadIdx] + input_actv * input_gate;
 	RealType  forget_gate_grad = state_c_out_grad_reg * state_c_reg;
