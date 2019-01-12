@@ -66,7 +66,10 @@ public:
 	}
 	~CULSTMNonLinBlockOp()
 	{
-		Storage::Get()->Free(_reserved_space);
+		if (_initialized)
+		{
+			Storage::Get()->Free(_reserved_space);
+		}
 	}
 
 private:
@@ -86,7 +89,7 @@ private:
 		_param.state_size = input.shape_[1] / 4;
 		
 		// allocate the reserve space [B x 4 x H]
-		_reserved_space = Storage::Get()->Alloc(_param.batch_size * 5 * _param.state_size * sizeof(DType), 
+		_reserved_space = Storage::Get()->Alloc(_param.batch_size * 4 * _param.state_size * sizeof(DType), 
 		                                        Context::GPU());
 		_initialized = true;
 	}
@@ -208,8 +211,6 @@ public:
 				state_c_out_grad.dptr_,
 				_param.batch_size, _param.state_size
 			);
-		
-		Storage::Get()->Free(_reserved_space);
 	}
 }; // class CULSTMNonLinBlockOp
 
