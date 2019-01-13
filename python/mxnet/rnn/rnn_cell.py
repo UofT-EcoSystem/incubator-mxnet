@@ -441,7 +441,7 @@ class LSTMCell(BaseRNNCell):
     def __call__(self, inputs, states):
         self._counter += 1
         name = '%st%d_'%(self._prefix, self._counter)
-        i2h = symbol.FullyConnected(data=inputs, weight=self._iW, bias=self._iB,
+        i2h = symbol.FullyConnected(data=inputs   , weight=self._iW, bias=self._iB,
                                     num_hidden=self._num_hidden*4,
                                     name='%si2h'%name)
         h2h = symbol.FullyConnected(data=states[0], weight=self._hW, bias=self._hB,
