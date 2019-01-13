@@ -450,7 +450,7 @@ class LSTMCell(BaseRNNCell):
 
         import os, logging
 
-        if int(os.environ['USE_FUSED_LSTM_NONLIN_BLOCK']):
+        if int(os.environ['USE_LSTM_NONLIN_BLOCK']):
 
             next_h, next_c = symbol.LSTMNonLinBlock(input=i2h, state_h=h2h, state_c=states[1])
 
