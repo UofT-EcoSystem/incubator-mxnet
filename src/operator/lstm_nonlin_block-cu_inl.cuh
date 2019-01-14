@@ -24,7 +24,7 @@ namespace mxnet {
  * @param8 state_size: (Parameter) State Size
  */
 template < typename RealType >
-static __global__ void _cuda_fused_lstm_nonlin_block__forward(
+static __global__ void _cuda_lstm_nonlin_block__forward(
 	const RealType * const __restrict__ input,
 	const RealType * const __restrict__ state_h,
 	const RealType * const __restrict__ state_c,
@@ -39,7 +39,7 @@ static __global__ void _cuda_fused_lstm_nonlin_block__forward(
  * All the parameters are the same as the forward kernel, except that the input now becomes output and vice versa.
  */
 template < typename RealType >
-static __global__ void _cuda_fused_lstm_nonlin_block_backward(
+static __global__ void _cuda_lstm_nonlin_block_backward(
 	      RealType * const __restrict__ input_grad,
 	      RealType * const __restrict__ state_h_grad,
 	const RealType * const __restrict__ state_c,
@@ -133,7 +133,7 @@ public:
 
 		const unsigned BxH = _param.batch_size * _param.state_size;
 
-		_cuda_fused_lstm_nonlin_block__forward < DType >
+		_cuda_lstm_nonlin_block__forward < DType >
 			<<<
 				(BxH - 1) / 128 + 1, 128, 0, Stream < gpu > ::GetStream(cuda_stream)
 			>>> 
@@ -197,7 +197,7 @@ public:
 
 		const unsigned BxH = _param.batch_size * _param.state_size;
 
-		_cuda_fused_lstm_nonlin_block_backward < DType >
+		_cuda_lstm_nonlin_block_backward < DType >
 			<<<
 				(BxH - 1) / 128 + 1, 128, 0, Stream < gpu > ::GetStream(cuda_stream)
 			>>> 
@@ -221,7 +221,7 @@ static __forceinline__ __device__ RealType __cu_sigmoid(RealType i)
 }
 
 template < typename RealType >
-__global__ void _cuda_fused_lstm_nonlin_block__forward(
+__global__ void _cuda_lstm_nonlin_block__forward(
 	const RealType * const __restrict__ input,
 	const RealType * const __restrict__ state_h,
 	const RealType * const __restrict__ state_c,
@@ -263,7 +263,7 @@ __global__ void _cuda_fused_lstm_nonlin_block__forward(
 }
 
 template < typename RealType >
-__global__ void _cuda_fused_lstm_nonlin_block_backward(
+__global__ void _cuda_lstm_nonlin_block_backward(
 	      RealType * const __restrict__ input_grad,
 	      RealType * const __restrict__ state_h_grad,
 	const RealType * const __restrict__ state_c,
