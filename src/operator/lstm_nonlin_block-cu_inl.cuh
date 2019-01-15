@@ -16,10 +16,10 @@ namespace mxnet {
  * This kernel shall be launched using the parameter <<< ceil(BxH / 128), 128, 0, cuda_stream >>>.
  * @param1 input   [B x 4H]:  (Input) Input to the LSTM Cell from the Previous Layer
  * @param2 state_h [B x 4H]:  (Input) Hidden State from the Previous Time Step
- * @param3 state_c [B x  H]:  (Input)   Cell State from the Previous Time Step
+ * @param3 state_c [B x  H]:  (Input) Cell   State from the Previous Time Step
  * @param4 reserved_space [B x 4H]: (Output) Space reserved by the Forward Pass to facilitate Backward Pass Compute
  * @param5 state_h_out [B x  H]: (Output) Hidden State Output that goes to the Next Time Step and/or Layer
- * @param6 state_c_out [B x  H]: (Output)   Cell State Output that goes to the Next Time Step and/or Layer
+ * @param6 state_c_out [B x  H]: (Output) Cell   State Output that goes to the Next Time Step
  * @param7 batch_size: (Parameter) Batch Size
  * @param8 state_size: (Parameter) State Size
  */
@@ -42,8 +42,8 @@ template < typename RealType >
 static __global__ void _cuda_lstm_nonlin_block_backward(
 	      RealType * const __restrict__ input_grad,
 	      RealType * const __restrict__ state_h_grad,
-	const RealType * const __restrict__ state_c,
 	      RealType * const __restrict__ state_c_grad,
+	const RealType * const __restrict__ state_c,
 	const RealType * const __restrict__ reserved_space,
 	const RealType * const __restrict__ state_h_out_grad,
 	const RealType * const __restrict__ state_c_out_grad,
@@ -81,14 +81,14 @@ private:
 
 		CHECK_EQ(_initialized, false);
 
-		Tensor < gpu, 2, DType > input = in_data[int(EnumOpInputs::Input)].
-			get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 2, DType > input = in_data[int(EnumOpInputs::Input)]
+			.get < gpu, 2, DType > (cuda_stream);
 		
 		// infer the parameters from the cell input
 		_param.batch_size = input.shape_[0];
 		_param.state_size = input.shape_[1] / 4;
 		
-		// allocate the reserve space [B x 4 x H]
+		// allocate the reserved space [B x 4H]
 		_reserved_space = Storage::Get()->Alloc(_param.batch_size * 4 * _param.state_size * sizeof(DType), 
 		                                        Context::GPU());
 		_initialized = true;
@@ -104,8 +104,8 @@ public:
 
 		std::size_t in_expected = 3, out_expected = 2;
 
-		CHECK_EQ( in_data.size(),  in_expected); // Input, StateH, StateC
-		CHECK_EQ(out_data.size(), out_expected); // StateHOut, StateCOut
+		CHECK_EQ( in_data.size(),  in_expected); // input, state_h, state_c
+		CHECK_EQ(out_data.size(), out_expected); // state_h_out, state_c_out
 
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 
@@ -161,10 +161,10 @@ public:
 
 		std::size_t in_expected = 3, out_expected = 2;
 
-		CHECK_EQ( in_data.size(),  in_expected);
+		CHECK_EQ( in_data.size(),  in_expected); // input, state_h, state_c
 		CHECK_EQ( in_grad.size(),  in_expected);
 		CHECK_EQ(     req.size(),  in_expected);
-		CHECK_EQ(out_data.size(), out_expected);
+		CHECK_EQ(out_data.size(), out_expected); // state_h_out, state_c_out
 		CHECK_EQ(out_grad.size(), out_expected);
 
 		CHECK_NE(req[int(EnumOpInputs::Input )], kAddTo) << "AddTo is not supported for input.";
@@ -204,8 +204,8 @@ public:
 			(
 				input_grad  .dptr_,
 				state_h_grad.dptr_,
-				state_c     .dptr_,
 				state_c_grad.dptr_,
+				state_c     .dptr_,
 				reinterpret_cast < DType * > (_reserved_space.dptr),
 				state_h_out_grad.dptr_,
 				state_c_out_grad.dptr_,
@@ -266,8 +266,8 @@ template < typename RealType >
 __global__ void _cuda_lstm_nonlin_block_backward(
 	      RealType * const __restrict__ input_grad,
 	      RealType * const __restrict__ state_h_grad,
-	const RealType * const __restrict__ state_c,
 	      RealType * const __restrict__ state_c_grad,
+	const RealType * const __restrict__ state_c,
 	const RealType * const __restrict__ reserved_space,
 	const RealType * const __restrict__ state_h_out_grad,
 	const RealType * const __restrict__ state_c_out_grad,
