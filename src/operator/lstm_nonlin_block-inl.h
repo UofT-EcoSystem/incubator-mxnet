@@ -55,7 +55,7 @@ public:
 	}
 };
 
-template<typename xpu>
+template < typename xpu >
 Operator * CreateOp(LSTMNonLinBlockParam param, int dtype);
 
 #if DMLC_USE_CXX11
@@ -70,11 +70,11 @@ public:
 
 	std::vector < std::string > ListArguments() const override
 	{
-		return {"input", "state_h", "state_c"};
+		return { "input", "state_h", "state_c" };
 	}
 	std::vector < std::string > ListOutputs  () const override
 	{
-		return {"state_h_out", "state_c_out"};
+		return { "state_h_out", "state_c_out" };
 	}
 	int NumOutputs() const override 
 	{
@@ -99,7 +99,6 @@ public:
 
 		CHECK_EQ(in_shape->size(), 3U); // input, state_h, state_c
 
-		// query the input shape and perform shape inference
 		const TShape & ishape = (*in_shape)[int(EnumOpInputs::Input)];
 
 		CHECK_EQ(ishape.ndim(), 2U) << "Input data should be rank-2 tensor of dim "
