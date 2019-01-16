@@ -15,7 +15,7 @@ namespace mxnet {
 /**
  * Forward Pass of the MLP Attention Layer Scoring Function
  * This kernel shall be launched using the parameter <<< (B, T), H, H * sizeof(RealType), cuda_stream >>>
- * @param1 qry_hidden [B     x H]:  (Input)  Query Hidden State
+ * @param1 qry_hidden [B     x H]:  (Input) Query  Hidden State
  * @param2 src_hidden [B x T x H]:  (Input) Source Hidden State
  * @param3 att_hidden [B x T x H]: (Output) Attention Hidden State
  * @param4 att_hidden_exp [B x T x H]: (Output) EXP_H[Attention Hidden State]
@@ -35,8 +35,8 @@ static __global__ void _cuda_fused_mlp_att_scoring_func_forward(
 /**
  * Backward Pass of the MLP Attention Layer Scoring Function
  * This kernel shall be launched using the parameter <<< (B, T), H, H * sizeof(RealType), cuda_stream >>>
- * @param1 qry_hidden      [B     x H]:  (Input)  Query Hidden State
- * @param2 qry_hidden_grad [B     x H]: (Output)  Query Hidden State Gradient
+ * @param1 qry_hidden      [B     x H]:  (Input) Query  Hidden State
+ * @param2 qry_hidden_grad [B     x H]: (Output) Query  Hidden State Gradient
  * @param3 src_hidden      [B x T x H]:  (Input) Source Hidden State
  * @param4 src_hidden_grad [B x T x H]: (Output) Source Hidden State Gradient
  * @param5 att_hidden      [B x T x H]:  (Input) Attention Hidden State
@@ -196,15 +196,6 @@ public:
 				_param.layer_norm
 			);
 		
-		/*
-            # (batch_size, seq_len, 1)
-            attention_scores = mx.sym.FullyConnected(data=attention_hidden,
-                                                     weight=self.att_h2s_weight,
-                                                     num_hidden=1,
-                                                     no_bias=True,
-                                                     flatten=False,
-                                                     name="%sraw_att_score_fc" % self.prefix)
-		 */
 		CHECK_EQ(cuda_stream->blas_handle_ownership_, Stream < gpu > ::OwnHandle) << 
 			"Must initialize the cuBLAS handle in CUDA stream.";
 		
@@ -308,15 +299,6 @@ public:
 				_param.layer_norm
 			);
 
-		/*
-            # (batch_size, seq_len, 1)
-            attention_scores = mx.sym.FullyConnected(data=attention_hidden,
-                                                     weight=self.att_h2s_weight,
-                                                     num_hidden=1,
-                                                     no_bias=True,
-                                                     flatten=False,
-                                                     name="%sraw_att_score_fc" % self.prefix)
-		 */
 		CHECK_EQ(cuda_stream->blas_handle_ownership_, Stream < gpu > ::OwnHandle) << 
 			"Must initialize the cuBLAS handle in CUDA stream.";
 		

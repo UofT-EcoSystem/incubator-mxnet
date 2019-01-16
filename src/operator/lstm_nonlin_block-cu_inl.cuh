@@ -13,15 +13,14 @@ namespace mxnet {
 
 /**
  * Forward Pass of the LSTM Nonlinear Block
- * This kernel shall be launched using the parameter <<< ceil(BxH / 128), 128, 0, cuda_stream >>>.
- * @param1 input   [B x 4H]:  (Input) Input to the LSTM Cell from the Previous Layer
- * @param2 state_h [B x 4H]:  (Input) Hidden State from the Previous Time Step
- * @param3 state_c [B x  H]:  (Input) Cell   State from the Previous Time Step
- * @param4 reserved_space [B x 4H]: (Output) Space reserved by the Forward Pass to facilitate Backward Pass Compute
- * @param5 state_h_out [B x  H]: (Output) Hidden State Output that goes to the Next Time Step and/or Layer
- * @param6 state_c_out [B x  H]: (Output) Cell   State Output that goes to the Next Time Step
- * @param7 batch_size: (Parameter) Batch Size
- * @param8 state_size: (Parameter) State Size
+ * @param1 input   [B x 4H]
+ * @param2 state_h [B x 4H]
+ * @param3 state_c [B x  H]
+ * @param4 reserved_space [B x 4H]
+ * @param5 state_h_out [B x  H]
+ * @param6 state_c_out [B x  H]
+ * @param7 batch_size: (Parameter)
+ * @param8 state_size: (Parameter)
  */
 template < typename RealType >
 static __global__ void _cuda_lstm_nonlin_block__forward(
@@ -35,16 +34,15 @@ static __global__ void _cuda_lstm_nonlin_block__forward(
 
 /**
  * Backward Pass of the LSTM Nonlinear Block
- * This kernel shall be launched using the parameter <<< ceil(BxH / 128), 128, 0, cuda_stream >>>.
- * @param1 input_grad       [B x 4H]: (Output) Gradient of the Input to the LSTM Cell from the Previous Layer
- * @param2 state_h_grad     [B x 4H]: (Output) Gradient of the Hidden State from the Previous Time Step
- * @param3 state_c_grad     [B x  H]: (Output) Gradient of the Cell   State from the Previous Time Step
- * @param4 state_c          [B x  H]:  (Input) Cell State from the Previous Time Step
- * @param5 reserved_space [B x 4H]: (Input) Space reserved by the Forward Pass to facilitate Backward Pass Compute
- * @param6 state_h_out_grad [B x  H]:  (Input) Gradient of the Hidden State Output that goes to the Next Time Step and/or Layer
- * @param7 state_c_out_grad [B x  H]:  (Input) Gradient of the Hidden State Output that goes to the Next Time Step
- * @param8 batch_size: (Parameter) Batch Size
- * @param9 state_size: (Parameter) State Size
+ * @param1 input_grad   [B x 4H]
+ * @param2 state_h_grad [B x 4H]
+ * @param3 state_c_grad [B x  H]
+ * @param4 state_c      [B x  H]
+ * @param5 reserved_space [B x 4H]
+ * @param6 state_h_out_grad [B x  H]
+ * @param7 state_c_out_grad [B x  H]
+ * @param8 batch_size: (Parameter)
+ * @param9 state_size: (Parameter)
  */
 template < typename RealType >
 static __global__ void _cuda_lstm_nonlin_block_backward(
