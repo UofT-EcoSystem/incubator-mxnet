@@ -14,14 +14,14 @@ namespace mxnet {
 /**
  * Forward Pass of the LSTM Cell
  * This kernel shall be launched using the parameter <<< ceil(BxH / 128), 128, 0, cuda_stream >>>.
- * @param1 i2h_bias           [4H]:  (Input) I2H Bias
- * @param2 h2h_bias           [4H]:  (Input) H2H Bias
- * @param3 state_c        [B x  H]:  (Input) Cell State from the Previous Time Step
- * @param4 reserved_space [B x 4H]:  (Inout) Reserved Space that has the Sum of I2H and H2H
- * @param5 state_h_out    [B x  H]: (Output) Hidden State Output that goes to the Next Time Step and/or Layer
- * @param6 state_c_out    [B x  H]: (Output) Cell   State Output that goes to the Next Time Step
- * @param7 batch_size: (Parameter) Batch Size
- * @param8 state_size: (Parameter) State Size
+ * @param1 i2h_bias           [4H]
+ * @param2 h2h_bias           [4H]
+ * @param3 state_c        [B x  H]
+ * @param4 reserved_space [B x 2H]
+ * @param5 state_h_out    [B x  H]
+ * @param6 state_c_out    [B x  H]
+ * @param7 batch_size: (Parameter)
+ * @param8 state_size: (Parameter)
  */
 template < typename RealType >
 __global__ void _cuda_lstm_cell__forward(
@@ -36,7 +36,15 @@ __global__ void _cuda_lstm_cell__forward(
 /**
  * Backward Pass of the LSTM Cell
  * This kernel shall be launched using the parameter <<< ceil(BxH / 128), 128, 0, cuda_stream >>>.
- * All the parameters are the same as the forward kernel, except that the input now becomes output and vice versa.
+ * @param1 state_c_grad     [B x  H]
+ * @param2 reserved_space   [B x 2H]
+ * @param3 state_c          [B x  H]
+ * @param4 state_h_out      [B x  H]
+ * @param5 state_c_out      [B x  H]
+ * @param6 state_h_out_grad [B x  H]
+ * @param7 state_c_out_grad [B x  H]
+ * @param8 batch_size: (Parameter)
+ * @param9 state_size: (Parameter)
  */
 template < typename RealType >
 __global__ void _cuda_lstm_cell_backward(
@@ -48,6 +56,50 @@ __global__ void _cuda_lstm_cell_backward(
 	const RealType * const __restrict__ state_h_out_grad,
 	const RealType * const __restrict__ state_c_out_grad,
 	const unsigned batch_size, const unsigned state_size);
+
+// FullyConnected Layer Y = X W^T Forward Pass
+// @param1 X [batch_size x input_size]
+// @param2 W [state_size x input_size]
+// @param3 Y [batch_size x state_size]
+// @param4 batch_size: (Parameter)
+// @param5 input_size: (Parameter)
+// @param6 state_size: (Parameter)
+template < typename RealType >
+static inline void FullyConnectedFW(cublasHandle_t cublas_handle,
+	const RealType * const __restrict__ X,
+	const RealType * const __restrict__ W,
+	      RealType * const __restrict__ Y,
+	const unsigned batch_size, const unsigned input_size, const unsigned state_size);
+
+// FullyConnected Layer Y = XW^T Backward Pass on Weight (dW = dY^T X)
+// @param1  X [batch_size x input_size]
+// @param2 dW [state_size x input_size]
+// @param3 dY [batch_size x state_size]
+// @param4 batch_size: (Parameter)
+// @param5 input_size: (Parameter)
+// @param6 state_size: (Parameter)
+template < typename RealType >
+static inline void FullyConnectedBWWeight(cublasHandle_t cublas_handle,
+	const RealType * const __restrict__  X,
+	      RealType * const __restrict__ dW,
+	const RealType * const __restrict__ dY,
+	const OpReqType grad_req,   const unsigned batch_size, 
+	const unsigned  input_size, const unsigned state_size);
+
+// FullyConnected Layer Y = XW^T Backward Pass on Data (dX = dY W)
+// @param1 dX [batch_size x input_size]
+// @param2  W [state_size x input_size]
+// @param3 dY [batch_size x state_size]
+// @param4 batch_size: (Parameter) 
+// @param5 input_size: (Parameter) 
+// @param6 state_size: (Parameter)
+template < typename RealType >
+static inline void FullyConnectedBWData  (cublasHandle_t cublas_handle,
+	      RealType * const __restrict__ dX,
+	const RealType * const __restrict__  W,
+	const RealType * const __restrict__ dY,
+	const OpReqType grad_req,   const unsigned batch_size, 
+	const unsigned  input_size, const unsigned state_size);
 
 template < typename DType >
 class CUEcoLSTMCellOp : public Operator
@@ -152,7 +204,7 @@ public:
 
 		const unsigned BxH = _param.batch_size * _param.state_size;
 
-		// @TODO Kernels go here.
+		
 	}
 
 	virtual void Backward(const OpContext & ctx,
@@ -206,7 +258,10 @@ public:
 		Tensor < gpu, 2, DType > state_c_out = out_data[int(EnumOpOutputs::StateCOut)]
 			.get < gpu, 2, DType > (cuda_stream);
 		
-		// Tensor < gpu, 2, DType >
+		Tensor < gpu, 2, DType > state_h_out_grad = out_grad[int(EnumOpOutputs::StateHOut)]
+			.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 2, DType > state_c_out_grad = out_grad[int(EnumOpOutputs::StateCOut)]
+			.get < gpu, 2, DType > (cuda_stream);
 
 		CHECK_EQ(input           .CheckContiguous(), true);
 		CHECK_EQ(input_grad      .CheckContiguous(), true);
@@ -228,6 +283,61 @@ public:
 		// @TODO Kernels go here.
 	}
 };
+
+
+template <>
+inline void FullyConnectedFW < float > (cublasHandle_t cublas_handle,
+	const float * const __restrict__ X,
+	const float * const __restrict__ W,
+	      float * const __restrict__ Y,
+	const unsigned batch_size, const unsigned input_size, const unsigned state_size)
+{
+	float alpha = 1.0, beta = 0.0;
+	CUBLAS_CALL(cublasSgemm(cublas_handle, // cuBLAS Handle
+	                        CUBLAS_OP_T, // W.T
+				CUBLAS_OP_N, // X
+				state_size,  // Y.shape[1]
+				batch_size,  // Y.shape[0]
+				input_size,  // W.shape[1]
+				&alpha, W, input_size, X, input_size,
+				& beta, Y, state_size));
+}
+template <>
+inline void FullyConnectedBWWeight < float > (cublasHandle_t cublas_handle,
+	const float * const __restrict__  X,
+	      float * const __restrict__ dW,
+	const float * const __restrict__ dY,
+	const OpReqType grad_req,   const unsigned batch_size,
+	const unsigned  input_size, const unsigned state_size)
+{
+	float alpha = 1.0, beta = float(grad_req == kAddTo);
+	CUBLAS_CALL(cublasSgemm(cublas_handle, // cuBLAS Handle
+	                        CUBLAS_OP_N, //  X
+				CUBLAS_OP_T, // dY^T
+				input_size,  // dW.shape[1]
+				state_size,  // dW.shape[0]
+				batch_size,  //  X.shape[0]
+	                        &alpha,  X, input_size, dY, state_size,
+				& beta, dW, input_size));
+}
+template <>
+inline void FullyConnectedBWData < float > (cublasHandle_t cublas_handle,
+	      float * const __restrict__ dX,
+	const float * const __restrict__  W,
+	const float * const __restrict__ dY, 
+	const OpReqType grad_req,   const unsigned batch_size,
+	const unsigned  input_size, const unsigned state_size)
+{
+	float alpha = 1.0, beta = float(grad_req == kAddTo);
+	CUBLAS_CALL(cublasSgemm(cublas_handle, //cuBLAS Handle
+	                        CUBLAS_OP_N, //  W
+				CUBLAS_OP_N, // dY
+				input_size,  // dX.shape[1]
+				batch_size,  // dX.shape[0]
+				state_size,  //  W.shape[0]
+				&alpha,  W, input_size, dY, state_size,
+				& beta, dX, input_size));
+}
 
 #endif // __CUDACC__
 

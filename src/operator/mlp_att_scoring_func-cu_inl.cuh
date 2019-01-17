@@ -537,7 +537,7 @@ inline void FullyConnectedFW < float > (cublasHandle_t cublas_handle,
 }
 
 template <>
-inline void FullyConnectedBWWeight < float >  (cublasHandle_t cublas_handle,
+inline void FullyConnectedBWWeight < float > (cublasHandle_t cublas_handle,
 	const float * const __restrict__  X,
 	      float * const __restrict__ dW,
 	const float * const __restrict__ dY,
@@ -557,7 +557,7 @@ inline void FullyConnectedBWWeight < float >  (cublasHandle_t cublas_handle,
 }
 
 template <>
-inline void FullyConnectedBWData  (cublasHandle_t cublas_handle,
+inline void FullyConnectedBWData < float > (cublasHandle_t cublas_handle,
 	      float * const __restrict__ dX,
 	const float * const __restrict__  W,
 	const float * const __restrict__ dY, 
