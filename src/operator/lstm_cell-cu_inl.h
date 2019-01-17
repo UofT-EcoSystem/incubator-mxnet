@@ -14,6 +14,7 @@ namespace mxnet {
 /**
  * Forward Pass of the LSTM Cell
  * This kernel shall be launched using the parameter <<< ceil(BxH / 128), 128, 0, cuda_stream >>>.
+ * @param1 workspace      [B x 4H]
  * @param1 i2h_bias           [4H]
  * @param2 h2h_bias           [4H]
  * @param3 state_c        [B x  H]
@@ -25,6 +26,7 @@ namespace mxnet {
  */
 template < typename RealType >
 __global__ void _cuda_lstm_cell__forward(
+	const RealType * const __restrict__ workspace,
 	const RealType * const __restrict__ i2h_bias,
 	const RealType * const __restrict__ h2h_bias,
 	const RealType * const __restrict__ state_c,
@@ -109,8 +111,7 @@ private:
 
 	bool _initialized = false;
 
-	// ReservedSpace
-	Storage::Handle _reserved_space;
+	Storage::Handle _reserved_space; unsigned _temp_space_size;
 public:
 	explicit CUEcoLSTMCellOp(EcoLSTMCellParam param)
 	{
@@ -146,6 +147,10 @@ private:
 		// allocate the reserved space [B x 2H]
 		_reserved_space = Storage::Get()->Alloc(_param.batch_size * 2 * _param.state_size * sizeof(DType),
 		                                        Context::GPU());
+
+		// allocate the workspace size
+		_temp_space_size = _param.batch_size * 4 * _param.state_size;
+
 		_initialized = true;
 	}
 public:
@@ -204,7 +209,15 @@ public:
 
 		const unsigned BxH = _param.batch_size * _param.state_size;
 
-		
+		Tensor < gpu, 1, DType > workspace = ctx.requested[int(EnumOpWorkspace::TempSpace)]
+			.get_space_typed < gpu, 1, DType > (Shape1(_temp_space_size), cuda_stream);
+
+		FullyConnectedFW(Stream < gpu > ::GetBlasHandle(cuda_stream),
+		                 input, i2h_weight.dptr_, workspace.dptr_,
+				 _param.batch_size,
+				 _param.input_size,
+				 _param.state_size * 4)
+		FullyConnectedFW
 	}
 
 	virtual void Backward(const OpContext & ctx,
@@ -318,7 +331,7 @@ inline void FullyConnectedBWWeight < float > (cublasHandle_t cublas_handle,
 				state_size,  // dW.shape[0]
 				batch_size,  //  X.shape[0]
 	                        &alpha,  X, input_size, dY, state_size,
-				& beta, dW, input_size));
+				&beta,  dW, input_size));
 }
 template <>
 inline void FullyConnectedBWData < float > (cublasHandle_t cublas_handle,
@@ -336,7 +349,7 @@ inline void FullyConnectedBWData < float > (cublasHandle_t cublas_handle,
 				batch_size,  // dX.shape[0]
 				state_size,  //  W.shape[0]
 				&alpha,  W, input_size, dY, state_size,
-				& beta, dX, input_size));
+				&beta,  dX, input_size));
 }
 
 #endif // __CUDACC__
