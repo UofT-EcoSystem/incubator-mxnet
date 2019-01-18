@@ -12,7 +12,7 @@ namespace mxnet {
 	namespace op {
 		namespace {
 
-enum class EnumOpInputs { I2HPlusH2H, StateC };
+enum class EnumOpInputs { Input, StateH, StateC };
 enum class EnumOpOutputs { StateHOut, StateCOut };
 // NO Need for Temporary Workspace
 
@@ -70,7 +70,7 @@ public:
 
 	std::vector < std::string > ListArguments() const override
 	{
-		return { "i2h_plus_h2h", "state_c" };
+		return { "input", "state_h", "state_c" };
 	}
 	std::vector < std::string > ListOutputs  () const override
 	{
@@ -97,9 +97,9 @@ public:
 	{
 		using namespace mshadow;
 
-		CHECK_EQ(in_shape->size(), 2U); // i2h_plus_h2h, state_c
+		CHECK_EQ(in_shape->size(), 3U); // input, state_h, state_c
 
-		const TShape & ishape = (*in_shape)[int(EnumOpInputs::I2HPlusH2H)];
+		const TShape & ishape = (*in_shape)[int(EnumOpInputs::Input)];
 
 		CHECK_EQ(ishape.ndim(), 2U) << "Input data should be rank-2 tensor of dim "
 			"[batch size, 4 * state size].";
@@ -107,8 +107,8 @@ public:
 		unsigned batch_size = ishape[0];
 		unsigned state_size = ishape[1] / 4;
 
-		// SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::StateH), 
-		// 	Shape2(batch_size, 4 * state_size));
+		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::StateH), 
+			Shape2(batch_size, 4 * state_size));
 		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::StateC),
 			Shape2(batch_size,     state_size));
 
