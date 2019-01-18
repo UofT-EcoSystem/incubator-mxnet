@@ -314,14 +314,14 @@ __global__ void _cuda_lstm_nonlin_block_backward(
 
 	state_c_grad[g_threadIdx]  = state_c_out_grad_reg * forget_gate;
 
-	// RealType  input_gate = __cu_sigmoid(input  [0 * BxH + g_threadIdx] + 
-	//                                     state_h[0 * BxH + g_threadIdx]);
-	// RealType forget_gate = __cu_sigmoid(input  [1 * BxH + g_threadIdx] + 
-	//                                     state_h[1 * BxH + g_threadIdx]);
-	// RealType  input_actv =         tanh(input  [2 * BxH + g_threadIdx] + 
-	//                                     state_h[2 * BxH + g_threadIdx]);
-	// RealType output_gate = __cu_sigmoid(input  [3 * BxH + g_threadIdx] + 
-	//                                     state_h[3 * BxH + g_threadIdx]);
+	// RealType  input_gate = __cu_sigmoid(input  [batch_idx_x4H_plus_state_idx + 0 * state_size] + 
+	//                                     state_h[batch_idx_x4H_plus_state_idx + 0 * state_size]);
+	// RealType forget_gate = __cu_sigmoid(input  [batch_idx_x4H_plus_state_idx + 1 * state_size] + 
+	//                                     state_h[batch_idx_x4H_plus_state_idx + 1 * state_size]);
+	// RealType  input_actv =         tanh(input  [batch_idx_x4H_plus_state_idx + 2 * state_size] + 
+	//                                     state_h[batch_idx_x4H_plus_state_idx + 2 * state_size]);
+	// RealType output_gate = __cu_sigmoid(input  [batch_idx_x4H_plus_state_idx + 3 * state_size] + 
+	//                                     state_h[batch_idx_x4H_plus_state_idx + 3 * state_size]);
 
 	input_grad  [batch_idx_x4H_plus_state_idx + 0 * state_size] = 
 	state_h_grad[batch_idx_x4H_plus_state_idx + 0 * state_size] =  input_gate_grad *  input_gate * (1 -  input_gate);
