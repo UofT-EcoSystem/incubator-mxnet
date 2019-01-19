@@ -4,11 +4,11 @@ namespace mxnet {
 	namespace op {
 
 template <> 
-Operator * CreateOp < gpu > (LSTMCellParam param, int dtype)
+Operator * CreateOp < gpu > (EcoLSTMCellParam param, int dtype)
 {
 	Operator * op = nullptr;
 
-	MSHADOW_SGL_DBL_TYPE_SWITCH(dtype, DType, { op = new CULSTMCellOp < float > (param); });
+	MSHADOW_SGL_DBL_TYPE_SWITCH(dtype, DType, { op = new CUEcoLSTMCellOp < float > (param); });
 
 	return op;
 }

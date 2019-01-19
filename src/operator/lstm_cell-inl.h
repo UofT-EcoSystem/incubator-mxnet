@@ -18,12 +18,12 @@ enum class EnumOpWorkspace { TempSpace };
 
 		} // anonymous namespace
 
-struct EcoLSTMCellParam : public dmlc::Parameter < EcoLSTMCell >
+struct EcoLSTMCellParam : public dmlc::Parameter < EcoLSTMCellParam >
 {
 	unsigned batch_size, input_size, state_size;
 
 	DMLC_DECLARE_PARAMETER(EcoLSTMCellParam) {}
-}
+};
 
 template < typename xpu, typename DType >
 class EcoLSTMCellOp : public Operator
@@ -56,7 +56,7 @@ public:
 };
 
 template < typename xpu >
-Operator * CreateOp(LSMTCellParam param, int dtype);
+Operator * CreateOp(EcoLSTMCellParam param, int dtype);
 
 #if DMLC_USE_CXX11
 
@@ -108,7 +108,7 @@ public:
 		const TShape & hshape = (*in_shape)[int(EnumOpInputs::StateH)];
 
 		CHECK_EQ(ishape.ndim(), 7U) << "Input data should be rank-2 tensor of dim "
-			"[batch size, input size]"
+			"[batch size, input size]";
 		
 		unsigned batch_size = ishape[0];
 		unsigned input_size = ishape[1];
@@ -123,7 +123,7 @@ public:
 		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::I2HBias),
 			Shape1(4 * state_size));
 		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::H2HWeight),
-			Shape2(4 * stae_size, state_size));
+			Shape2(4 * state_size, state_size));
 		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::H2HBias),
 			Shape1(4 * state_size));
 		
@@ -181,13 +181,15 @@ public:
 		const std::vector < int > &  in_data,
 		const std::vector < int > & out_data) const override
 	{
-		return { in_data[EnumOpInputs ::Input],
-		         in_data[EnumOpInputs ::StateH],
-			 in_data[EnumOpInputs ::StateC],
-			out_data[EnumOpOutputs::StateHOut],
-			out_data[EnumOpOutputs::StateCOut],
-			out_grad[EnumOpOutputs::StateHOut],
-			out_grad[EnumOpOutputs::StateCOut]};
+		return { in_data[int(EnumOpInputs ::Input)],
+		         in_data[int(EnumOpInputs ::StateH)],
+			 in_data[int(EnumOpInputs ::StateC)],
+			 in_data[int(EnumOpInputs ::I2HWeight)],
+			 in_data[int(EnumOpInputs ::H2HWeight)],
+			out_data[int(EnumOpOutputs::StateHOut)],
+			out_data[int(EnumOpOutputs::StateCOut)],
+			out_grad[int(EnumOpOutputs::StateHOut)],
+			out_grad[int(EnumOpOutputs::StateCOut)]};
 	}
 
 	std::vector < ResourceRequest >  ForwardResource(
