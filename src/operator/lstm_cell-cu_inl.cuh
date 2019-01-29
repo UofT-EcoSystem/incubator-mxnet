@@ -344,7 +344,8 @@ public:
 				(BxH - 1) / 128 + 1, 128, 0, Stream < gpu > ::GetStream(cuda_stream)
 			>>>
 			(
-				workspace.dptr_, i2h_bias_grad.dptr_,
+				workspace.dptr_,
+				i2h_bias_grad.dptr_,
 				state_c_grad.dptr_,
 				reinterpret_cast < DType * > (_reserved_space.dptr),
 				state_c.dptr_,
@@ -371,18 +372,18 @@ public:
 				       _param.batch_size,
 				       _param.state_size,
 				       4 * _param.state_size);
-		FullyConnectedBWData(Stream < gpu > ::GetBlasHandle(cuda_stream),
-				     input_grad  .dptr_, i2h_weight.dptr_, workspace.dptr_,
-				     req[int(EnumOpInputs::Input)],
-				     _param.batch_size,
-				     _param.input_size,
-				     4 * _param.state_size);
-		FullyConnectedBWData(Stream < gpu > ::GetBlasHandle(cuda_stream),
-				     state_h_grad.dptr_, h2h_weight.dptr_, workspace.dptr_,
-				     req[int(EnumOpInputs::StateH)],
-				     _param.batch_size,
-				     _param.state_size,
-				     4 * _param.state_size);
+		FullyConnectedBWData  (Stream < gpu > ::GetBlasHandle(cuda_stream),
+				       input_grad  .dptr_, i2h_weight.dptr_, workspace.dptr_,
+				       req[int(EnumOpInputs::Input)],
+				       _param.batch_size,
+				       _param.input_size,
+				       4 * _param.state_size);
+		FullyConnectedBWData  (Stream < gpu > ::GetBlasHandle(cuda_stream),
+				       state_h_grad.dptr_, h2h_weight.dptr_, workspace.dptr_,
+				       req[int(EnumOpInputs::StateH)],
+				       _param.batch_size,
+				       _param.state_size,
+				       4 * _param.state_size);
 	}
 };
 
@@ -409,6 +410,8 @@ __global__ void _cuda_lstm_cell__forward(
 	if (g_threadIdx >= BxH) { return ; }
 
 	const unsigned batch_idx_x4H_plus_state_idx = (g_threadIdx / state_size) * 4 * state_size + 
+						       g_threadIdx % state_size;
+	const unsigned batch_idx_x2H_plus_state_idx = (g_threadIdx / state_size) * 2 * state_size + 
 	                                               g_threadIdx % state_size;
 
 	RealType  input_gate = __cu_sigmoid(workspace[batch_idx_x4H_plus_state_idx + 0 * state_size] + 
@@ -432,8 +435,8 @@ __global__ void _cuda_lstm_cell__forward(
 	if (reserved_space != nullptr)
 	{
 		// preserve the gates to be used in the backward pass
-		reserved_space[batch_idx_x4H_plus_state_idx + 0 * state_size] =  input_gate;
-		reserved_space[batch_idx_x4H_plus_state_idx + 1 * state_size] = forget_gate;
+		reserved_space[batch_idx_x2H_plus_state_idx + 0 * state_size] =  input_gate;
+		reserved_space[batch_idx_x2H_plus_state_idx + 1 * state_size] = forget_gate;
 	}
 }
 
@@ -457,33 +460,36 @@ __global__ void _cuda_lstm_cell_backward(
 
 	const unsigned batch_idx_x4H_plus_state_idx = (g_threadIdx / state_size) * 4 * state_size + 
 	                                               g_threadIdx % state_size;
+	const unsigned batch_idx_x2H_plus_state_idx = (g_threadIdx / state_size) * 2 * state_size + 
+						       g_threadIdx % state_size;
 	
-	RealType   input_gate = reserved_space[batch_idx_x4H_plus_state_idx + 0 * state_size];
-	RealType  forget_gate = reserved_space[batch_idx_x4H_plus_state_idx + 1 * state_size];
+	RealType   input_gate = reserved_space[batch_idx_x2H_plus_state_idx + 0 * state_size];
+	RealType  forget_gate = reserved_space[batch_idx_x2H_plus_state_idx + 1 * state_size];
 	
+	RealType state_c_reg     = state_c    [g_threadIdx];
 	RealType state_c_out_reg = state_c_out[g_threadIdx];
 
-	RealType   input_actv = (state_c_out_reg - forget_gate * state_c[g_threadIdx]) / input_gate;
-	RealType  output_gate =  state_h_out[g_threadIdx] / state_c_out_reg;
-
+	RealType input_actv = (state_c_out_reg - forget_gate * state_c_reg) / input_gate;
 	RealType state_c_out_actv = tanh(state_c_out_reg);
+	RealType output_gate = state_h_out[g_threadIdx] / state_c_out_actv;
 
 	// state_c_out[g_threadIdx] =      state_c_out_reg;
 	// state_h_out[g_threadIdx] = tanh(state_c_out_reg) * output_gate;
 
 	RealType state_h_out_grad_reg = state_h_out_grad[g_threadIdx];
 
-	RealType  output_gate_grad = state_h_out_grad_reg * state_c_out_actv;
-	RealType state_c_actv_grad = state_h_out_grad_reg * output_gate;
+	RealType state_c_out_actv_grad = state_h_out_grad_reg * output_gate;
+	RealType      output_gate_grad = state_h_out_grad_reg * state_c_out_actv;
 
-	RealType state_c_out_grad_reg = state_c_out_grad[g_threadIdx] + state_c_actv_grad * (1 - state_c_actv_grad * state_c_actv_grad);
+	RealType state_c_out_grad_reg = state_c_out_grad[g_threadIdx] + 
+		state_c_out_actv_grad * 
+		(1 - state_c_out_actv * state_c_out_actv);
 
 	// state_c_out_reg = forget_gate * state_c[g_threadIdx] + input_actv * input_gate;
-	RealType  forget_gate_grad = state_c_out_grad_reg * state_c[g_threadIdx];
+	RealType  forget_gate_grad = state_c_out_grad_reg * state_c_reg;
+	state_c_grad[g_threadIdx]  = state_c_out_grad_reg * forget_gate;
 	RealType   input_actv_grad = state_c_out_grad_reg * input_gate;
 	RealType   input_gate_grad = state_c_out_grad_reg * input_actv;
-
-	state_c_grad[g_threadIdx]  = state_c_out_grad_reg * forget_gate;
 
 	// RealType  input_gate = __cu_sigmoid(input  [0 * BxH + g_threadIdx] + 
 	//                                     state_h[0 * BxH + g_threadIdx]);
@@ -499,10 +505,10 @@ __global__ void _cuda_lstm_cell_backward(
 	RealType  input_actv_input_grad =  input_actv_grad * (1 - input_actv * input_actv);
 	RealType output_gate_input_grad = output_gate_grad * output_gate * (1 - output_gate);
 
-	workspace[batch_idx_x4H_plus_state_idx + 0 * state_size] =  input_gate_grad *  input_gate * (1 -  input_gate);
-	workspace[batch_idx_x4H_plus_state_idx + 1 * state_size] = forget_gate_grad * forget_gate * (1 - forget_gate);
-	workspace[batch_idx_x4H_plus_state_idx + 2 * state_size] =  input_actv_grad * (1 - input_actv * input_actv);
-	workspace[batch_idx_x4H_plus_state_idx + 3 * state_size] = output_gate_grad * output_gate * (1 - output_gate);
+	workspace[batch_idx_x4H_plus_state_idx + 0 * state_size] =  input_gate_input_grad;
+	workspace[batch_idx_x4H_plus_state_idx + 1 * state_size] = forget_gate_input_grad;
+	workspace[batch_idx_x4H_plus_state_idx + 2 * state_size] =  input_actv_input_grad;
+	workspace[batch_idx_x4H_plus_state_idx + 3 * state_size] = output_gate_input_grad;
 
 	atomicAdd(&bias_grad[g_threadIdx % state_size + 0 * state_size],  input_gate_input_grad);
 	atomicAdd(&bias_grad[g_threadIdx % state_size + 1 * state_size], forget_gate_input_grad);
