@@ -441,6 +441,18 @@ class LSTMCell(BaseRNNCell):
     def __call__(self, inputs, states):
         self._counter += 1
         name = '%st%d_'%(self._prefix, self._counter)
+
+        import os
+
+        if int(os.environ['USE_ECO_LSTM_CELL']):
+
+            next_h, next_c = symbol.EcoLSTMCell(input=inputs, state_h=states[0], state_c=states[1],
+                                                i2h_weight=self._iW, i2h_bias=self._iB,
+                                                h2h_weight=self._hW, h2h_bias=self._hB,
+                                                name='%s_lstm_cell'%name)
+
+            return next_h, [next_h, next_c]
+
         i2h = symbol.FullyConnected(data=inputs   , weight=self._iW, bias=self._iB,
                                     num_hidden=self._num_hidden*4,
                                     name='%si2h'%name)
@@ -448,32 +460,28 @@ class LSTMCell(BaseRNNCell):
                                     num_hidden=self._num_hidden*4,
                                     name='%sh2h'%name)
 
-        import os, logging
-
         if int(os.environ['USE_LSTM_NONLIN_BLOCK']):
 
             next_h, next_c = symbol.LSTMNonLinBlock(input=i2h, state_h=h2h, state_c=states[1])
 
             return next_h, [next_h, next_c]
         
-        else:
-        
-            gates = i2h + h2h
-            slice_gates = symbol.SliceChannel(gates, num_outputs=4, name="%sslice"%name)
-            in_gate      = symbol.Activation(slice_gates[0], act_type="sigmoid",
-                                             name='%si'%name)
-            forget_gate  = symbol.Activation(slice_gates[1], act_type="sigmoid",
-                                             name='%sf'%name)
-            in_transform = symbol.Activation(slice_gates[2], act_type="tanh",
-                                             name='%sc'%name)
-            out_gate     = symbol.Activation(slice_gates[3], act_type="sigmoid",
-                                             name='%so'%name)
-            next_c = symbol._internal._plus(forget_gate * states[1], in_gate * in_transform,
-                                            name='%sstate'%name)
-            next_h = symbol._internal._mul (out_gate, symbol.Activation(next_c, act_type="tanh"),
-                                            name='%sout'%name)
+        gates = i2h + h2h
+        slice_gates = symbol.SliceChannel(gates, num_outputs=4, name="%sslice"%name)
+        in_gate      = symbol.Activation(slice_gates[0], act_type="sigmoid",
+                                            name='%si'%name)
+        forget_gate  = symbol.Activation(slice_gates[1], act_type="sigmoid",
+                                            name='%sf'%name)
+        in_transform = symbol.Activation(slice_gates[2], act_type="tanh",
+                                            name='%sc'%name)
+        out_gate     = symbol.Activation(slice_gates[3], act_type="sigmoid",
+                                            name='%so'%name)
+        next_c = symbol._internal._plus(forget_gate * states[1], in_gate * in_transform,
+                                        name='%sstate'%name)
+        next_h = symbol._internal._mul (out_gate, symbol.Activation(next_c, act_type="tanh"),
+                                        name='%sout'%name)
 
-            return next_h, [next_h, next_c]
+        return next_h, [next_h, next_c]
 
 
 class GRUCell(BaseRNNCell):

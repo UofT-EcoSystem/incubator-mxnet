@@ -463,15 +463,17 @@ __global__ void _cuda_lstm_cell_backward(
 	const unsigned batch_idx_x2H_plus_state_idx = (g_threadIdx / state_size) * 2 * state_size + 
 						       g_threadIdx % state_size;
 	
-	RealType   input_gate = reserved_space[batch_idx_x2H_plus_state_idx + 0 * state_size];
-	RealType  forget_gate = reserved_space[batch_idx_x2H_plus_state_idx + 1 * state_size];
+	RealType  input_gate = reserved_space[batch_idx_x2H_plus_state_idx + 0 * state_size];
+	RealType forget_gate = reserved_space[batch_idx_x2H_plus_state_idx + 1 * state_size];
 	
 	RealType state_c_reg     = state_c    [g_threadIdx];
 	RealType state_c_out_reg = state_c_out[g_threadIdx];
 
-	RealType input_actv = (state_c_out_reg - forget_gate * state_c_reg) / input_gate;
+	RealType input_actv = input_gate == 0 ? 
+		0 : (state_c_out_reg - forget_gate * state_c_reg) / input_gate;
 	RealType state_c_out_actv = tanh(state_c_out_reg);
-	RealType output_gate = state_h_out[g_threadIdx] / state_c_out_actv;
+	RealType output_gate = state_c_out_actv == 0 ? 
+		0 : state_h_out[g_threadIdx] / state_c_out_actv;
 
 	// state_c_out[g_threadIdx] =      state_c_out_reg;
 	// state_h_out[g_threadIdx] = tanh(state_c_out_reg) * output_gate;
