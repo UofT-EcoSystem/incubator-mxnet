@@ -107,8 +107,10 @@ public:
 		const TShape & ishape = (*in_shape)[int(EnumOpInputs::Input )];
 		const TShape & hshape = (*in_shape)[int(EnumOpInputs::StateH)];
 
-		CHECK_EQ(ishape.ndim(), 7U) << "Input data should be rank-2 tensor of dim "
+		CHECK_EQ(ishape.ndim(), 2U) <<   "Input data should be rank-2 tensor of dim "
 			"[batch size, input size]";
+		CHECK_EQ(hshape.ndim(), 2U) << "Hidden state should be rank-2 tensor of dim "
+			"[batch size, state size]";
 		
 		unsigned batch_size = ishape[0];
 		unsigned input_size = ishape[1];
@@ -195,12 +197,12 @@ public:
 	std::vector < ResourceRequest >  ForwardResource(
 		const std::vector < TShape > & in_shape) const override
 	{
-		return {};
+		return { ResourceRequest::kTempSpace };
 	}
 	std::vector < ResourceRequest > BackwardResource(
 		const std::vector < TShape > & in_shape) const override
 	{
-		return {};
+		return { ResourceRequest::kTempSpace };
 	}
 
 	Operator * CreateOperator  (Context ctx) const override
