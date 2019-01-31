@@ -449,7 +449,7 @@ class LSTMCell(BaseRNNCell):
             next_h, next_c = symbol.EcoLSTMCell(input=inputs, state_h=states[0], state_c=states[1],
                                                 i2h_weight=self._iW, i2h_bias=self._iB,
                                                 h2h_weight=self._hW, h2h_bias=self._hB,
-                                                name='%s_lstm_cell'%name)
+                                                name='%slstm_cell'%name)
 
             return next_h, [next_h, next_c]
 
