@@ -249,7 +249,7 @@ public:
 				 _param.batch_size,
 				 _param.state_size,
 				 _param.state_size * 4);
-		CUDA_CALL(cudaEventRecord(h2h_event, h2h_stream));
+		CUDA_CALL(cudaEventRecord(wait_event, h2h_stream));
 		CUDA_CALL(cudaStreamWaitEvent(i2h_stream, wait_event, 0));
 		
 		_cuda_lstm_cell__forward < DType >
