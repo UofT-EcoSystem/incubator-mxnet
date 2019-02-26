@@ -12,10 +12,6 @@ namespace mxnet {
 
 #if defined(__CUDACC__)
 
-cudaStream_t i2h_stream, i2h_backward_stream,
-             h2h_stream, h2h_backward_stream;
-cudaEvent_t  wait_event; bool gInitCudaStrams;
-
 /**
  * Forward Pass of the LSTM Cell
  * This kernel shall be launched using the parameter <<< ceil(BxH / 128), 128, 0, cuda_stream >>>.
@@ -173,16 +169,6 @@ public:
 	{
 		using namespace mshadow;
 
-		if (!gInitCudaStrams)
-		{
-			CUDA_CALL(cudaStreamCreate(&i2h_stream));
-			CUDA_CALL(cudaStreamCreate(&h2h_stream));
-			CUDA_CALL(cudaStreamCreate(&i2h_backward_stream));
-			CUDA_CALL(cudaStreamCreate(&h2h_backward_stream));
-			CUDA_CALL(cudaEventCreate(&wait_event));
-			gInitCudaStrams = true;
-		}
-
 		std::size_t in_expected = 7, out_expected = 2;
 
 		// input, state_h, state_c
@@ -233,29 +219,22 @@ public:
 
 		const unsigned BxH = _param.batch_size * _param.state_size;
 
-		CUDA_CALL(cudaStreamSynchronize(Stream < gpu > ::GetStream(cuda_stream)));
-
-		CUBLAS_CALL(cublasSetStream(Stream < gpu > ::GetBlasHandle(cuda_stream), i2h_stream));
 		FullyConnectedFW(Stream < gpu > ::GetBlasHandle(cuda_stream),
 		                 input  .dptr_, i2h_weight.dptr_, workspace.dptr_,
 				 OpReqType::kWriteTo,
 				 _param.batch_size,
 				 _param.input_size,
 				 _param.state_size * 4);
-		CUBLAS_CALL(cublasSetStream(Stream < gpu > ::GetBlasHandle(cuda_stream), h2h_stream));
 		FullyConnectedFW(Stream < gpu > ::GetBlasHandle(cuda_stream),
 		                 state_h.dptr_, h2h_weight.dptr_, workspace.dptr_,
 				 OpReqType::kAddTo,
 				 _param.batch_size,
 				 _param.state_size,
 				 _param.state_size * 4);
-		CUDA_CALL(cudaEventRecord(wait_event, h2h_stream));
-		CUDA_CALL(cudaStreamWaitEvent(i2h_stream, wait_event, 0));
 		
 		_cuda_lstm_cell__forward < DType >
 			<<<
-				// (BxH - 1) / 128 + 1, 128, 0, Stream < gpu > ::GetStream(cuda_stream)
-				(BxH - 1) / 128 + 1, 128, 0, i2h_stream
+				(BxH - 1) / 128 + 1, 128, 0, Stream < gpu > ::GetStream(cuda_stream)
 			>>> 
 			(
 				workspace.dptr_,
@@ -267,7 +246,6 @@ public:
 				state_c_out.dptr_,
 				_param.batch_size, _param.state_size
 			);
-		CUDA_CALL(cudaStreamSynchronize(i2h_stream));
 	}
 
 	virtual void Backward(const OpContext & ctx,
@@ -361,12 +339,9 @@ public:
 				Stream < gpu > ::GetStream(cuda_stream)));
 		}
 
-		CUDA_CALL(cudaStreamSynchronize(Stream < gpu > ::GetStream(cuda_stream)));
-
 		_cuda_lstm_cell_backward < DType >
 			<<<
-				// (BxH - 1) / 128 + 1, 128, 0, Stream < gpu > ::GetStream(cuda_stream)
-				(BxH - 1) / 128 + 1, 128, 0, i2h_stream
+				(BxH - 1) / 128 + 1, 128, 0, Stream < gpu > ::GetStream(cuda_stream)
 			>>>
 			(
 				workspace.dptr_,
@@ -383,49 +358,32 @@ public:
 
 		CUDA_CALL(cudaMemcpyAsync(h2h_bias_grad.dptr_, i2h_bias_grad.dptr_, 
 			4 * _param.state_size * sizeof(DType), 
-			// cudaMemcpyDeviceToDevice, Stream < gpu > ::GetStream(cuda_stream)));
-			cudaMemcpyDeviceToDevice, i2h_stream));
-		CUDA_CALL(cudaEventRecord(wait_event, i2h_stream));
-
-		CUBLAS_CALL(cublasSetStream(Stream < gpu > ::GetBlasHandle(cuda_stream), i2h_stream));
+			cudaMemcpyDeviceToDevice, Stream < gpu > ::GetStream(cuda_stream)));
+		
 		FullyConnectedBWWeight(Stream < gpu > ::GetBlasHandle(cuda_stream),
 				       input  .dptr_, i2h_weight_grad.dptr_, workspace.dptr_,
 				       req[int(EnumOpInputs::I2HWeight)],
 				       _param.batch_size,
 				       _param.input_size,
 				       4 * _param.state_size);
-		
-		CUBLAS_CALL(cublasSetStream(Stream < gpu > ::GetBlasHandle(cuda_stream), h2h_stream));
-		CUDA_CALL(cudaStreamWaitEvent(h2h_stream, wait_event, 0));
 		FullyConnectedBWWeight(Stream < gpu > ::GetBlasHandle(cuda_stream),
 				       state_h.dptr_, h2h_weight_grad.dptr_, workspace.dptr_,
 				       req[int(EnumOpInputs::H2HWeight)],
 				       _param.batch_size,
 				       _param.state_size,
 				       4 * _param.state_size);
-	
-		CUBLAS_CALL(cublasSetStream(Stream < gpu > ::GetBlasHandle(cuda_stream), i2h_backward_stream));
-		CUDA_CALL(cudaStreamWaitEvent(i2h_backward_stream, wait_event, 0));
 		FullyConnectedBWData  (Stream < gpu > ::GetBlasHandle(cuda_stream),
 				       input_grad  .dptr_, i2h_weight.dptr_, workspace.dptr_,
 				       req[int(EnumOpInputs::Input)],
 				       _param.batch_size,
 				       _param.input_size,
 				       4 * _param.state_size);
-
-		CUBLAS_CALL(cublasSetStream(Stream < gpu > ::GetBlasHandle(cuda_stream), h2h_backward_stream));
-		CUDA_CALL(cudaStreamWaitEvent(h2h_backward_stream, wait_event, 0));
 		FullyConnectedBWData  (Stream < gpu > ::GetBlasHandle(cuda_stream),
 				       state_h_grad.dptr_, h2h_weight.dptr_, workspace.dptr_,
 				       req[int(EnumOpInputs::StateH)],
 				       _param.batch_size,
 				       _param.state_size,
 				       4 * _param.state_size);
-
-		CUDA_CALL(cudaStreamSynchronize(i2h_stream));
-		CUDA_CALL(cudaStreamSynchronize(h2h_stream));
-		CUDA_CALL(cudaStreamSynchronize(i2h_backward_stream));
-		CUDA_CALL(cudaStreamSynchronize(h2h_backward_stream));
 	}
 };
 
