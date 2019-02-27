@@ -152,9 +152,15 @@ class Executor {
   static Executor* SimpleBind(nnvm::Symbol symbol,
                               const Context& default_ctx,
                               const std::map<std::string, Context>& group2ctx,
+#if MXNET_USE_MEMORY_PROFILER
+                                    std::vector<Context>& in_arg_ctxes,
+                                    std::vector<Context>& arg_grad_ctxes,
+                                    std::vector<Context>& aux_state_ctxes,
+#else
                               const std::vector<Context>& in_arg_ctxes,
                               const std::vector<Context>& arg_grad_ctxes,
                               const std::vector<Context>& aux_state_ctxes,
+#endif // MXNET_USE_MEMORY_PROFILER
                               const std::unordered_map<std::string, TShape>& arg_shape_map,
                               const std::unordered_map<std::string, int>& arg_dtype_map,
                               const std::unordered_map<std::string, int>& arg_stype_map,

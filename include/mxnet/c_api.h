@@ -492,6 +492,9 @@ MXNET_DLL int MXNDArrayCreate(const mx_uint *shape,
  *    the narray is first mutated
  * \param dtype data type of created array
  * \param out the returning handle
+#if MXNET_USE_MEMORY_PROFILER
+ * \param name name of the ndarray created
+#endif // MXNET_USE_MEMORY_PROFILER
  * \return 0 when success, -1 when failure happens
  */
 MXNET_DLL int MXNDArrayCreateEx(const mx_uint *shape,
@@ -500,7 +503,11 @@ MXNET_DLL int MXNDArrayCreateEx(const mx_uint *shape,
                               int dev_id,
                               int delay_alloc,
                               int dtype,
-                              NDArrayHandle *out);
+                              NDArrayHandle *out
+#if MXNET_USE_MEMORY_PROFILER
+                              , const char* name
+#endif // MXNET_USE_MEMORY_PROFILER
+                              );
 
 
 /*!

@@ -74,7 +74,11 @@ class Storage {
    * \brief Allocate a new contiguous memory for a given size.
    * \param handle handle initialized with size and ctx
    */
+#if MXNET_USE_MEMORY_PROFILER
+  virtual void Alloc(Handle* handle, const std::string & tag = "<unk>") = 0;
+#else
   virtual void Alloc(Handle* handle) = 0;
+#endif // MXNET_USE_MEMORY_PROFILER
   /*!
    * \brief Increase ref counter on shared memory.
    * \param handle handle to shared memory.

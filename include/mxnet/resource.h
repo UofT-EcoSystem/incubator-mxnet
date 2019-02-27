@@ -121,11 +121,20 @@ struct Resource {
    * \tparam xpu the device type of random number generator.
    * \tparam ndim the number of dimension of the tensor requested.
    */
+#if MXNET_USE_MEMORY_PROFILER
+  template<typename xpu, int ndim>
+  inline mshadow::Tensor<xpu, ndim, real_t> get_space(
+      mshadow::Shape<ndim> shape, mshadow::Stream<xpu> *stream,
+      const std::string & tag = "<unk>") const {
+    return get_space_typed<xpu, ndim, real_t>(shape, stream, tag);
+  }
+#else
   template<typename xpu, int ndim>
   inline mshadow::Tensor<xpu, ndim, real_t> get_space(
       mshadow::Shape<ndim> shape, mshadow::Stream<xpu> *stream) const {
     return get_space_typed<xpu, ndim, real_t>(shape, stream);
   }
+#endif // MXNET_USE_MEMORY_PROFILER
   /*!
    * \brief Get cpu space requested as mshadow Tensor.
    *  The caller can request arbitrary size.
@@ -149,6 +158,22 @@ struct Resource {
    * \tparam xpu the device type of random number generator.
    * \tparam ndim the number of dimension of the tensor requested.
    */
+#if MXNET_USE_MEMORY_PROFILER
+  template<typename xpu, int ndim, typename DType>
+  inline mshadow::Tensor<xpu, ndim, DType> get_space_typed(
+      mshadow::Shape<ndim> shape, mshadow::Stream<xpu> *stream,
+      const std::string & tag) const {
+    CHECK_EQ(req.type, ResourceRequest::kTempSpace);
+    if (std::is_same<xpu, gpu>::value)
+      return mshadow::Tensor<xpu, ndim, DType>(
+          reinterpret_cast<DType*>(get_space_internal(shape.Size() * sizeof(DType), tag)),
+          shape, shape[ndim - 1], stream);
+    else
+      return mshadow::Tensor<xpu, ndim, DType>(
+          reinterpret_cast<DType*>(get_space_internal(shape.Size() * sizeof(DType))),
+          shape, shape[ndim - 1], stream);
+  }
+#else
   template<typename xpu, int ndim, typename DType>
   inline mshadow::Tensor<xpu, ndim, DType> get_space_typed(
       mshadow::Shape<ndim> shape, mshadow::Stream<xpu> *stream) const {
@@ -157,6 +182,7 @@ struct Resource {
         reinterpret_cast<DType*>(get_space_internal(shape.Size() * sizeof(DType))),
         shape, shape[ndim - 1], stream);
   }
+#endif // MXNET_USE_MEMORY_PROFILER
   /*!
    * \brief Get CPU space as mshadow Tensor in specified type.
    * The caller can request arbitrary size.
@@ -178,7 +204,11 @@ struct Resource {
    * \param size The size of the space.
    * \return The allocated space.
    */
+#if MXNET_USE_MEMORY_PROFILER
+  void* get_space_internal(size_t size, const std::string & tag) const;
+#else
   void* get_space_internal(size_t size) const;
+#endif // MXNET_USE_MEMORY_PROFILER
   /*!
    * \brief internal function to get cpu space from resources.
    * \param size The size of space.
