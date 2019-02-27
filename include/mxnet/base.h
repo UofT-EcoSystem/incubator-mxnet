@@ -140,6 +140,10 @@ struct Context {
     kCPUPinned = 3,
     kCPUShared = 5,
   };
+#if MXNET_USE_MEMORY_PROFILER
+  /*! \brief context name, default to <unk> */
+  std::string name = "<unk>";
+#endif // MXNET_USE_MEMORY_PROFILER
   /*! \brief the device type we run the op on */
   DeviceType dev_type;
   /*! \brief device id we are going to run it on */
@@ -205,12 +209,17 @@ struct Context {
   static const int32_t kMaxDevType = 6;
   /*! \brief the maximal device index */
   static const int32_t kMaxDevID = 16;
+#if MXNET_USE_MEMORY_PROFILER
+  inline static Context Create(DeviceType dev_type, int32_t dev_id = -1,
+                               const std::string & name = "<unk>");
+#else
   /*!
    * \brief Create a new context.
    * \param dev_type device type.
    * \param dev_id device id. -1 for current device.
    */
   inline static Context Create(DeviceType dev_type, int32_t dev_id = -1);
+#endif // MXNET_USE_MEMORY_PROFILER
   /*! \return CPU Context */
   inline static Context CPU(int32_t dev_id = 0);
   /*!
@@ -289,9 +298,17 @@ inline bool Context::operator<(const Context &b) const {
     return dev_type < b.dev_type;
   }
 }
+#if MXNET_USE_MEMORY_PROFILER
+inline Context Context::Create(DeviceType dev_type, int32_t dev_id,
+                               const std::string & name = "<unk>")
+#else
 inline Context Context::Create(DeviceType dev_type, int32_t dev_id) {
+#endif // MXNET_USE_MEMORY_PROFILER
   Context ctx;
   ctx.dev_type = dev_type;
+#if MXNET_USE_MEMORY_PROFILER
+  ctx.name = name;
+#endif // MXNET_USE_MEMORY_PROFILER
   if (dev_id < 0) {
     ctx.dev_id = 0;
     if (dev_type & kGPU) {
@@ -379,6 +396,9 @@ inline Context Context::FromString(const std::string& str) {
       ret = CPU(id);
     } else if (type == "gpu") {
       ret = GPU(id);
+#if MXNET_USE_MEMORY_PROFILER
+      ret.name = str.substr(r+1);
+#endif // MXNET_USE_MEMORY_PROFILER
     } else if (type == "cpu_pinned") {
       ret = CPUPinned(id);
     } else if (type == "cpu_shared") {

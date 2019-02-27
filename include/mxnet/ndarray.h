@@ -223,7 +223,12 @@ class NDArray {
    * \return the data TBlob
    */
   inline const TBlob& data() const {
-    if (storage_type() == kDefaultStorage) CheckAndAlloc();
+    if (storage_type() == kDefaultStorage) 
+#if MXNET_USE_MEMORY_PROFILER
+      CheckAndAlloc(ctx().name);
+#else 
+      CheckAndAlloc();
+#endif // MXNET_USE_MEMORY_PROFILER
     SetTBlob();
     return tblob_;
   }
@@ -305,7 +310,11 @@ class NDArray {
   inline Storage::Handle storage_handle() const {
     CHECK(!is_none());
     CHECK_EQ(storage_type(), kDefaultStorage);
+#if MXNET_USE_MEMORY_PROFILER
+    CheckAndAlloc(ctx().name);
+#else
     CheckAndAlloc();
+#endif // MXNET_USE_MEMORY_PROFILER
     return ptr_->shandle;
   }
   /*!
@@ -581,9 +590,17 @@ class NDArray {
    * \brief Allocate the space if it is delayed allocated.
    * This is an internal function used by system that normal user should not use
    */
+#if MXNET_USE_MEMORY_PROFILER
+  inline void CheckAndAlloc(const std::string & tag) const {
+#else 
   inline void CheckAndAlloc() const {
+#endif // MXNET_USE_MEMORY_PROFILER
     CHECK_EQ(storage_type(), kDefaultStorage);
+#if MXNET_USE_MEMORY_PROFILER
+    ptr_->CheckAndAlloc(tag);
+#else
     ptr_->CheckAndAlloc();
+#endif // MXNET_USE_MEMORY_PROFILER
   }
 
   /*!
@@ -595,31 +612,66 @@ class NDArray {
    * with CheckAndAlloc(const std::vector<TShape> &aux_shapes), since
    * TShape tmp = some_shape is equivalent to TShape tmp = {some_shape}.
    */
+#if MXNET_USE_MEMORY_PROFILER
+  void ReshapeAndAlloc(const TShape& shape, const std::string & tag) {
+#else
   void ReshapeAndAlloc(const TShape& shape) {
+#endif // MXNET_USE_MEMORY_PROFILER
     CHECK_EQ(storage_type(), kDefaultStorage);
     CHECK(!is_none());
     shape_ = shape;
+#if MXNET_USE_MEMORY_PROFILER
+    ptr_->CheckAndAlloc(shape.size() * mshadow::mshadow_sizeof(dtype_), tag);
+#else
     ptr_->CheckAndAlloc(shape.Size() * mshadow::mshadow_sizeof(dtype_));
+#endif // MXNET_USE_MEMORY_PROFILER
   }
 
   /* !
    * \brief Alloc memory for non-default storage
    * aux_shape is only known at run time
    */
+#if MXNET_USE_MEMORY_PROFILER
+  inline void CheckAndAlloc(const std::vector<TShape> &aux_shapes,
+                            const std::string & tag) const {
+#else
   inline void CheckAndAlloc(const std::vector<TShape> &aux_shapes) const {
+#endif // MXNET_USE_MEMORY_PROFILER
     CHECK_NE(storage_type(), kDefaultStorage)
              << "CheckAndAlloc(aux_shapes) is not intended for kDefaultStorage";
+#if MXNET_USE_MEMORY_PROFILER
+    ptr_->CheckAndAlloc(shape_, aux_shapes, dtype_, tag);
+#else
     ptr_->CheckAndAlloc(shape_, aux_shapes, dtype_);
+#endif // MXNET_USE_MEMORY_PROFILER
   }
+#if MXNET_USE_MEMORY_PROFILER
+  inline void CheckAndAllocData(const TShape &storage_shape, 
+                                const std::string & tag) const {
+#else
   inline void CheckAndAllocData(const TShape &storage_shape) const {
+#endif // MXNET_USE_MEMORY_PROFILER
     CHECK_NE(storage_type(), kDefaultStorage)
              << "CheckAndAllocData is not intended for kDefaultStorage";
+#if MXNET_USE_MEMORY_PROFILER
+    ptr_->CheckAndAllocData(storage_shape, dtype_, tag);
+#else
     ptr_->CheckAndAllocData(storage_shape, dtype_);
+#endif // MXNET_USE_MEMORY_PROFILER
   }
+#if MXNET_USE_MEMORY_PROFILER
+  inline void CheckAndAllocAuxData(size_t i, const TShape &aux_shape,
+                                   const std::string & tag) const {
+#else
   inline void CheckAndAllocAuxData(size_t i, const TShape &aux_shape) const {
+#endif // MXNET_USE_MEMORY_PROFILER
     CHECK_NE(storage_type(), kDefaultStorage)
              << "CheckAndAllocAuxData is not intended for kDefaultStorage";
+#if MXNET_USE_MEMORY_PROFILER
+    ptr_->CheckAndAllocAuxData(i, aux_shape, tag);
+#else
     ptr_->CheckAndAllocAuxData(i, aux_shape);
+#endif // MXNET_USE_MEMORY_PROFILER
   }
 
 #if MXNET_USE_MKLDNN == 1
@@ -777,7 +829,12 @@ class NDArray {
       var = Engine::Get()->NewVariable();
       shandle.size = size * mshadow::mshadow_sizeof(dtype);
       shandle.ctx = ctx_;
-      if (!delay_alloc_) this->CheckAndAlloc();
+      if (!delay_alloc_) 
+#if MXNET_USE_MEMORY_PROFILER
+        this->CheckAndAlloc(ctx.name);
+#else
+        this->CheckAndAlloc();
+#endif // MXNET_USE_MEMORY_PROFILER
     }
 
     Chunk(const TBlob &data, int dev_id)
@@ -805,7 +862,11 @@ class NDArray {
       shandle.ctx = ctx;
       shandle.shared_pid = shared_pid;
       shandle.shared_id = shared_id;
+#if MXNET_USE_MEMORY_PROFILER
+      Storage::Get()->Alloc(&shandle, ctx.name);
+#else
       Storage::Get()->Alloc(&shandle);
+#endif // MXNET_USE_MEMORY_PROFILER
       storage_shape = shape;
     }
     // Constructor for a non-default storage chunk
@@ -819,13 +880,21 @@ class NDArray {
       var = Engine::Get()->NewVariable();
       // aux_handles always reflect the correct number of aux data
       for (size_t i = 0; i < aux_shapes.size(); i++) {
+#if MXNET_USE_MEMORY_PROFILER
+        CheckAndAllocAuxData(i, aux_shapes[i], ctx.name);
+#else
         CheckAndAllocAuxData(i, aux_shapes[i]);
+#endif // MXNET_USE_MEMORY_PROFILER
         // this line is needed in case when aux_shapes[i].Size() = 0
         // aux_handles[i] will not be updated and take only default value.
         aux_handles[i].ctx = ctx;
       }
       if (!delay_alloc) {
+#if MXNET_USE_MEMORY_PROFILER
+        CheckAndAllocData(storage_shape, dtype, ctx.name);
+#else
         CheckAndAllocData(storage_shape, dtype);
+#endif // MXNET_USE_MEMORY_PROFILER
       }
     }
 
@@ -873,9 +942,17 @@ class NDArray {
     }
 
     /*! \brief check if delay alloc is on, do alloc if not yet done */
+#if MXNET_USE_MEMORY_PROFILER
+    inline void CheckAndAlloc(const std::string & tag) {
+#else
     inline void CheckAndAlloc(void) {
+#endif // MXNET_USE_MEMORY_PROFILER
       if (delay_alloc) {
+#if MXNET_USE_MEMORY_PROFILER
+        shandle = Storage::Get()->Alloc(shandle.size, shandle.ctx, tag);
+#else
         shandle = Storage::Get()->Alloc(shandle.size, shandle.ctx);
+#endif // MXNET_USE_MEMORY_PROFILER
 #if MXNET_USE_MKLDNN == 1
         mkl_mem_ = nullptr;
 #endif
@@ -885,12 +962,20 @@ class NDArray {
 
     /*! \brief Check and alloc memory for a dense ndarray */
     // size is the number of bytes
+#if MXNET_USE_MEMORY_PROFILER
+    void CheckAndAlloc(uint64_t dbytes, const std::string & tag) {
+#else
     void CheckAndAlloc(uint64_t dbytes) {
+#endif // MXNET_USE_MEMORY_PROFILER
       CHECK_EQ(kDefaultStorage, storage_type)
           << "CheckAndAlloc(dbytes) is only intended for kDefaultStorage";
       dbytes = std::max(dbytes, static_cast<uint64_t>(shandle.size));
       if (delay_alloc) {
+#if MXNET_USE_MEMORY_PROFILER
+        shandle = Storage::Get()->Alloc(dbytes, shandle.ctx, tag);
+#else
         shandle = Storage::Get()->Alloc(dbytes, shandle.ctx);
+#endif // MXNET_USE_MEMORY_PROFILER
 #if MXNET_USE_MKLDNN == 1
         mkl_mem_ = nullptr;
 #endif
@@ -899,15 +984,24 @@ class NDArray {
         // free storage if necessary and alloc again
         if (shandle.size > 0) Storage::Get()->Free(shandle);
         // init storage
+#if MXNET_USE_MEMORY_PROFILER
+        shandle = Storage::Get()->Alloc(dbytes, shandle.ctx, tag);
+#else
         shandle = Storage::Get()->Alloc(dbytes, shandle.ctx);
+#endif // MXNET_USE_MEMORY_PROFILER
 #if MXNET_USE_MKLDNN == 1
         mkl_mem_ = nullptr;
 #endif
       }
     }
 
+#if MXNET_USE_MEMORY_PROFILER
+    inline void CheckAndAlloc(const TShape &shape, const std::vector<TShape> &aux_shapes,
+                              int dtype, const std::string & tag) {
+#else
     inline void CheckAndAlloc(const TShape &shape, const std::vector<TShape> &aux_shapes,
                               int dtype) {
+#endif // MXNET_USE_MEMORY_PROFILER
       // calculate size, perform allocation
       if (kRowSparseStorage == storage_type) {
         // For row sparse, aux_shape indicates the number of rows to allocate
@@ -915,11 +1009,21 @@ class NDArray {
         CheckAndAllocAuxData(rowsparse::kIdx, aux_shape);
         TShape storage_shape(shape);
         storage_shape[0] = aux_shape[0];
+#if MXNET_USE_MEMORY_PROFILER
+        CheckAndAllocData(storage_shape, dtype, tag);
+#else
         CheckAndAllocData(storage_shape, dtype);
+#endif // MXNET_USE_MEMORY_PROFILER
       } else if (kCSRStorage == storage_type) {
+#if MXNET_USE_MEMORY_PROFILER
+        CheckAndAllocAuxData(csr::kIndPtr, aux_shapes[csr::kIndPtr], tag);
+        CheckAndAllocAuxData(csr::kIdx, aux_shapes[csr::kIdx], tag);
+        CheckAndAllocData(aux_shapes[csr::kIdx], dtype, tag);
+#else
         CheckAndAllocAuxData(csr::kIndPtr, aux_shapes[csr::kIndPtr]);
         CheckAndAllocAuxData(csr::kIdx, aux_shapes[csr::kIdx]);
         CheckAndAllocData(aux_shapes[csr::kIdx], dtype);
+#endif // MXNET_USE_MEMORY_PROFILER
       } else {
         LOG(FATAL) << "Storage type " << storage_type << " not implemented for CheckAndAlloc";
       }
@@ -928,7 +1032,12 @@ class NDArray {
     // storage shape is also updated
     // if data is already allocated, try reuse the storage. Otherwise, free the current one
     // and allocate new storage
+#if MXNET_USE_MEMORY_PROFILER
+    void CheckAndAllocData(const TShape &shape, int dtype, 
+                           const std::string & tag);
+#else
     void CheckAndAllocData(const TShape &shape, int dtype);
+#endif // MXNET_USE_MEMORY_PROFILER
 
 #if MXNET_USE_MKLDNN == 1
     // Have MKL memory reference to the data in the default storage
@@ -948,7 +1057,12 @@ class NDArray {
     // aux shape is also updated
     // if aux data is already allocated, try reuse the storage. Otherwise, free the current one
     // and allocate new storage
+#if MXNET_USE_MEMORY_PROFILER
+    inline void CheckAndAllocAuxData(size_t i, const TShape &shape,
+                                     const std::string & tag) {
+#else
     inline void CheckAndAllocAuxData(size_t i, const TShape &shape) {
+#endif // MXNET_USE_MEMORY_PROFILER
       CHECK_EQ(shape.ndim(), 1) << "shape must be 1D in CheckAndAllocAuxData";
       CHECK_NE(storage_type, kUndefinedStorage)
         << "storage type cannot be kUndefinedStorage in CheckAndAllocAuxData";
@@ -962,7 +1076,11 @@ class NDArray {
         // free storage if necessary and alloc again
         if (aux_handles[i].size > 0) Storage::Get()->Free(aux_handles[i]);
         // init aux storage
+#if MXNET_USE_MEMORY_PROFILER
+        aux_handles[i] = Storage::Get()->Alloc(aux_bytes, ctx, tag);
+#else
         aux_handles[i] = Storage::Get()->Alloc(aux_bytes, ctx);
+#endif // MXNET_USE_MEMORY_PROFILER
       }
       // init shape
       set_aux_shape(i, shape);
