@@ -5,6 +5,9 @@
 #include <cstdlib>
 #include <fstream>
 
+#define MXNET_USE_MEMORY_PROFILER 1
+
+#if MXNET_USE_MEMORY_PROFILER
 namespace mxnet {
 	namespace profiler {
 class GpuMemoryProfiler
@@ -32,4 +35,4 @@ public:
 };
 	} // namespace profiler
 } // namespace mxnet
-
+#endif // MXNET_USE_MEMORY_PROFILER
