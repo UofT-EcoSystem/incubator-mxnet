@@ -36,6 +36,8 @@
 #include <nnvm/symbolic.h>
 #include <string>
 
+#define MXNET_USE_MEMORY_PROFILER 1
+
 /*!
  *\brief whether to use opencv support
  */

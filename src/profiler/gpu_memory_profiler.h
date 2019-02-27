@@ -5,7 +5,7 @@
 #include <cstdlib>
 #include <fstream>
 
-#define MXNET_USE_MEMORY_PROFILER 1
+#include <mxnet/base.h>
 
 #if MXNET_USE_MEMORY_PROFILER
 namespace mxnet {
