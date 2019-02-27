@@ -28,6 +28,12 @@
 #include "storage_manager.h"
 #include "mxnet/base.h"
 
+#if MXNET_USE_MEMORY_PROFILER
+#include "../profiler/gpu_memory_profiler.h"
+
+extern mxnet::profiler::GpuMemoryProfiler g_gpu_memory_profiler;
+#endif // MXNET_USE_MEMORY_PROFILER
+
 namespace mxnet {
 namespace storage {
 
@@ -45,7 +51,12 @@ class NaiveStorageManager final : public StorageManager {
    * \brief Default destructor.
    */
   ~NaiveStorageManager() = default;
+#if MXNET_USE_MEMORY_PROFILER
+  void Alloc(Storage::Handle* handle,
+             const std::string & tag = "<unk>") override;
+#else
   void Alloc(Storage::Handle* handle) override;
+#endif // MXNET_USE_MEMORY_PROFILER
   void Free(Storage::Handle handle) override;
 
   void DirectFree(Storage::Handle handle) override {
@@ -56,8 +67,15 @@ class NaiveStorageManager final : public StorageManager {
   DISALLOW_COPY_AND_ASSIGN(NaiveStorageManager);
 };  // class NaiveStorageManager
 
+#if MXNET_USE_MEMORY_PROFILER
+template <class DeviceStorage>
+void NaiveStorageManager<DeviceStorage>::Alloc(Storage::Handle* handle,
+                                               const std::string & tag) {
+  g_gpu_memory_profiler.addEntry(tag, handle->size);  
+#else
 template <class DeviceStorage>
 void NaiveStorageManager<DeviceStorage>::Alloc(Storage::Handle* handle) {
+#endif // MXNET_USE_MEMORY_PROFILER
   handle->dptr = DeviceStorage::Alloc(handle->size);
 }
 

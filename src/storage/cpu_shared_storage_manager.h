@@ -67,7 +67,12 @@ class CPUSharedStorageManager final : public StorageManager {
 #endif
   }
 
+#if MXNET_USE_MEMORY_PROFILER
+  void Alloc(Storage::Handle* handle,
+             const std::string & tag = "<unk>") override;
+#else
   void Alloc(Storage::Handle* handle) override;
+#endif // MXNET_USE_MEMORY_PROFILER
   void Free(Storage::Handle handle) override {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     pool_.erase(handle.dptr);
@@ -114,7 +119,14 @@ class CPUSharedStorageManager final : public StorageManager {
   DISALLOW_COPY_AND_ASSIGN(CPUSharedStorageManager);
 };  // class CPUSharedStorageManager
 
+#if MXNET_USE_MEMORY_PROFILER
+void CPUSharedStorageManager::Alloc(Storage::Handle* handle,
+                                    const std::string & tag) {
+  // Do not need to perform any actions since this is memory allocations
+  // on the host side.
+#else
 void CPUSharedStorageManager::Alloc(Storage::Handle* handle) {
+#endif // MXNET_USE_MEMORY_PROFILER
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::uniform_int_distribution<> dis(0, std::numeric_limits<int>::max());
   int fid = -1;

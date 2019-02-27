@@ -29,6 +29,12 @@
 #include <mxnet/storage.h>
 #include <cstddef>
 
+#if MXNET_USE_MEMORY_PROFILER
+#include "../profiler/gpu_memory_profiler.h"
+
+extern mxnet::profiler::GpuMemoryProfiler g_gpu_memory_profiler;
+#endif // MXNET_USE_MEMORY_PROFILER
+
 namespace mxnet {
 namespace storage {
 
@@ -42,7 +48,12 @@ class StorageManager {
    * \param size Size to allocate.
    * \return Pointer to the storage.
    */
+#if MXNET_USE_MEMORY_PROFILER
+  virtual void Alloc(Storage::Handle* handle,
+                     const std::string & tag = "<unk>") = 0;
+#else
   virtual void Alloc(Storage::Handle* handle) = 0;
+#endif // MXNET_USE_MEMORY_PROFILER
   /*!
    * \brief Deallocation.
    * \param ptr Pointer to deallocate.

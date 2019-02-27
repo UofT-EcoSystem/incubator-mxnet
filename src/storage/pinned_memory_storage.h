@@ -31,6 +31,12 @@
 #include "mxnet/storage.h"
 #include "../common/cuda_utils.h"
 
+#if MXNET_USE_MEMORY_PROFILER
+#include "../profiler/gpu_memory_profiler.h"
+
+extern mxnet::profiler::GpuMemoryProfiler g_gpu_memory_profiler;
+#endif // MXNET_USE_MEMORY_PROFILER
+
 namespace mxnet {
 namespace storage {
 
@@ -41,7 +47,13 @@ class PinnedMemoryStorage {
    * \param size Size to allocate.
    * \return Pointer to the storage.
    */
+  // @ArmageddonKnight \ref{memory-profiler}
+#if MXNET_USE_MEMORY_PROFILER
+  inline static void* Alloc(size_t size,
+                            const std::string & tag = "<unk>");
+#else
   inline static void* Alloc(size_t size);
+#endif // MXNET_USE_MEMORY_PROFILER
 
   /*!
    * \brief Deallocation.
@@ -50,7 +62,13 @@ class PinnedMemoryStorage {
   inline static void Free(void* ptr);
 };
 
+#if MXNET_USE_MEMORY_PROFILER
+inline void* PinnedMemoryStorage::Alloc(size_t size, 
+                                        const std::string & tag) {
+  g_gpu_memory_profiler.addEntry(tag, size);
+#else
 inline void* PinnedMemoryStorage::Alloc(size_t size) {
+#endif // MXNET_USE_MEMORY_PROFILER
   void* ret = nullptr;
 #if MXNET_USE_NCCL
   std::lock_guard<std::mutex> lock(Storage::Get()->GetMutex(Context::kGPU));

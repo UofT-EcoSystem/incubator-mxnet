@@ -40,6 +40,11 @@
 #include "../common/cuda_utils.h"
 #include "../common/utils.h"
 
+#if MXNET_USE_MEMORY_PROFILER
+#include "../profiler/gpu_memory_profiler.h"
+
+extern mxnet::profiler::GpuMemoryProfiler g_gpu_memory_profiler;
+#endif // MXNET_USE_MEMORY_PROFILER
 
 namespace mxnet {
 namespace storage {
@@ -69,7 +74,12 @@ class GPUPooledStorageManager final : public StorageManager {
     ReleaseAll();
   }
 
+#if MXNET_USE_MEMORY_PROFILER
+  void Alloc(Storage::Handle* handle,
+             const std::string & tag = "<unk>") override; 
+#else 
   void Alloc(Storage::Handle* handle) override;
+#endif // MXNET_USE_MEMORY_PROFILER
   void Free(Storage::Handle handle) override;
 
   void DirectFree(Storage::Handle handle) override {
@@ -103,7 +113,12 @@ class GPUPooledStorageManager final : public StorageManager {
   DISALLOW_COPY_AND_ASSIGN(GPUPooledStorageManager);
 };  // class GPUPooledStorageManager
 
+#if MXNET_USE_MEMORY_PROFILER
+void GPUPooledStorageManager::Alloc(Storage::Handle* handle,
+                                    const std::string & tag) {
+#else
 void GPUPooledStorageManager::Alloc(Storage::Handle* handle) {
+#endif // MXNET_USE_MEMORY_PROFILER
   std::lock_guard<std::mutex> lock(Storage::Get()->GetMutex(Context::kGPU));
   size_t size = std::max(handle->size, page_size_);
   auto&& reuse_it = memory_pool_.find(size);
@@ -114,6 +129,9 @@ void GPUPooledStorageManager::Alloc(Storage::Handle* handle) {
       ReleaseAll();
 
     void* ret = nullptr;
+#if MXNET_USE_MEMORY_PROFILER
+    g_gpu_memory_profiler.addEntry(tag, size);
+#endif // MXNET_USE_MEMORY_PROFILER
     cudaError_t e = cudaMalloc(&ret, size);
     if (e != cudaSuccess && e != cudaErrorCudartUnloading) {
       LOG(FATAL) << "cudaMalloc failed: " << cudaGetErrorString(e);
@@ -197,7 +215,12 @@ class GPUPooledRoundedStorageManager final : public StorageManager {
     ReleaseAll();
   }
 
+#if MXNET_USE_MEMORY_PROFILER
+  void Alloc(Storage::Handle* handle,
+             const std::string & tag = "<unk>") override;
+#else 
   void Alloc(Storage::Handle* handle) override;
+#endif // MXNET_USE_MEMORY_PROFILER
   void Free(Storage::Handle handle) override;
 
   void DirectFree(Storage::Handle handle) override {
@@ -258,7 +281,12 @@ class GPUPooledRoundedStorageManager final : public StorageManager {
   DISALLOW_COPY_AND_ASSIGN(GPUPooledRoundedStorageManager);
 };  // class GPUPooledRoundedStorageManager
 
+#if MXNET_USE_MEMORY_PROFILER
+void GPUPooledRoundedStorageManager::Alloc(Storage::Handle* handle,
+                                           const std::string & tag) {
+#else 
 void GPUPooledRoundedStorageManager::Alloc(Storage::Handle* handle) {
+#endif // MXNET_USE_MEMORY_PROFILER
   std::lock_guard<std::mutex> lock(Storage::Get()->GetMutex(Context::kGPU));
   int bucket = get_bucket(handle->size);
   size_t size = get_size(bucket);
@@ -270,7 +298,11 @@ void GPUPooledRoundedStorageManager::Alloc(Storage::Handle* handle) {
       ReleaseAll();
 
     void* ret = nullptr;
+#if MXNET_USE_MEMORY_PROFILER
+    g_gpu_memory_profiler.addEntry(tag, size);
+#else
     cudaError_t e = cudaMalloc(&ret, size);
+#endif // MXNET_USE_MEMORY_PROFILER
     if (e != cudaSuccess && e != cudaErrorCudartUnloading) {
       LOG(FATAL) << "cudaMalloc failed: " << cudaGetErrorString(e);
     }
