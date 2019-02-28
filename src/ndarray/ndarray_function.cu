@@ -137,7 +137,11 @@ void ElementwiseSumRspImpl(mshadow::Stream<gpu>* s,
                                     mshadow::Stream<gpu>::GetStream(s));
       mshadow::Tensor<gpu, 1, char> workspace = rsc
           .get_space_typed<gpu, 1, char>(mshadow::Shape1(num_rows * sizeof(IType) +
-                                                         temp_storage_bytes), s);
+                                                         temp_storage_bytes), s
+#if MXNET_USE_MEMORY_PROFILER
+                                                         , "workspace:ndarray_function"
+#endif // MXNET_USE_MEMORY_PROFILER                         
+                                                         );
       row_flg = reinterpret_cast<IType*>(workspace.dptr_);
       d_temp_storage = workspace.dptr_ + num_rows*sizeof(IType);
       // Mark row_flg array with 0 for zero rows and 1 for non-zero rows
@@ -163,7 +167,12 @@ void ElementwiseSumRspImpl(mshadow::Stream<gpu>* s,
       dim_t nnr_out = 0;
       CUDA_CALL(cudaMemcpy(&nnr_out, &row_flg[num_rows-1], sizeof(dim_t),
                            cudaMemcpyDeviceToHost));
+#if MXNET_USE_MEMORY_PROFILER
+      out->CheckAndAlloc({mshadow::Shape1(nnr_out)}, 
+                         "output:ndarray_function:elementwise_sum_rsp");
+#else
       out->CheckAndAlloc({mshadow::Shape1(nnr_out)});
+#endif // MXNET_USE_MEMORY_PROFILER
       IType* out_row_idx = out->aux_data(kIdx).dptr<IType>();
       DType* out_data = out->data().dptr<DType>();
       // Fill row_idx array of output using row_flg

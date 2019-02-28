@@ -161,7 +161,12 @@ void ElementwiseSumRsp(mshadow::Stream<cpu>* s,
       //            allocating it directly in GetUniqueRspRowIdx
       std::vector<IType> uniq_row_idx;
       GetUniqueRspRowIdx(nds, &uniq_row_idx);
+#if MXNET_USE_MEMORY_PROFILER
+      out->CheckAndAlloc({mshadow::Shape1(uniq_row_idx.size())},
+                         "output:ndarray_function:elementwise_sum_rsp");
+#else
       out->CheckAndAlloc({mshadow::Shape1(uniq_row_idx.size())});
+#endif // MXNET_USE_MEMORY_PROFILER
       out->data().FlatTo2D<cpu, DType>() = static_cast<DType>(0);
       ElementwiseSumRspImpl<DType, IType>(s, nds, uniq_row_idx, out, omp_get_max_threads());
     });

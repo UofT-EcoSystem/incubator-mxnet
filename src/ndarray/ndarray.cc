@@ -129,7 +129,12 @@ NDArray::Chunk::~Chunk() {
   }, shandle.ctx, var);
 }
 
+#if MXNET_USE_MEMORY_CHUNK
+void NDArray::Chunk::CheckAndAllocData(const TShape &shape, int dtype,
+                                       const std::string & tag) {
+#else
 void NDArray::Chunk::CheckAndAllocData(const TShape &shape, int dtype) {
+#endif // MXNET_USE_MEMORY_CHUNK
   CHECK_NE(aux_shapes.size(), 0)
       << "data is expected to be allocated after aux_data";
   auto dbytes = shape.Size() * mshadow::mshadow_sizeof(dtype);
@@ -137,6 +142,7 @@ void NDArray::Chunk::CheckAndAllocData(const TShape &shape, int dtype) {
     // free storage if necessary and alloc again
     if (shandle.size > 0) Storage::Get()->Free(shandle);
     // init storage
+
     shandle = Storage::Get()->Alloc(dbytes, ctx);
 #if MXNET_USE_MKLDNN == 1
     mkl_mem_ = nullptr;
@@ -1006,9 +1012,15 @@ inline void CopyFromToCsrImpl(const NDArray& from, const NDArray& to, RunContext
     return;
   }
   // Allocate storage
+#if MXNET_USE_MEMORY_PROFILER
+  to.CheckAndAllocAuxData(csr::kIndPtr, from.aux_shape(csr::kIndPtr), "aux:copy_from_to_csr");
+  to.CheckAndAllocAuxData(csr::kIdx, from.aux_shape(csr::kIdx), "aux:copy_from_to_csr");
+  to.CheckAndAllocData(from.aux_shape(csr::kIdx), "data:copy_from_to_csr");
+#else
   to.CheckAndAllocAuxData(csr::kIndPtr, from.aux_shape(csr::kIndPtr));
   to.CheckAndAllocAuxData(csr::kIdx, from.aux_shape(csr::kIdx));
   to.CheckAndAllocData(from.aux_shape(csr::kIdx));
+#endif // MXNET_USE_MEMORY_PROFILER
   TBlob val = to.data();
   TBlob indptr = to.aux_data(csr::kIndPtr);
   TBlob idx = to.aux_data(csr::kIdx);
@@ -1032,7 +1044,11 @@ inline void CopyFromToRspImpl(const NDArray& from, const NDArray& to, RunContext
     return;
   }
   auto aux_shape = from.aux_shape(rowsparse::kIdx);
+#if MXNET_USE_MEMORY_PROFILER
+  to.CheckAndAlloc({aux_shape}, "output:ndarray:copy_from_to_csr");
+#else
   to.CheckAndAlloc({aux_shape});
+#endif // MXNET_USE_MEMORY_PROFILER
   TBlob val = to.data();
   TBlob idx = to.aux_data(rowsparse::kIdx);
   ndarray::Copy<from_xpu, to_xpu>(from.data(), &val,
