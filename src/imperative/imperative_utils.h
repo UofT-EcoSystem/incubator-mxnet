@@ -95,7 +95,12 @@ inline Context GetContext(const nnvm::NodeAttrs& attrs,
 }
 
 // Set the shape, dtype, storage type and dispatch mode via the attribute inference functions
-inline void SetShapeType(const Context& ctx,
+inline void SetShapeType(
+#if MXNET_USE_MEMORY_PROFILER
+                               Context& ctx,
+#else
+                         const Context& ctx,
+#endif // MXNET_USE_MEMORY_PROFILER
                          const nnvm::NodeAttrs& attrs,
                          const std::vector<NDArray*>& inputs,
                          const std::vector<NDArray*>& outputs,
@@ -104,6 +109,9 @@ inline void SetShapeType(const Context& ctx,
   static auto& infertype = nnvm::Op::GetAttr<nnvm::FInferType>("FInferType");
   static auto& inferstorage = nnvm::Op::GetAttr<FInferStorageType>("FInferStorageType");
   MXAPIThreadLocalEntry *ret = MXAPIThreadLocalStore::Get();
+#if MXNET_USE_MEMORY_PROFILER
+  ctx.name = attrs.op->name;
+#endif // MXNET_USE_MEMORY_PROFILER
   // infer shape
   std::vector<TShape>& in_shapes  = ret->arg_shapes;
   in_shapes.clear();

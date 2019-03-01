@@ -96,9 +96,15 @@ class SparsePrefetcherIter : public PrefetcherIter {
             auto& indptr = batch.data[data_iter + 2];
             // allocate memory
             CHECK_EQ(indices.shape_.Size(), values.shape_.Size());
+#if MXNET_USE_MEMORY_PROFILER
+            nd.CheckAndAllocAuxData(csr::kIdx, indices.shape_, "aux:iter_sparse_prefetcher");
+            nd.CheckAndAllocData(values.shape_, "data:iter_sparse_prefetcher");
+            nd.CheckAndAllocAuxData(csr::kIndPtr, indptr.shape_, "aux:iter_sparse_prefetcher");
+#else
             nd.CheckAndAllocAuxData(csr::kIdx, indices.shape_);
             nd.CheckAndAllocData(values.shape_);
             nd.CheckAndAllocAuxData(csr::kIndPtr, indptr.shape_);
+#endif // MXNET_USE_MEMORY_PROFILER
             // copy values, indices and indptr
             CopyFromTo(data_i.data(), values);
             CopyFromTo(data_i.aux_data(csr::kIdx), indices);
