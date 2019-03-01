@@ -454,9 +454,16 @@ inline NDArray ReshapeOrCreate(const std::string& name,
                                const TShape& dest_arg_shape,
                                const int dest_arg_dtype,
                                const NDArrayStorageType dest_arg_stype,
+#if MXNET_USE_MEMORY_PROFILER
+                                     Context& ctx,
+#else
                                const Context& ctx,
+#endif // MXNET_USE_MEMORY_PROFILER
                                std::unordered_map<std::string, NDArray>* shared_buffer,
                                bool enable_row_sparse_sharing) {
+#if MXNET_USE_MEMORY_PROFILER
+  ctx.name = name;
+#endif // MXNET_USE_MEMORY_PROFILER
   bool stype_shareable = dest_arg_stype == kDefaultStorage;
   if (enable_row_sparse_sharing) {
     stype_shareable = stype_shareable || dest_arg_stype == kRowSparseStorage;

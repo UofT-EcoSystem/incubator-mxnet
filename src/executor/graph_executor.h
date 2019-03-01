@@ -91,9 +91,15 @@ class GraphExecutor : public Executor {
   void Init(nnvm::Symbol symbol,
             const Context& default_ctx,
             const std::map<std::string, Context>& ctx_map,
+#if MXNET_USE_MEMORY_PROFILER
+                  std::vector<Context>& in_arg_ctxes,
+                  std::vector<Context>& arg_grad_ctxes,
+                  std::vector<Context>& aux_state_ctxes,
+#else
             const std::vector<Context>& in_arg_ctxes,
             const std::vector<Context>& arg_grad_ctxes,
             const std::vector<Context>& aux_state_ctxes,
+#endif // MXNET_USE_MEMORY_PROFILER
             const std::unordered_map<std::string, TShape>& arg_shape_map,
             const std::unordered_map<std::string, int>& arg_dtype_map,
             const std::unordered_map<std::string, int>& arg_stype_map,
@@ -154,9 +160,15 @@ class GraphExecutor : public Executor {
                      const nnvm::ShapeVector& inferred_shapes,
                      const nnvm::DTypeVector& inferred_dtypes,
                      const StorageTypeVector& inferred_stypes,
+#if MXNET_USE_MEMORY_PROFILER
+                           std::vector<Context>& in_arg_ctxes,
+                           std::vector<Context>& arg_grad_ctxes,
+                           std::vector<Context>& aux_state_ctxes,
+#else
                      const std::vector<Context>& in_arg_ctxes,
                      const std::vector<Context>& arg_grad_ctxes,
                      const std::vector<Context>& aux_state_ctxes,
+#endif // MXNET_USE_MEMORY_PROFILER
                      const std::vector<OpReqType>& grad_req_types,
                      std::vector<NDArray>* in_arg_vec,
                      std::vector<NDArray>* arg_grad_vec,
@@ -167,9 +179,15 @@ class GraphExecutor : public Executor {
                              const nnvm::ShapeVector& inferred_shapes,
                              const nnvm::DTypeVector& inferred_dtypes,
                              const StorageTypeVector& inferred_stypes,
+#if MXNET_USE_MEMORY_PROFILER
+                                   std::vector<Context>& in_arg_ctxes,
+                                   std::vector<Context>& arg_grad_ctxes,
+                                   std::vector<Context>& aux_state_ctxes,
+#else
                              const std::vector<Context>& in_arg_ctxes,
                              const std::vector<Context>& arg_grad_ctxes,
                              const std::vector<Context>& aux_state_ctxes,
+#endif // MXNET_USE_MEMORY_PROFILER
                              const std::vector<OpReqType>& grad_req_types,
                              const std::unordered_set<std::string>& shared_arg_names,
                              const Executor* shared_exec,

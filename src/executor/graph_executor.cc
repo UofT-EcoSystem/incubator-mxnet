@@ -400,9 +400,15 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
                                   const nnvm::ShapeVector& inferred_shapes,
                                   const nnvm::DTypeVector& inferred_dtypes,
                                   const StorageTypeVector& inferred_stypes,
+#if MXNET_USE_MEMORY_PROFILER
+                                        std::vector<Context>& in_arg_ctxes,
+                                        std::vector<Context>& arg_grad_ctxes,
+                                        std::vector<Context>& aux_state_ctxes,
+#else
                                   const std::vector<Context>& in_arg_ctxes,
                                   const std::vector<Context>& arg_grad_ctxes,
                                   const std::vector<Context>& aux_state_ctxes,
+#endif // MXNET_USE_MEMORY_PROFILER
                                   const std::vector<OpReqType>& grad_req_types,
                                   std::vector<NDArray>* in_arg_vec,
                                   std::vector<NDArray>* arg_grad_vec,
@@ -470,9 +476,15 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
                                   const nnvm::ShapeVector& inferred_shapes,
                                   const nnvm::DTypeVector& inferred_dtypes,
                                   const StorageTypeVector& inferred_stypes,
+#if MXNET_USE_MEMORY_PROFILER
+                                        std::vector<Context>& in_arg_ctxes,
+                                        std::vector<Context>& arg_grad_ctxes,
+                                        std::vector<Context>& aux_state_ctxes,
+#else
                                   const std::vector<Context>& in_arg_ctxes,
                                   const std::vector<Context>& arg_grad_ctxes,
                                   const std::vector<Context>& aux_state_ctxes,
+#endif // MXNET_USE_MEMORY_PROFILER
                                   const std::vector<OpReqType>& grad_req_types,
                                   const std::unordered_set<std::string>& shared_arg_names,
                                   const Executor* shared_exec,
@@ -493,6 +505,9 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
     const std::string& arg_name = idx[nid].source->attrs.name;
     // aux_states
     if (mutable_nodes.count(nid)) {
+#if MXNET_USE_MEMORY_PROFILER
+      aux_state_ctxes[aux_top].name = "aux_state:" + arg_name;
+#endif // MXNET_USE_MEMORY_PROFILER
       if (nullptr != shared_exec) {
         const NDArray& aux_nd = shared_exec->aux_state_map().at(arg_name);
         CHECK(inferred_stype == kDefaultStorage && aux_nd.storage_type() == kDefaultStorage)
@@ -520,6 +535,9 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
     } else {  // in_args and grad for in_args
       if (shared_arg_names.count(arg_name)) {  // model parameter
         // model parameter
+#if MXNET_USE_MEMORY_PROFILER
+        in_arg_ctxes[arg_top].name = "in_arg:" + arg_name;
+#endif // MXNET_USE_MEMORY_PROFILER
         if (nullptr != shared_exec) {
           const NDArray& in_arg_nd = shared_exec->in_arg_map().at(arg_name);
           auto arg_nd_stype = in_arg_nd.storage_type();
@@ -558,6 +576,9 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
           auto grad_oid = grad_store_.size() + num_forward_outputs_;
           auto grad_eid = idx.entry_id(idx.outputs()[grad_oid]);
           auto grad_stype = (NDArrayStorageType) inferred_stypes[grad_eid];
+#if MXNET_USE_MEMORY_PROFILER
+          arg_grad_ctxes[arg_top].name = "arg_grad:" + arg_name;
+#endif // MXNET_USE_MEMORY_PROFILER
           if (nullptr != shared_exec && grad_stype == kDefaultStorage &&
               shared_exec->arg_grad_map().at(arg_name).storage_type() == kDefaultStorage) {
             // try to reuse memory from shared_exec
@@ -687,9 +708,15 @@ void GraphExecutor::FinishInitGraph(nnvm::Symbol symbol,
 void GraphExecutor::Init(nnvm::Symbol symbol,
                          const Context& default_ctx,
                          const std::map<std::string, Context>& ctx_map,
+#if MXNET_USE_MEMORY_PROFILER
+                               std::vector<Context>& in_arg_ctxes,
+                               std::vector<Context>& arg_grad_ctxes,
+                               std::vector<Context>& aux_state_ctxes,
+#else
                          const std::vector<Context>& in_arg_ctxes,
                          const std::vector<Context>& arg_grad_ctxes,
                          const std::vector<Context>& aux_state_ctxes,
+#endif // MXNET_USE_MEMORY_PROFILER
                          const std::unordered_map<std::string, TShape>& arg_shape_map,
                          const std::unordered_map<std::string, int>& arg_dtype_map,
                          const std::unordered_map<std::string, int>& arg_stype_map,
@@ -944,6 +971,10 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
       auto eid = idx.entry_id(nid, i);
       data_context[eid] = vctx[nid];
       CHECK_NE(vstorage_type[nid], kUndefinedStorage);
+#if MXNET_USE_MEMORY_PROFILER
+      data_context[eid].name = "forward_features:" +
+                               idx[nid].source->attrs.name;
+#endif // MXNET_USE_MEMORY_PROFILER
       data_storage_type[eid] = (NDArrayStorageType) vstorage_type[nid];
     }
   }
@@ -1433,9 +1464,15 @@ GraphExecutor::CachedSegOpr GraphExecutor::CreateCachedSegOpr(size_t topo_start,
 Executor *Executor::SimpleBind(nnvm::Symbol symbol,
                                const Context& default_ctx,
                                const std::map<std::string, Context>& group2ctx,
+#if MXNET_USE_MEMORY_PROFILER
+                                     std::vector<Context>& in_arg_ctxes,
+                                     std::vector<Context>& arg_grad_ctxes,
+                                     std::vector<Context>& aux_state_ctxes,
+#else
                                const std::vector<Context>& in_arg_ctxes,
                                const std::vector<Context>& arg_grad_ctxes,
                                const std::vector<Context>& aux_state_ctxes,
+#endif // MXNET_USE_MEMORY_PROFILER
                                const std::unordered_map<std::string, TShape>& arg_shape_map,
                                const std::unordered_map<std::string, int>& arg_dtype_map,
                                const std::unordered_map<std::string, int>& arg_stype_map,
