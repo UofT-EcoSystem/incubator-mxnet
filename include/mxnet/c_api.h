@@ -505,7 +505,7 @@ MXNET_DLL int MXNDArrayCreateEx(const mx_uint *shape,
                               int dtype,
                               NDArrayHandle *out
 #if MXNET_USE_MEMORY_PROFILER
-                              , const char* name
+                            , const char * name
 #endif // MXNET_USE_MEMORY_PROFILER
                               );
 

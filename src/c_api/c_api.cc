@@ -160,11 +160,19 @@ int MXNDArrayCreateEx(const mx_uint *shape,
                     int dev_id,
                     int delay_alloc,
                     int dtype,
-                    NDArrayHandle *out) {
+                    NDArrayHandle *out
+#if MXNET_USE_MEMORY_PROFILER
+                  , const char * name 
+#endif // MXNET_USE_MEMORY_PROFILER
+                    ) {
   API_BEGIN();
   *out = new NDArray(
       TShape(shape, shape + ndim),
+#if MXNET_USE_MEMORY_PROFILER
+      Context::Create(static_cast<Context::DeviceType>(dev_type), dev_id, name),
+#else
       Context::Create(static_cast<Context::DeviceType>(dev_type), dev_id),
+#endif // MXNET_USE_MEMORY_PROFILER
       delay_alloc != 0,
       dtype);
   API_END();
