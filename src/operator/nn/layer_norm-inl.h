@@ -109,7 +109,7 @@ void LayerNormCompute(const nnvm::NodeAttrs& attrs,
   });
   workspace = ctx.requested[0].get_space_typed<xpu, 1, char>(Shape1(workspace_size), s
 #if MXNET_USE_MEMORY_PROFILER
-      , "workspace:layer_norm"
+    , "workspace:layer_norm"
 #endif // MXNET_USE_MEMORY_PROFILER
       );
   // Calculate mean
@@ -220,7 +220,7 @@ void LayerNormGradCompute(const nnvm::NodeAttrs& attrs,
   workspace = ctx.requested[0].get_space_typed<xpu, 1, char>(
     Shape1(reduce_workspace_size + data_size * 2 + red_out_size), s
 #if MXNET_USE_MEMORY_PROFILER
-        , "workspace:layer_norm"
+      , "workspace:layer_norm"
 #endif // MXNET_USE_MEMORY_PROFILER
         );
   const TBlob normalized_data = TBlob(workspace.dptr_ + reduce_workspace_size,

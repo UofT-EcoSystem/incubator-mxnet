@@ -260,7 +260,7 @@ class DeconvolutionOp {
         ctx.requested[deconv::kTempSpace].get_space_typed<xpu, 1, DType>(
             Shape1(this->InitTemp(out.shape_, data.shape_)), s
 #if MXNET_USE_MEMORY_PROFILER
-                , "workspace:deconvolution"
+              , "workspace:deconvolution"
 #endif // MXNET_USE_MEMORY_PROFILER
                 );
     for (index_t i = 0; i < nbatch; i += nstep_) {
@@ -387,7 +387,7 @@ class DeconvolutionOp {
         ctx.requested[deconv::kTempSpace].get_space_typed<xpu, 1, DType>(
             Shape1(this->InitTemp(grad.shape_, data.shape_)), s
 #if MXNET_USE_MEMORY_PROFILER
-                , "workspace:deconvolution"
+              , "workspace:deconvolution"
 #endif // MXNET_USE_MEMORY_PROFILER
                 );
     for (index_t i = 0; i < nbatch; i += nstep_) {

@@ -951,7 +951,7 @@ class CuDNNConvolutionOp {
     return ctx.requested[conv::kTempSpace].get_space_typed<gpu, 1, DType>(
         mshadow::Shape1(size_words), s
 #if MXNET_USE_MEMORY_PROFILER
-            , "workspace:cudnn_convolution"
+          , "workspace:cudnn_convolution"
 #endif // MXNET_USE_MEMORY_PROFILER
             );
   }
