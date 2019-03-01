@@ -474,7 +474,12 @@ class KVStoreDistServer {
     Engine::Get()->PushAsync(
     [this, recved, stored, type](RunContext ctx, Engine::CallbackOnComplete on_complete) {
       NDArray rsp = stored;
+#if MXNET_USE_MEMORY_PROFILER
+      stored.CheckAndAlloc({mshadow::Shape1(recved.shape()[0])}, 
+                           "data:kvstore_dist_server:data_handle_row_sparse");
+#else
       stored.CheckAndAlloc({mshadow::Shape1(recved.shape()[0])});
+#endif // MXNET_USE_MEMORY_PROFILER
       mshadow::Stream<cpu> *s = ctx.get_stream<cpu>();
       using namespace mxnet::op;
       nnvm::dim_t nnr = rsp.shape()[0];

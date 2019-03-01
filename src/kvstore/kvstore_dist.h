@@ -476,7 +476,12 @@ class KVStoreDist : public KVStoreLocal {
       CHECK_EQ(indices.dtype(), mshadow::kInt64);
       const TBlob idx_data = indices.data();
       const size_t num_rows = idx_data.shape_.Size();
+#if MXNET_USE_MEMORY_PROFILER
+      recv_buf.CheckAndAlloc({mshadow::Shape1(num_rows)}, 
+                             "buffer:kvstore_dist:pull_row_sparse");
+#else
       recv_buf.CheckAndAlloc({mshadow::Shape1(num_rows)});
+#endif // MXNET_USE_MEMORY_PROFILER
       const int dtype = recv_buf.dtype();
       char* data = static_cast<char *>(recv_buf.data().dptr_);
       const auto offsets = idx_data.dptr<int64_t>();
