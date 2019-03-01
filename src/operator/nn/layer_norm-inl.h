@@ -107,7 +107,11 @@ void LayerNormCompute(const nnvm::NodeAttrs& attrs,
         broadcast::ReduceWorkspaceSize<NDim, DType>(s, mean_data.shape_, req[0], in_data.shape_);
     });
   });
-  workspace = ctx.requested[0].get_space_typed<xpu, 1, char>(Shape1(workspace_size), s);
+  workspace = ctx.requested[0].get_space_typed<xpu, 1, char>(Shape1(workspace_size), s
+#if MXNET_USE_MEMORY_PROFILER
+      , "workspace:layer_norm"
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
   // Calculate mean
   MSHADOW_REAL_TYPE_SWITCH(outputs[0].type_flag_, DType, {
     BROADCAST_NDIM_SWITCH(red_dst_shape.ndim(), NDim, {
@@ -214,7 +218,11 @@ void LayerNormGradCompute(const nnvm::NodeAttrs& attrs,
     });
   });
   workspace = ctx.requested[0].get_space_typed<xpu, 1, char>(
-    Shape1(reduce_workspace_size + data_size * 2 + red_out_size), s);
+    Shape1(reduce_workspace_size + data_size * 2 + red_out_size), s
+#if MXNET_USE_MEMORY_PROFILER
+        , "workspace:layer_norm"
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
   const TBlob normalized_data = TBlob(workspace.dptr_ + reduce_workspace_size,
                                       data.shape_, data.dev_mask(), data.type_flag_, data.dev_id());
   const TBlob ograd_mult = TBlob(workspace.dptr_ + reduce_workspace_size + data_size,

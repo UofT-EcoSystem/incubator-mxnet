@@ -258,7 +258,11 @@ class DeconvolutionOp {
     const index_t nbatch = data.size(0);
     Tensor<xpu, 1, DType> workspace =
         ctx.requested[deconv::kTempSpace].get_space_typed<xpu, 1, DType>(
-            Shape1(this->InitTemp(out.shape_, data.shape_)), s);
+            Shape1(this->InitTemp(out.shape_, data.shape_)), s
+#if MXNET_USE_MEMORY_PROFILER
+                , "workspace:deconvolution"
+#endif // MXNET_USE_MEMORY_PROFILER
+                );
     for (index_t i = 0; i < nbatch; i += nstep_) {
       const index_t step = std::min(nstep_, nbatch - i);
       Tensor<xpu, 2, DType> temp_col = Tensor<xpu, 2, DType>(
@@ -381,7 +385,11 @@ class DeconvolutionOp {
     const index_t nbatch = data.size(0);
     Tensor<xpu, 1, DType> workspace =
         ctx.requested[deconv::kTempSpace].get_space_typed<xpu, 1, DType>(
-            Shape1(this->InitTemp(grad.shape_, data.shape_)), s);
+            Shape1(this->InitTemp(grad.shape_, data.shape_)), s
+#if MXNET_USE_MEMORY_PROFILER
+                , "workspace:deconvolution"
+#endif // MXNET_USE_MEMORY_PROFILER
+                );
     for (index_t i = 0; i < nbatch; i += nstep_) {
       const index_t step = std::min(nstep_, nbatch - i);
       Tensor<xpu, 2, DType> temp_col = Tensor<xpu, 2, DType>(

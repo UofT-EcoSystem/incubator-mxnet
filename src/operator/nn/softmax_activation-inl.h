@@ -122,7 +122,11 @@ void SoftmaxActivationGradCompute(const nnvm::NodeAttrs& attrs,
       in_grad.get_with_shape<xpu, 3, real_t>(data_shape, s);
   // get requested temp space
   Tensor<xpu, 2> workspace = ctx.requested[softmax_activation::kTempSpace].get_space<xpu>(
-      Shape2(batch_size, rest_size), s);
+      Shape2(batch_size, rest_size), s
+#if MXNET_USE_MEMORY_PROFILER
+          , "workspace:softmax_activation"
+#endif // MXNET_USE_MEMORY_PROFILER
+          );
   workspace = reduce_with_axis<red::sum, false>(m_out_grad * m_out_data, 1);
   Assign(m_in_grad, req,
          m_out_data * (m_out_grad - broadcast_with_axis(workspace, 0, channel_num)));

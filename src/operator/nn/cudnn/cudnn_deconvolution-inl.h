@@ -899,7 +899,11 @@ class CuDNNDeconvolutionOp {
     mshadow::Stream<gpu> *s = ctx.get_stream<gpu>();
     size_t size_words = size_bytes / sizeof(DType) + 1;
     return ctx.requested[deconv::kTempSpace].get_space_typed<gpu, 1, DType>(
-        mshadow::Shape1(size_words), s);
+        mshadow::Shape1(size_words), s
+#if MXNET_USE_MEMORY_PROFILER
+            , "workspace:cudnn_deconvolution"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
   }
 
   // Returns the size in bytes of the 1D Tensor of words.
