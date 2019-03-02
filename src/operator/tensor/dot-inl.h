@@ -844,7 +844,11 @@ inline void DotCsrDnsRspImpl(const OpContext& ctx,
           size_t workspace_size = num_rows * sizeof(dim_t);
           mshadow::Tensor<cpu, 1, char> workspace =
             ctx.requested[0].get_space_typed<cpu, 1, char>(
-            mshadow::Shape1(workspace_size), s);
+                mshadow::Shape1(workspace_size), s
+#if MXNET_USE_MEMORY_PROFILER
+              , "workspace:dot"
+#endif // MXNET_USE_MEMORY_PROFILER
+                );
           dim_t* row_flg = reinterpret_cast<dim_t*>(workspace.dptr_);
           // prefix sum array re-uses the row_flg array temp space
           dim_t* prefix_sum = row_flg;
@@ -1075,7 +1079,11 @@ inline void DotDnsCsrCsrImpl(const OpContext& ctx, const cpu& cpu_dev,
         size_t workspace_size = 2 * num_cols_out * sizeof(CType);
         Tensor<cpu, 1, char> workspace =
             ctx.requested[0].get_space_typed<cpu, 1, char>(
-                Shape1(workspace_size), s);
+                Shape1(workspace_size), s
+#if MXNET_USE_MEMORY_PROFILER
+              , "workspace:dot"
+#endif // MXNET_USE_MEMORY_PROFILER
+                );
         CType* col_flg = reinterpret_cast<dim_t*>(workspace.dptr_);
 
         CType* prefix_sum = col_flg;
@@ -1342,7 +1350,11 @@ void BatchDotForward_(const nnvm::NodeAttrs& attrs,
     mshadow::Tensor<xpu, 3, DType> mlhs = inputs[0].get<xpu, 3, DType>(s);
     mshadow::Tensor<xpu, 3, DType> mrhs = inputs[1].get<xpu, 3, DType>(s);
     mshadow::Tensor<xpu, 1, DType*> workspace =
-      ctx.requested[0].get_space_typed<xpu, 1, DType*>(mshadow::Shape1(3 * out.size(0)), s);
+      ctx.requested[0].get_space_typed<xpu, 1, DType*>(mshadow::Shape1(3 * out.size(0)), s
+#if MXNET_USE_MEMORY_PROFILER
+        , "workspace:dot"
+#endif // MXNET_USE_MEMORY_PROFILER
+          );
     if (kNullOp != req[0]) {
       if (param.transpose_a && param.transpose_b) {
         mshadow::BatchGEMM<true, true>(out, mlhs, mrhs, (DType)1.0f,
@@ -1388,7 +1400,11 @@ void BatchDotBackward_(const nnvm::NodeAttrs& attrs,
     mshadow::Tensor<xpu, 3, DType> mrhs_grad = outputs[1].get<xpu, 3, DType>(s);
     mshadow::Tensor<xpu, 2, DType*> workspace =
       ctx.requested[0].get_space_typed<xpu, 2, DType*>(
-        mshadow::Shape2(2, 3 * mout_grad.size(0)), s);
+        mshadow::Shape2(2, 3 * mout_grad.size(0)), s
+#if MXNET_USE_MEMORY_PROFILER
+      , "workspace:dot"
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
     mshadow::Tensor<xpu, 1, DType*> rhs_workspace = workspace[0];
     mshadow::Tensor<xpu, 1, DType*> lhs_workspace = workspace[1];
     if (param.transpose_a && param.transpose_b) {

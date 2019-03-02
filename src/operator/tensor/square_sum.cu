@@ -37,7 +37,11 @@ void CheckSameIdx<gpu>(const OpContext& ctx,
     const nnvm::dim_t idx_size = ograd_row_idx.Size();
     int32_t is_diff = 0;
     mshadow::Tensor<gpu, 1, char> workspace = ctx.requested[0]
-        .get_space_typed<gpu, 1, char>(mshadow::Shape1(sizeof(int32_t)), s);
+        .get_space_typed<gpu, 1, char>(mshadow::Shape1(sizeof(int32_t)), s
+#if MXNET_USE_MEMORY_PROFILER
+          , "workspace:square_sum"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
     int32_t* is_diff_ptr = reinterpret_cast<int32_t*>(workspace.dptr_);
     mxnet_op::Kernel<mxnet_op::set_zero, gpu>::Launch(s, 1, is_diff_ptr);
     mxnet_op::Kernel<CheckSameIdxKernel, gpu>::Launch(s, idx_size,

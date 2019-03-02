@@ -111,7 +111,11 @@ inline void SparseEmbeddingOpBackwardRspImpl<cpu>(const bool deterministic,
   size_t workspace_size = num_rows * sizeof(dim_t);
   Tensor<cpu, 1, char> workspace =
     ctx.requested[embedding::kTempSpace].get_space_typed<cpu, 1, char>(
-      Shape1(workspace_size), s);
+      Shape1(workspace_size), s
+#if MXNET_USE_MEMORY_PROFILER
+    , "workspace:index_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
   dim_t* row_flg = reinterpret_cast<dim_t*>(workspace.dptr_);
   // prefix sum array re-uses the row_flg array temp space
   dim_t* prefix_sum = row_flg;

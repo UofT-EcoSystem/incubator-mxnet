@@ -971,7 +971,11 @@ void TakeOpBackwardImpl(mshadow::Stream<gpu>* s,
     size_t src_indptr_bytes = (arrshape[axis] + 1) * sizeof(int);
     size_t workspace_bytes = src_indptr_bytes + 2 * original_idx_bytes + temp_storage_bytes;
     Tensor<gpu, 1, char> workspace =
-      ctx.requested[0].get_space_typed<gpu, 1, char>(Shape1(workspace_bytes), s);
+      ctx.requested[0].get_space_typed<gpu, 1, char>(Shape1(workspace_bytes), s
+#if MXNET_USE_MEMORY_PROFILER
+        , "workspace:indexing_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+          );
     sorted_idx_ptr = reinterpret_cast<int*>(workspace.dptr_);
     int* original_idx_ptr = reinterpret_cast<int*>(workspace.dptr_ + original_idx_bytes);
     src_indptr_ptr = reinterpret_cast<int*>(workspace.dptr_ + 2 * original_idx_bytes);

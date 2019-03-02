@@ -304,7 +304,11 @@ void ElemwiseBinaryOp::CsrCsrOp(mshadow::Stream<cpu> *s,
 
         Tensor<cpu, 1, uint8_t> workspace =
           ctx.requested[ResourceRequestType::kTempSpace].get_space_typed<cpu, 1, uint8_t>(
-            mshadow::Shape1(alloc_size), s);
+            mshadow::Shape1(alloc_size), s
+#if MXNET_USE_MEMORY_PROFILER
+          , "workspace:elementwise_binary_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
 
         // Allocate temp space and partition into three tensors
         mshadow::Tensor<cpu, 1, IType> next(reinterpret_cast<IType *>(workspace.dptr_),

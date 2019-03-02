@@ -120,7 +120,11 @@ class QuantizedCuDNNConvOp {
       size_t total_temp_bytes = (workspace_ + data_size + weight_size) * sizeof(SrcType)
                               + output_size * (sizeof(DstType) + sizeof(int32_t));
       Tensor<gpu, 1, char> temp_space =
-        ctx.requested[0].get_space_typed<gpu, 1, char>(mshadow::Shape1(total_temp_bytes), s);
+        ctx.requested[0].get_space_typed<gpu, 1, char>(mshadow::Shape1(total_temp_bytes), s
+#if MXNET_USE_MEMORY_PROFILER
+          , "workspace:quantized_conv"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
       char* temp_dptr = temp_space.dptr_;
       TBlob data_(reinterpret_cast<SrcType*>(temp_dptr),
                   TShape({dshape[N], dshape[H], dshape[W], dshape[C]}),

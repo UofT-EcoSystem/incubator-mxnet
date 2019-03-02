@@ -103,7 +103,11 @@ void SliceDimTwoCsrImpl<gpu>(const TShape &begin, const TShape &end, const OpCon
                                       indptr_len,
                                       Stream<gpu>::GetStream(s));
         Tensor<gpu, 1, char> workspace = ctx.requested[0]
-            .get_space_typed<gpu, 1, char>(Shape1(temp_storage_bytes), s);
+            .get_space_typed<gpu, 1, char>(Shape1(temp_storage_bytes), s
+#if MXNET_USE_MEMORY_PROFILER
+              , "workspace:matrix_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+                );
         d_temp_storage = workspace.dptr_;
 
         cub::DeviceScan::InclusiveSum(d_temp_storage,

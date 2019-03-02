@@ -64,7 +64,11 @@ void SoftmaxCrossEntropyForward(const nnvm::NodeAttrs& attrs,
     mshadow::Tensor<xpu, 1, DType> mlabel = inputs[1].get<xpu, 1, DType>(s);
     mshadow::Tensor<xpu, 2, DType> mdata = inputs[0].get<xpu, 2, DType>(s);
     mshadow::Tensor<xpu, 1, DType> workspace = ctx.requested[0].get_space_typed<xpu, 1, DType>(
-        mshadow::Shape1(mdata.shape_.Size() + mlabel.size(0)), s);
+        mshadow::Shape1(mdata.shape_.Size() + mlabel.size(0)), s
+#if MXNET_USE_MEMORY_PROFILER
+      , "workspace:loss_binary_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
     mshadow::Tensor<xpu, 2, DType> temp1(workspace.dptr_, mdata.shape_, s);
     mshadow::Tensor<xpu, 2, DType> temp2(workspace.dptr_ + mdata.shape_.Size(),
         mshadow::Shape2(1, mlabel.size(0)), s);
@@ -97,7 +101,11 @@ void SoftmaxCrossEntropyBackward(const nnvm::NodeAttrs& attrs,
     mshadow::Tensor<xpu, 2, DType> mdata_grad = outputs[0].get<xpu, 2, DType>(s);
     mshadow::Tensor<xpu, 1, DType> mscale = inputs[0].get<xpu, 1, DType>(s);
     mshadow::Tensor<xpu, 2, DType> temp = ctx.requested[0].get_space_typed<xpu, 2, DType>(
-        mdata.shape_, s);
+        mdata.shape_, s
+#if MXNET_USE_MEMORY_PROFILER
+      , "workspace:loss_binary_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
     mshadow::Softmax(temp, mdata);
     mshadow::SoftmaxGrad(temp, temp, mlabel);
     ASSIGN_DISPATCH(mdata_grad, req[0], broadcast_scalar(mscale, temp.shape_) * temp);

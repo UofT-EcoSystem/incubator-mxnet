@@ -462,7 +462,11 @@ inline void DotCsrDnsDnsImpl(const OpContext& ctx,
             csc_indptr_bytes + csc_data_bytes + temp_storage_bytes;
           total_workspace_bytes += (sizeof(IType) - total_workspace_bytes % sizeof(IType));
           Tensor<gpu, 1, char> workspace = ctx.requested[0]
-              .get_space_typed<gpu, 1, char>(Shape1(total_workspace_bytes), s);
+              .get_space_typed<gpu, 1, char>(Shape1(total_workspace_bytes), s
+#if MXNET_USE_MEMORY_PROFILER
+                , "workspace:dot"
+#endif // MXNET_USE_MEMORY_PROFILER
+                  );
           original_idx_ptr = reinterpret_cast<IType*>(workspace.dptr_);
           csc_indices_ptr = reinterpret_cast<IType*>(workspace.dptr_ + original_idx_bytes);
           csc_cols_ptr = reinterpret_cast<IType*>(workspace.dptr_ + original_idx_bytes +
@@ -665,7 +669,11 @@ inline void DotCsrDnsRspImpl(const OpContext& ctx,
                                          lookup_table_bytes + total_temp_bytes;
           // request temp space
           Tensor<gpu, 1, char> workspace = ctx.requested[0]
-              .get_space_typed<gpu, 1, char>(Shape1(total_workspace_bytes), s);
+              .get_space_typed<gpu, 1, char>(Shape1(total_workspace_bytes), s
+#if MXNET_USE_MEMORY_PROFILER
+                , "workspace:dot"
+#endif // MXNET_USE_MEMORY_PROFILER
+                  );
           // update individual temp space ptrs
           nnr_ptr = reinterpret_cast<size_t*>(workspace.dptr_);
           original_idx_ptr = reinterpret_cast<IType*>(workspace.dptr_ + nnr_bytes);
@@ -801,7 +809,11 @@ inline void DotCsrRspRspImpl(const OpContext& ctx,
                                           mshadow::Stream<gpu>::GetStream(s));
             mshadow::Tensor<gpu, 1, char> workspace = ctx.requested[0]
                 .get_space_typed<gpu, 1, char>(Shape1(num_cols_l * sizeof(dim_t) +
-                                                      temp_storage_bytes), s);
+                                                      temp_storage_bytes), s,
+#if MXNET_USE_MEMORY_PROFILER
+                                                    , "workspace:dot"                                               
+#endif // MXNET_USE_MEMORY_PROFILER
+                                               );
             row_flg_out = reinterpret_cast<dim_t*>(workspace.dptr_);
             d_temp_storage = workspace.dptr_ + num_cols_l*sizeof(dim_t);
             num_threads = num_cols_l;
@@ -913,7 +925,11 @@ inline void DotCsrRspDnsImpl(const OpContext& ctx,
             // TODO: Consider implementing a vector kernel for SpMV (similar to DotCsrDnsDns)
             // Alloc temp storage for row_flg array
             RType* row_flg_r = ctx.requested[0]
-                .get_space_typed<gpu, 1, RType>(mshadow::Shape1(rhs.shape()[0]), s).dptr_;
+                .get_space_typed<gpu, 1, RType>(mshadow::Shape1(rhs.shape()[0]), s
+#if MXNET_USE_MEMORY_PROFILER
+                  , "workspace:dot"
+#endif // MXNET_USE_MEMORY_PROFILER
+                    ).dptr_;
             num_threads = rhs.shape()[0];
             Kernel<set_zero, gpu>::Launch(s, num_threads, row_flg_r);
             // Set row_flg index array
@@ -1012,7 +1028,11 @@ inline void DotDnsCsrDnsImpl(const OpContext& ctx, const gpu& gpu_dev,
             csc_indptr_bytes + csc_data_bytes + temp_storage_bytes;
           total_workspace_bytes += (sizeof(IType) - total_workspace_bytes % sizeof(IType));
           Tensor<gpu, 1, char> workspace = ctx.requested[0]
-              .get_space_typed<gpu, 1, char>(Shape1(total_workspace_bytes), s);
+              .get_space_typed<gpu, 1, char>(Shape1(total_workspace_bytes), s
+#if MXNET_USE_MEMORY_PROFILER
+                , "workspace:dot"
+#endif // MXNET_USE_MEMORY_PROFILER
+                  );
           original_idx_ptr = reinterpret_cast<IType*>(workspace.dptr_);
           csc_indices_ptr = reinterpret_cast<IType*>(workspace.dptr_ + original_idx_bytes);
           csc_cols_ptr = reinterpret_cast<IType*>(workspace.dptr_ + original_idx_bytes +

@@ -532,7 +532,11 @@ void LaOpBackward(const nnvm::NodeAttrs& attrs,
     for ( int i = 0; i < onum; ++i ) {
       if ( req[i] == kAddTo ) {
         tspace[i].dptr_ = ctx.requested[0]
-                             .get_space_typed<xpu, 1, OType>(Shape1(outputs[i].Size()), s).dptr_;
+            .get_space_typed<xpu, 1, OType>(Shape1(outputs[i].Size()), s
+#if MXNET_USE_MEMORY_PROFILER
+              , "workspace:la_op"
+#endif // MXNET_USE_MEMORY_PROFILER             
+                ).dptr_;
       }
     }
     LaOpCaller<xpu, OType, idim, odim, inum, onum, laop>::op(inputs, tspace,
@@ -585,7 +589,11 @@ void LaOpGemmBackward(const nnvm::NodeAttrs& attrs,
     for ( int i = 0; i < onum; ++i ) {
       if ( req[i] == kAddTo ) {
         tspace[i].dptr_ = ctx.requested[0]
-                             .get_space_typed<xpu, 1, OType>(Shape1(outputs[i].Size()), s).dptr_;
+            .get_space_typed<xpu, 1, OType>(Shape1(outputs[i].Size()), s
+#if MXNET_USE_MEMORY_PROFILER
+              , "workspace:la_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+                ).dptr_;
       }
     }
     if (axis == -2 || axis == inputs[0].ndim()-2) {
@@ -640,7 +648,11 @@ void LaOpBackwSyevd(const nnvm::NodeAttrs& attrs,
     std::vector<TBlob> tspace(outputs);
     if ( req[0] == kAddTo ) {
       tspace[0].dptr_ = ctx.requested[0]
-        .get_space_typed<xpu, 1, OType>(Shape1(outputs[0].Size()), s).dptr_;
+        .get_space_typed<xpu, 1, OType>(Shape1(outputs[0].Size()), s
+#if MXNET_USE_MEMORY_PROFILER
+          , "workspace:la_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+            ).dptr_;
     }
     laop::op(inputs[0].FlatToKD<xpu, 3, OType>(s),
              inputs[1].FlatToKD<xpu, 2, OType>(s),

@@ -108,7 +108,11 @@ void CastStorageDnsRspGPUImpl_(const OpContext& ctx,
   CHECK_GT(ctx.requested.size(), 0);
   // The resource is located at the end of requested resource array
   mshadow::Tensor<gpu, 1, char> workspace = ctx.requested[ctx.requested.size() - 1]
-    .get_space_typed<gpu, 1, char>(Shape1(num_rows * sizeof(RType) + temp_storage_bytes), s);
+    .get_space_typed<gpu, 1, char>(Shape1(num_rows * sizeof(RType) + temp_storage_bytes), s
+#if MXNET_USE_MEMORY_PROFILER
+      , "workspace:cast_storage"
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
 
   row_flg = reinterpret_cast<RType *>(workspace.dptr_);
   d_temp_storage = workspace.dptr_ + num_rows * sizeof(RType);
@@ -543,7 +547,11 @@ inline void CastStorageDnsCsrImpl(const OpContext& ctx,
        CHECK_GT(ctx.requested.size(), 0);
        // The resource is located at the end of requested resource array
        auto workspace = ctx.requested[ctx.requested.size() - 1].
-          get_space_typed<gpu, 1, char>(Shape1(temp_storage_bytes), s);
+          get_space_typed<gpu, 1, char>(Shape1(temp_storage_bytes), s
+#if MXNET_USE_MEMORY_PROFILER
+            , "workspace:cast_range"
+#endif // MXNET_USE_MEMORY_PROFILER
+              );
        d_temp_storage = workspace.dptr_;
 
         // Compute indptr through inclusive prefix sum

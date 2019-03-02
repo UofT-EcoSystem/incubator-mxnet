@@ -129,7 +129,11 @@ void RavelForward(const nnvm::NodeAttrs& attrs,
   const TShape& shape = nnvm::get<RavelParam>(attrs.parsed).shape;
   std::vector<index_t> buffer(shape.data(), shape.data()+shape.ndim());
   Tensor<xpu, 1, index_t> work
-    = ctx.requested[0].get_space_typed<xpu, 1, index_t>(Shape1(shape.ndim()), s);
+    = ctx.requested[0].get_space_typed<xpu, 1, index_t>(Shape1(shape.ndim()), s
+#if MXNET_USE_MEMORY_PROFILER
+      , "workspace:ravel"
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
   Copy(work, Tensor<cpu, 1, index_t>(&buffer[0], Shape1(buffer.size()), 0), s);
   MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, OType, {
     Tensor<xpu, 1, OType> in = inputs[0].FlatTo1D<xpu, OType>(s);
@@ -150,7 +154,11 @@ void UnravelForward(const nnvm::NodeAttrs& attrs,
   const TShape& shape = nnvm::get<RavelParam>(attrs.parsed).shape;
   std::vector<index_t> buffer(shape.data(), shape.data()+shape.ndim());
   Tensor<xpu, 1, index_t> work
-    = ctx.requested[0].get_space_typed<xpu, 1, index_t>(Shape1(shape.ndim()), s);
+    = ctx.requested[0].get_space_typed<xpu, 1, index_t>(Shape1(shape.ndim()), s
+#if MXNET_USE_MEMORY_PROFILER
+      , "workspace:ravel"
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
   Copy(work, Tensor<cpu, 1, index_t>(&buffer[0], Shape1(buffer.size()), 0), s);
   MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, OType, {
     Tensor<xpu, 1, OType> in = inputs[0].FlatTo1D<xpu, OType>(s);

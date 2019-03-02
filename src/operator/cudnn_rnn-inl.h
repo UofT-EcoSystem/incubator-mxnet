@@ -168,7 +168,11 @@ class CuDNNRNNOp : public Operator{
     int temp_size = workspace_size_;
     Tensor<gpu, 1, DType> temp_space =
       ctx.requested[rnn_enum::kTempSpace].get_space_typed<gpu, 1, DType>(
-                              mshadow::Shape1(temp_size), s);
+                              mshadow::Shape1(temp_size), s
+#if MXNET_USE_MEMORY_PROFILER
+                            , "workspace:cudnn_rnn"
+#endif // MXNET_USE_MEMORY_PROFILER
+                              );
     if (ctx.is_train) {
       CUDNN_CALL(cudnnRNNForwardTraining(s->dnn_handle_,
                                          rnn_desc_,
@@ -282,7 +286,11 @@ class CuDNNRNNOp : public Operator{
     int temp_size = workspace_size_;
     Tensor<gpu, 1, DType> temp_space =
       ctx.requested[rnn_enum::kTempSpace].get_space_typed<gpu, 1, DType>(
-                              mshadow::Shape1(temp_size), s);
+                              mshadow::Shape1(temp_size), s
+#if MXNET_USE_MEMORY_PROFILER
+                            , "workspace:cudnn_rnn"
+#endif // MXNET_USE_MEMORY_PROFILER
+                              );
     CUDNN_CALL(cudnnRNNBackwardData(s->dnn_handle_,
                                     rnn_desc_,
                                     param_.seq_length_,

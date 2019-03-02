@@ -1990,7 +1990,11 @@ void ReverseOpForward(const nnvm::NodeAttrs& attrs,
 #ifdef __CUDACC__
   mshadow::Tensor<xpu, 1, uint8_t> workspace =
     ctx.requested[0].get_space_typed<xpu, 1, uint8_t>(
-      mshadow::Shape1(reverse_index * sizeof(index_t) * 2), s);
+      mshadow::Shape1(reverse_index * sizeof(index_t) * 2), s
+#if MXNET_USE_MEMORY_PROFILER
+    , "workspace:matrix_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
 
   auto stride_workspace = workspace.dptr_;
   auto trailing_workspace = workspace.dptr_ + reverse_index * sizeof(index_t);
@@ -2349,7 +2353,11 @@ void DepthToSpaceOpForward(const nnvm::NodeAttrs& attrs,
   int block = param.block_size;
 
   mshadow::Tensor<xpu, 1, char> workspace =
-    ctx.requested[0].get_space_typed<xpu, 1, char>(mshadow::Shape1(sizeof(int32_t) * 10), s);
+    ctx.requested[0].get_space_typed<xpu, 1, char>(mshadow::Shape1(sizeof(int32_t) * 10), s
+#if MXNET_USE_MEMORY_PROFILER
+      , "workspace:matrix_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
   char* workspace_curr_ptr = workspace.dptr_;
   int32_t* offset_arr = reinterpret_cast<int32_t*>(workspace_curr_ptr);
   int32_t* size = reinterpret_cast<int32_t*>(workspace_curr_ptr + sizeof(int32_t) * 6);
@@ -2500,7 +2508,11 @@ void SpaceToDepthOpForward(const nnvm::NodeAttrs& attrs,
   int block = param.block_size;
 
   mshadow::Tensor<xpu, 1, char> workspace =
-    ctx.requested[0].get_space_typed<xpu, 1, char>(mshadow::Shape1(sizeof(int32_t) * 10), s);
+    ctx.requested[0].get_space_typed<xpu, 1, char>(mshadow::Shape1(sizeof(int32_t) * 10), s
+#if MXNET_USE_MEMORY_PROFILER
+      , "workspace:matrix_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
   char* workspace_curr_ptr = workspace.dptr_;
   int32_t* offset_arr = reinterpret_cast<int32_t*>(workspace_curr_ptr);
   int32_t* size = reinterpret_cast<int32_t*>(workspace_curr_ptr + sizeof(int32_t) * 6);

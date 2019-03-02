@@ -163,7 +163,11 @@ void SparseEmbeddingOpForwardRspImpl<gpu>(const OpContext& ctx,
     DType* data_ptr = data.dptr<DType>();
     size_t data_size = data.shape_.Size();
     Tensor<gpu, 1, char> workspace = ctx.requested[0]
-        .get_space_typed<gpu, 1, char>(Shape1(1), s);
+        .get_space_typed<gpu, 1, char>(Shape1(1), s
+#if MXNET_USE_MEMORY_PROFILER
+      , "workspace:indexing_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
     char* is_valid_ptr = reinterpret_cast<char*>(workspace.dptr_);
     bool is_valid = CheckIndexOutOfBound(s, data_ptr, data_size, min, max, is_valid_ptr);
     CHECK(is_valid) << "SparseEmbedding input contains data out of bound";
@@ -217,7 +221,11 @@ void SparseEmbeddingDeterministicKernelLaunch(const OpContext& ctx,
   // request resource and split it. layout is:
   // lookup_table, sorted_data, original_idx, temp_storage
   Tensor<gpu, 1, char> workspace = ctx.requested[0]
-      .get_space_typed<gpu, 1, char>(Shape1(total_storage_bytes), s);
+      .get_space_typed<gpu, 1, char>(Shape1(total_storage_bytes), s
+#if MXNET_USE_MEMORY_PROFILER
+        , "workspace:indexing_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+          );
   lookup_table = reinterpret_cast<dim_t*>(workspace.dptr_);
   sorted_data = reinterpret_cast<dim_t*>(workspace.dptr_ + lookup_table_bytes);
   original_idx = reinterpret_cast<dim_t*>(workspace.dptr_ + lookup_table_bytes +
@@ -350,7 +358,11 @@ inline void SparseEmbeddingOpBackwardRspImpl<gpu>(const bool deterministic,
                                       Stream<gpu>::GetStream(s));
         Tensor<gpu, 1, char> workspace = ctx.requested[0]
             .get_space_typed<gpu, 1, char>(Shape1(num_rows * sizeof(dim_t) +
-                                           temp_storage_bytes), s);
+                                           temp_storage_bytes), s
+#if MXNET_USE_MEMORY_PROFILER
+                                         , "workspace:indexing_op"        
+#endif // MXNET_USE_MEMORY_PROFILER
+                                           );
         prefix_sum = reinterpret_cast<dim_t*>(workspace.dptr_);
         d_temp_storage = workspace.dptr_ + num_rows*sizeof(dim_t);
         num_threads = num_rows;

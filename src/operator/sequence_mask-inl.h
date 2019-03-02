@@ -195,7 +195,11 @@ class SequenceMaskOp : public Operator {
       if (req[seq_mask::kData] == kAddTo) {
         Tensor<xpu, 3, DType> out_g_temp =
             ctx.requested[seq_mask::kTempSpace].get_space_typed<xpu, 3, DType>(
-                s3, s);
+                s3, s
+#if MXNET_MEMORY_PROFILER
+              , "workspace:sequence_mask"
+#endif // MXNET_MEMORY_PROFILER
+                );
         out_g_temp = F<mshadow_op::identity>(out_g);
         out_g = out_g_temp;
         sequence_mask(out_g, indices, kWriteInplace, s, DType(0.));

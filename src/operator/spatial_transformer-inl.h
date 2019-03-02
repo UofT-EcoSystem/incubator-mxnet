@@ -90,7 +90,11 @@ class SpatialTransformerOp : public Operator {
     Tensor<xpu, 3, DType> loc = in_data[st::kLoc].get_with_shape<xpu, 3, DType>(loc_shape, s);
     Tensor<cpu, 2, DType> workspace =
           ctx.requested[st::kTempSpace].get_host_space_typed<2, DType>(
-          grid_dst.shape_);
+          grid_dst.shape_
+#if MXNET_USE_MEMORY_PROFILER
+        , "workspace:spatial_transformer"
+#endif // MXNET_USE_MEMORY_PROFILER
+          );
     for (index_t i = 1; i <= workspace.size(1); i++) {
       // grid dst coordinate is (x, y, 1)
       workspace[0][i-1] = -1.0 + (i-1) % param_.target_shape[1] * 2.0 /

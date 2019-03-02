@@ -100,7 +100,11 @@ void ElemwiseBinaryOp::RspRspOp(mshadow::Stream<gpu> *s,
                                       mshadow::Stream<gpu>::GetStream(s));
         size_t workspace_bytes = common_row_table_bytes + temp_storage_bytes;
         Tensor<gpu, 1, char> workspace =
-          ctx.requested[0].get_space_typed<gpu, 1, char>(Shape1(workspace_bytes), s);
+          ctx.requested[0].get_space_typed<gpu, 1, char>(Shape1(workspace_bytes), s
+#if MXNET_USE_MEMORY_PROFILER
+            , "workspace:elementwise_binary_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+              );
         common_row_table = reinterpret_cast<IType*>(workspace.dptr_);
         temp_storage_ptr = workspace.dptr_ + common_row_table_bytes;
         mxnet_op::Kernel<set_zero, gpu>::Launch(s, num_rows, common_row_table);

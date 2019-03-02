@@ -547,7 +547,11 @@ BinaryBroadcastBackwardUseNone(const nnvm::NodeAttrs& attrs,
         size_t workspace_size = new_oshape.Size();
         Tensor<cpu, 1, char> workspace =
             ctx.requested[0].get_space_typed<cpu, 1, char>(
-                Shape1(workspace_size * sizeof(index_t)), s);
+                Shape1(workspace_size * sizeof(index_t)), s
+#if MXNET_USE_MEMORY_PROFILER
+              , "workspace:elementwise_binary_broadcast"
+#endif // MXNET_USE_MEMORY_PROFILER
+                );
         ReduceWithExtraMem<red::sum, NDim, DType, LOP>(s, lhs, req[0], workspace, out);
         ReduceWithExtraMem<red::sum, NDim, DType, ROP>(s, rhs, req[1], workspace, out);
       });
@@ -586,7 +590,11 @@ inline void BinaryBroadcastBackwardUseInImpl(const OpContext& ctx,
       s, rgrad.shape_, req[1], ograd.shape_, lhs.shape_, rhs.shape_);
   size_t workspace_size = std::max(workspace_size_l, workspace_size_r);
   Tensor<xpu, 1, char> workspace =
-      ctx.requested[0].get_space_typed<xpu, 1, char>(Shape1(workspace_size), s);
+      ctx.requested[0].get_space_typed<xpu, 1, char>(Shape1(workspace_size), s
+#if MXNET_USE_MEMORY_PROFILER
+        , "workspace:elementwise_binary_broadcast"
+#endif // MXNET_USE_MEMORY_PROFILER
+          );
   Reduce<red::sum, ndim, DType, op::mshadow_op::mul, LOP>(s, lgrad, req[0], workspace,
     ograd, lhs, rhs);
   Reduce<red::sum, ndim, DType, op::mshadow_op::mul, ROP>(s, rgrad, req[1], workspace,

@@ -97,7 +97,11 @@ void SGDMomStdUpdateDnsRspDnsImpl<gpu>(const SGDMomParam& param,
                                       Stream<gpu>::GetStream(s));
         Tensor<gpu, 1, char> workspace = ctx.requested[0]
           .get_space_typed<gpu, 1, char>(Shape1(num_rows * sizeof(nnvm::dim_t) +
-                                         temp_storage_bytes), s);
+                                         temp_storage_bytes), s
+#if MXNET_USE_MEMORY_PROFILER      
+                                       , "workspace:optimizer_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+                                         );
         prefix_sum = reinterpret_cast<nnvm::dim_t*>(workspace.dptr_);
         d_temp_storage = workspace.dptr_ + num_rows*sizeof(nnvm::dim_t);
         // mark row flags
@@ -194,7 +198,11 @@ void AdamStdUpdateDnsRspDnsImpl<gpu>(const AdamParam& param,
                                       Stream<gpu>::GetStream(s));
         Tensor<gpu, 1, char> workspace = ctx.requested[0]
           .get_space_typed<gpu, 1, char>(Shape1(num_rows * sizeof(nnvm::dim_t) +
-                                         temp_storage_bytes), s);
+                                         temp_storage_bytes), s
+#if MXNET_USE_MEMORY_PROFILER
+                                       , "workspace:optimizer_op"      
+#endif // MXNET_USE_MEMORY_PROFILER
+                                         );
         prefix_sum = reinterpret_cast<nnvm::dim_t*>(workspace.dptr_);
         d_temp_storage = workspace.dptr_ + num_rows*sizeof(nnvm::dim_t);
         // mark row flags

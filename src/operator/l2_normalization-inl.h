@@ -168,7 +168,11 @@ class L2NormalizationOp : public Operator {
         .get_with_shape<xpu, 2, DType>(dshape, s);
       Tensor<xpu, 1, DType> norm = out_data[l2_normalization::kNorm].get<xpu, 1, DType>(s);
       Tensor<xpu, 1, DType> temp = ctx.requested[l2_normalization::kTempSpace]
-        .get_space_typed<xpu, 1, DType>(mshadow::Shape1(data.shape_[0]), s);
+        .get_space_typed<xpu, 1, DType>(mshadow::Shape1(data.shape_[0]), s
+#if MXNET_USE_MEMORY_PROFILER
+          , "workspace:l2_normalization"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
       temp = sumall_except_dim<0>(grad_out * data);
       Assign(grad_in, req[l2_normalization::kData],
         (grad_out - data * broadcast<0>(temp, data.shape_)) /
@@ -187,7 +191,11 @@ class L2NormalizationOp : public Operator {
       Tensor<xpu, 2, DType> norm = out_data[l2_normalization::kNorm]
         .get_with_shape<xpu, 2, DType>(norm_shape, s);
       Tensor<xpu, 2, DType> temp = ctx.requested[l2_normalization::kTempSpace]
-        .get_space_typed<xpu, 2, DType>(mshadow::Shape2(data.shape_[0], data.shape_[2]), s);
+        .get_space_typed<xpu, 2, DType>(mshadow::Shape2(data.shape_[0], data.shape_[2]), s
+#if MXNET_USE_MEMORY_PROFILER
+          , "workspace:l2_normalization"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
       temp = reduce_with_axis<red::sum, false>(grad_out * data, 1);
       Assign(grad_in, req[l2_normalization::kData],
         (grad_out - data * broadcast_with_axis(temp, 0, orig_shape[1])) /
@@ -206,7 +214,11 @@ class L2NormalizationOp : public Operator {
       Tensor<xpu, 2, DType> norm = out_data[l2_normalization::kNorm]
         .get_with_shape<xpu, 2, DType>(norm_shape, s);
       Tensor<xpu, 2, DType> temp = ctx.requested[l2_normalization::kTempSpace]
-        .get_space_typed<xpu, 2, DType>(mshadow::Shape2(data.shape_[0], data.shape_[1]), s);
+        .get_space_typed<xpu, 2, DType>(mshadow::Shape2(data.shape_[0], data.shape_[1]), s
+#if MXNET_USE_MEMORY_PROFILER
+          , "workspace:l2_normalization"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
       temp = reduce_with_axis<red::sum, false>(grad_out * data, 2);
       Assign(grad_in, req[l2_normalization::kData],
         (grad_out - data * broadcast_with_axis(temp, 1, dshape[2])) /

@@ -412,7 +412,11 @@ class RNNOp : public Operator{
     const size_t workspace_size = GetRNNWorkspaceSize(param_.seq_length_, param_.batch_size_,
                                                       param_.state_size, direction, param_.mode);
     Tensor<cpu, 1, DType> workspace = ctx.requested[rnn_enum::kTempSpace]
-        .get_space_typed<cpu, 1, DType>(Shape1(workspace_size), s);
+        .get_space_typed<cpu, 1, DType>(Shape1(workspace_size), s
+#if MXNET_USE_MEMORY_PROFILER
+          , "workspace:rnn"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
 
     if (ctx.is_train) {
       const size_t r_size = GetRNNReserveSpaceSize(param_.num_layers, direction,
@@ -542,7 +546,11 @@ class RNNOp : public Operator{
     const size_t workspace_size = GetRNNWorkspaceSize(param_.seq_length_, param_.batch_size_,
                                                       param_.state_size, direction, param_.mode);
     Tensor<cpu, 1, DType> workspace = ctx.requested[rnn_enum::kTempSpace]
-        .get_space_typed<cpu, 1, DType>(Shape1(workspace_size), s);
+        .get_space_typed<cpu, 1, DType>(Shape1(workspace_size), s
+#if MXNET_USE_MEMORY_PROFILER
+          , "workspace:rnn"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
 
     size_t r_size = GetRNNReserveSpaceSize(param_.num_layers, direction,
                                            param_.seq_length_, param_.batch_size_,

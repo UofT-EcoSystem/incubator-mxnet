@@ -73,7 +73,11 @@ void HistogramForwardImpl<cpu>(const OpContext& ctx,
   using namespace mxnet_op;
   mshadow::Stream<cpu> *s = ctx.get_stream<cpu>();
   Tensor<cpu, 1, int> bin_indices =
-    ctx.requested[0].get_space_typed<cpu, 1, int>(Shape1(in_data.Size()), s);
+    ctx.requested[0].get_space_typed<cpu, 1, int>(Shape1(in_data.Size()), s
+#if MXNET_USE_MEMORY_PROFILER
+      , "workspace:histogram"
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
   const int bin_cnt = out_data.Size();
 
   MSHADOW_TYPE_SWITCH(in_data.type_flag_, DType, {
@@ -101,7 +105,11 @@ void HistogramForwardImpl<cpu>(const OpContext& ctx,
   using namespace mxnet_op;
   mshadow::Stream<cpu> *s = ctx.get_stream<cpu>();
   Tensor<cpu, 1, int> bin_indices =
-    ctx.requested[0].get_space_typed<cpu, 1, int>(Shape1(in_data.Size()), s);
+    ctx.requested[0].get_space_typed<cpu, 1, int>(Shape1(in_data.Size()), s
+#if MXNET_USE_MEMORY_PROFILER
+      , "workspace:histogram"
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
 
   MSHADOW_TYPE_SWITCH(in_data.type_flag_, DType, {
     Kernel<FillBinBoundsKernel, cpu>::Launch(

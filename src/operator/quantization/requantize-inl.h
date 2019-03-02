@@ -128,7 +128,11 @@ void RequantizeForward(const nnvm::NodeAttrs& attrs,
         s, inputs[0].shape_, TShape({1}), &src_shape, &dst_shape);
     Tensor<xpu, 1, char> temp_space =
       ctx.requested[0].get_space_typed<xpu, 1, char>(
-          Shape1(2*actual_float_size+2*actual_quantized_size+temp_reduce_size), s);
+          Shape1(2*actual_float_size+2*actual_quantized_size+temp_reduce_size), s
+#if MXNET_USE_MEMORY_PROFILER
+        , "workspace:requantize"
+#endif // MXNET_USE_MEMORY_PROFILER
+          );
     Tensor<xpu, 1, float> actual_min_float(
         reinterpret_cast<float*>(temp_space.dptr_), Shape1(1), s);
     Tensor<xpu, 1, float> actual_max_float(

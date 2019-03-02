@@ -52,7 +52,11 @@ BinaryBroadcastBackwardUseNone(const nnvm::NodeAttrs& attrs,
         size_t workspace_size = new_oshape.Size();
         Tensor<gpu, 1, char> workspace =
             ctx.requested[0].get_space_typed<gpu, 1, char>(
-                Shape1(workspace_size * sizeof(index_t)), s);
+                Shape1(workspace_size * sizeof(index_t)), s
+#if MXNET_USE_MEMORY_PROFILER
+              , "workspace:elementwise_binary_broadcast_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+                );
         Reduce<red::sum, NDim, DType, LOP>(s, lhs, req[0], workspace, out);
         Reduce<red::sum, NDim, DType, ROP>(s, rhs, req[1], workspace, out);
       });

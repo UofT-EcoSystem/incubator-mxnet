@@ -260,7 +260,11 @@ struct gelqf {
     // of the batch
     int ws_size(linalg_gelqf_workspace_query(Q[0], s));
     Tensor<xpu, 1, DType> work = ctx.requested[0]
-      .get_space_typed<xpu, 1, DType>(Shape1(ws_size), s);
+      .get_space_typed<xpu, 1, DType>(Shape1(ws_size), s
+#if MXNET_USE_MEMORY_PROFILER
+        , "workspace:la_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+          );
     // Loop over items in batch
     linalg_check_batch_size(A.size(0), Q.size(0), L.size(0));
     int m = Q.size(1);  // Q[i] has shape (m, n)
@@ -328,7 +332,11 @@ struct syevd {
     // Reserve workspace (size determined by query)
     int lwork(linalg_syevd_workspace_query(U[0], L[0], s));
     Tensor<xpu, 1, DType> work = ctx.requested[0]
-      .get_space_typed<xpu, 1, DType>(Shape1(lwork), s);
+      .get_space_typed<xpu, 1, DType>(Shape1(lwork), s
+#if MXNET_USE_MEMORY_PROFILER
+        , "workspace:la_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+          );
     // Loop over items in batch
     for (index_t i = 0; i < U.size(0); ++i) {
       linalg_syevd(U[i], L[i], work, s);
@@ -584,7 +592,11 @@ struct gelqf_backward {
     if (dQ.dptr_ != dA.dptr_) Copy(dA, dQ, s);
     // Need temporal space, same shape as dL
     Tensor<xpu, 3, DType> tempM = ctx.requested[0]
-      .get_space_typed<xpu, 3, DType>(dL.shape_, s);
+      .get_space_typed<xpu, 3, DType>(dL.shape_, s
+#if MXNET_USE_MEMORY_PROFILER
+        , "workspace:la_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+          );
     Copy(tempM, dL, s);
     trmm::op(L, tempM, DType(1.0), false, true, s);
     gemm::op(dA, Q, tempM, DType(-1.0), DType(1.0), false, true, s);
@@ -655,7 +667,11 @@ struct syevd_backward {
     Stream<xpu> *s = ctx.get_stream<xpu>();
     // Need temporal space, same shape as dA
     Tensor<xpu, 3, DType> tempM = ctx.requested[0]
-      .get_space_typed<xpu, 3, DType>(dA.shape_, s);
+      .get_space_typed<xpu, 3, DType>(dA.shape_, s
+#if MXNET_USE_MEMORY_PROFILER
+        , "workspace:la_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+          );
     // This copy is just to make sure there are no invalid values (NaN, infinity) in
     // tempM. gemm multiplies tempM with 0, instead of setting entries to 0.
     Copy(tempM, dU, s);

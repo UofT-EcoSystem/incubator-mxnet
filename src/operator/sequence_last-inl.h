@@ -167,7 +167,11 @@ class SequenceLastOp : public Operator {
         param_.use_sequence_length
             ? in_data[seq_last::kSequenceLength].get<xpu, 1, DType>(s)
             : ctx.requested[seq_last::kTempSpace]
-                  .get_space_typed<xpu, 1, DType>(Shape1(batch), s);
+                  .get_space_typed<xpu, 1, DType>(Shape1(batch), s
+#if MXNET_USE_MEMORY_PROFILER
+                    , "workspace:sequence_last"
+#endif // MXNET_USE_MEMORY_PROFILER
+                      );
     if (!param_.use_sequence_length) indices = max_seq_len;
 
     sequence_last(data, out, indices, req[seq_last::kOut], s);
@@ -210,7 +214,11 @@ class SequenceLastOp : public Operator {
         param_.use_sequence_length
             ? in_data[seq_last::kSequenceLength].get<xpu, 1, DType>(s)
             : ctx.requested[seq_last::kTempSpace]
-                  .get_space_typed<xpu, 1, DType>(Shape1(batch), s);
+                  .get_space_typed<xpu, 1, DType>(Shape1(batch), s
+#if MXNET_USE_MEMORY_PROFILER
+                    , "workspace:sequence_last"                      
+#endif // MXNET_USE_MEMORY_PROFILER
+                      );
 
     if (req[seq_last::kData] == kWriteTo) data_grad = 0.0f;
     sequence_last_grad(data_grad, output_grad, indices, s);

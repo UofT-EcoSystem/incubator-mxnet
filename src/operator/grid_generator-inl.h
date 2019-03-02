@@ -117,7 +117,11 @@ class GridGeneratorOp : public Operator {
         // grid_dst : (2, H, W)
         Tensor<xpu, 3, DType> grid_dst = out_data[grid::kGridDst].get<xpu, 3, DType>(s);
         Tensor<xpu, 2, DType> workspace = ctx.requested[grid::kTempSpace]
-          .get_space_typed<xpu, 2, DType>(Shape2(2, 1), s);
+          .get_space_typed<xpu, 2, DType>(Shape2(2, 1), s
+#if MXNET_USE_MEMORY_PROFILER
+            , "workspace:grid_generator"
+#endif // MXNET_USE_MEMORY_PROFILER
+              );
         grid_dst[0] = repmat(range<DType>(0, data.size(3)), data.size(2));
         grid_dst[1] = reshape(range<DType>(0, data.size(2), 1, data.size(3)),
                               Shape2(data.size(2), data.size(3)));
@@ -164,7 +168,11 @@ class GridGeneratorOp : public Operator {
         Tensor<xpu, 4, DType> grad = out_grad[grid::kOut].get<xpu, 4, DType>(s);
         Tensor<xpu, 4, DType> gdata = in_grad[grid::kData].get<xpu, 4, DType>(s);
         Tensor<xpu, 2, DType> workspace = ctx.requested[grid::kTempSpace]
-          .get_space_typed<xpu, 2, DType>(Shape2(2, 1), s);
+          .get_space_typed<xpu, 2, DType>(Shape2(2, 1), s
+#if MXNET_USE_MEMORY_PROFILER
+            , "workspace:grid_generator"
+#endif // MXNET_USE_MEMORY_PROFILER
+              );
         workspace[0] = scalar<DType>((DType(gdata.size(3)) - 1.0) / 2.0);
         workspace[1] = scalar<DType>((DType(gdata.size(2)) - 1.0) / 2.0);
         Assign(gdata, req[grid::kData],

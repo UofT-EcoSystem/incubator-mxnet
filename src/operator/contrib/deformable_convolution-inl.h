@@ -127,7 +127,7 @@ class DeformableConvolutionOp : public Operator {
     Tensor<xpu, 1, DType> workspace = ctx.requested[conv::kTempSpace]
       .get_space_typed<xpu, 1, DType>(Shape1(col_buffer_size_), s
 #if MXNET_USE_MEMORY_PROFILER
-          "workspace:deformable_convolution"
+        , "workspace:deformable_convolution"
 #endif // MXNET_USE_MEMORY_PROFILER
           );
     // calculate the shape of col_buffer

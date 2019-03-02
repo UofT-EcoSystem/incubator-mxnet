@@ -103,7 +103,11 @@ class MakeLossOp : public Operator {
     if (param_.normalization == make_loss_enum::kValid) {
       Tensor<xpu, 2, DType> data = in_data[make_loss_enum::kData].FlatTo2D<xpu, DType>(s);
       Tensor<xpu, 1, DType> temp = ctx.requested[make_loss_enum::kTempSpace]
-        .get_space_typed<xpu, 1, DType>(mshadow::Shape1(1), s);
+        .get_space_typed<xpu, 1, DType>(mshadow::Shape1(1), s
+#if MXNET_USE_MEMORY_PROFILER
+          , "workspace:make_loss"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
       temp = sumall_except_dim<0>(reduce_keepdim<red::sum, false>(
         F<mshadow_op::threshold>(ScalarExp<DType>(param_.valid_thresh), data), 0));
       temp = F<mshadow_op::maximum>(ScalarExp<DType>(1.f), temp);  // avoid zero

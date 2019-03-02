@@ -492,7 +492,11 @@ void ReduceAxesComputeImpl(const OpContext& ctx,
       size_t workspace_size = broadcast::ReduceWorkspaceSize<NDim, DType>(
           s, out_data.shape_, req[0], in_data.shape_);
       Tensor<xpu, 1, char> workspace =
-          ctx.requested[0].get_space_typed<xpu, 1, char>(Shape1(workspace_size), s);
+          ctx.requested[0].get_space_typed<xpu, 1, char>(Shape1(workspace_size), s
+#if MXNET_USE_MEMORY_PROFILER
+            , "workspace:broadcast_reduce_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+              );
       broadcast::Reduce<reducer, NDim, DType, OP>(
           s, out_data, req[0], workspace, in_data);
       if (normalize) {
@@ -677,7 +681,11 @@ void ReduceCsrImpl(mshadow::Stream<xpu>* s, const OpContext& ctx,
             dim_t seg_len = (out_data_size + num_threads - 1) / num_threads;
             mshadow::Tensor<xpu, 1, DType> workspace =
                 ctx.requested[0].get_space_typed<xpu, 1, DType>(
-                    Shape1(2 * out_data_size), s);
+                    Shape1(2 * out_data_size), s
+#if MXNET_USE_MEMORY_PROFILER
+                  , "workspace:broadcast_reduce_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+                    );
             mshadow::Tensor<xpu, 1, DType> sum(
                 reinterpret_cast<DType*>(workspace.dptr_),
                 Shape1(out_data_size));
