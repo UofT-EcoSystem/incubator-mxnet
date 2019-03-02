@@ -148,7 +148,11 @@ inline void SparseEmbeddingOpBackwardRspImpl<cpu>(const bool deterministic,
           FillZerosRspImpl(s, output);
           return;
         }
-        output.CheckAndAlloc({Shape1(nnr)});
+        output.CheckAndAlloc({Shape1(nnr)}
+#if MXNET_USE_MEMORY_PROFILER
+          , "placeholder:indexing_op:output"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
         RType* grad_row_idx = output.aux_data(kIdx).dptr<RType>();
         // fill row_idx array of output matrix, using the row_flg values
         Kernel<FillRspRowIdxKernel, cpu>::Launch(s, num_rows,

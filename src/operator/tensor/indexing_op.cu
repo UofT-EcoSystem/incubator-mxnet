@@ -261,7 +261,11 @@ void SparseEmbeddingDeterministicKernelLaunch(const OpContext& ctx,
             &temp_storage_tensor, 0, num_bits);
 
   // compute unique row ids based on sorted values.
-  output.CheckAndAllocAuxData(kIdx, Shape1(data_size + 1));
+  output.CheckAndAllocAuxData(kIdx, Shape1(data_size + 1)
+#if MXNET_USE_MEMORY_PROFILER
+    , "aux:indexing_op:output:idx"
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
 
   // fill row_idx array of output matrix, using the row_flg values
   RType* grad_row_idx = output.aux_data(kIdx).dptr<RType>();
@@ -272,7 +276,11 @@ void SparseEmbeddingDeterministicKernelLaunch(const OpContext& ctx,
   CUDA_CALL(cudaMemcpy(&nnr, grad_row_idx + data_size, sizeof(RType),
       cudaMemcpyDeviceToHost));
   CHECK_EQ(output.shape().ndim(), 2) << "Unexcepted ndim";
-  output.CheckAndAllocData(Shape2(nnr, output.shape()[1]));
+  output.CheckAndAllocData(Shape2(nnr, output.shape()[1])
+#if MXNET_USE_MEMORY_PROFILER
+    , "output:indexing_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
   output.set_aux_shape(kIdx, Shape1(nnr));
 
   // generate lookup table
@@ -382,7 +390,11 @@ inline void SparseEmbeddingOpBackwardRspImpl<gpu>(const bool deterministic,
           FillZerosRspImpl(s, output);
           return;
         }
-        output.CheckAndAlloc({Shape1(nnr)});
+        output.CheckAndAlloc({Shape1(nnr)}
+#if MXNET_USE_MEMORY_PROFILER
+          , "output:indexing_op"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
         RType* grad_row_idx = output.aux_data(kIdx).dptr<RType>();
         // fill row_idx array of output matrix, using the row_flg values
         Kernel<FillRspRowIdxKernel, gpu>::Launch(s, num_rows,

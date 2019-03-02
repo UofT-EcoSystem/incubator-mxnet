@@ -36,7 +36,11 @@ namespace op {
 void FillZerosCsrImpl(mshadow::Stream<mshadow::gpu> *s, const NDArray& dst) {
   CHECK_EQ(dst.storage_type(), kCSRStorage) << "dst is not a CSR NDArray";
   dst.set_aux_shape(csr::kIdx, mshadow::Shape1(0));
-  dst.CheckAndAllocAuxData(csr::kIndPtr, mshadow::Shape1(dst.shape()[0] + 1));
+  dst.CheckAndAllocAuxData(csr::kIndPtr, mshadow::Shape1(dst.shape()[0] + 1)
+#if MXNET_USE_MEMORY_PROFILER
+    , "aux:init_op:dst:ind_ptr"
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
   TBlob indptr_data = dst.aux_data(csr::kIndPtr);
   MSHADOW_IDX_TYPE_SWITCH(dst.aux_type(csr::kIndPtr), IType, {
     mxnet_op::Kernel<mxnet_op::set_zero, mshadow::gpu>::Launch(

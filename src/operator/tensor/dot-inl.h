@@ -867,7 +867,11 @@ inline void DotCsrDnsRspImpl(const OpContext& ctx,
             return;
           }
 
-          ret->CheckAndAlloc({mshadow::Shape1(nnr)});
+          ret->CheckAndAlloc({mshadow::Shape1(nnr)}
+#if MXNET_USE_MEMORY_PROFILER
+            , "placeholder:dot:ret"
+#endif // MXNET_USE_MEMORY_PROFILER
+              );
           const TBlob& data_out = ret->data();
           const TBlob& row_idx = ret->aux_data(rowsparse::kIdx);
 
@@ -996,7 +1000,11 @@ inline void DotCsrRspRspImpl(const OpContext& ctx,
 
   // pre-allocate spaces for ret using the dense dimension size
   if (ret->storage_type() == kRowSparseStorage) {
-    ret->CheckAndAlloc({mshadow::Shape1(lhs.shape()[1])});
+    ret->CheckAndAlloc({mshadow::Shape1(lhs.shape()[1])}
+#if MXNET_USE_MEMORY_PROFILER
+      , "placeholder:dot:ret"
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
   }
   const TBlob data_out = ret->data();
   const TBlob row_idx_out = ret->aux_data(rowsparse::kIdx);
@@ -1110,9 +1118,21 @@ inline void DotDnsCsrCsrImpl(const OpContext& ctx, const cpu& cpu_dev,
         IType num_rows_l = lhs.shape_[0];
         dim_t nnc = prefix_sum[num_cols_out - 1];
         dim_t nnz = nnc * num_rows_l;
-        out.CheckAndAllocAuxData(csr::kIndPtr, Shape1(num_rows_l + 1));
-        out.CheckAndAllocAuxData(csr::kIdx, Shape1(nnz));
-        out.CheckAndAllocData(Shape1(nnz));
+        out.CheckAndAllocAuxData(csr::kIndPtr, Shape1(num_rows_l + 1)
+#if MXNET_USE_MEMORY_PROFILER
+          , "aux:dot:out:ind_ptr"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
+        out.CheckAndAllocAuxData(csr::kIdx, Shape1(nnz)
+#if MXNET_USE_MEMORY_PROFILER
+          , "aux:dot:out:idx"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
+        out.CheckAndAllocData(Shape1(nnz)
+#if MXNET_USE_MEMORY_PROFILER
+          , "placeholder:dot:out"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
 
         /* Set csr indptr and index according to nnc_idx*/
         IType* indptr_out = out.aux_data(csr::kIndPtr).dptr<IType>();

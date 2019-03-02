@@ -121,7 +121,11 @@ void ElemwiseBinaryOp::RspRspOp(mshadow::Stream<gpu> *s,
         nnvm::dim_t nnr_out = 0;
         CUDA_CALL(cudaMemcpy(&nnr_out, &common_row_table[num_rows-1], sizeof(nnvm::dim_t),
                               cudaMemcpyDeviceToHost));
-        output.CheckAndAlloc({mshadow::Shape1(nnr_out)});
+        output.CheckAndAlloc({mshadow::Shape1(nnr_out)}
+#if MXNET_USE_MEMORY_PROFILER
+          , "placeholder:elementwise_binary_op:output"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
         Kernel<FillRspRowIdxKernel, gpu>::Launch(
           s, num_rows, output.aux_data(kIdx).dptr<IType>(), common_row_table, num_rows);
         Kernel<set_zero, gpu>::Launch(s, nnr_out * num_cols, output.data().dptr<DType>());
@@ -134,7 +138,11 @@ void ElemwiseBinaryOp::RspRspOp(mshadow::Stream<gpu> *s,
       } else {
         if (lhs.storage_initialized()) {
           if (req == kWriteTo) {
-            output.CheckAndAlloc({lhs.aux_shape(kIdx)});
+            output.CheckAndAlloc({lhs.aux_shape(kIdx)}
+#if MXNET_USE_MEMORY_PROFILER
+              , "placeholder:elementwise_binary_op:output"
+#endif // MXNET_USE_MEMORY_PROFILER
+                );
             Copy(output.data().FlatTo1D<gpu, DType>(),
                  lhs.data().FlatTo1D<gpu, DType>(), s);
             Copy(output.aux_data(kIdx).FlatTo1D<gpu, IType>(),
@@ -144,7 +152,11 @@ void ElemwiseBinaryOp::RspRspOp(mshadow::Stream<gpu> *s,
           }
         } else if (rhs.storage_initialized()) {
           if (req == kWriteTo) {
-            output.CheckAndAlloc({rhs.aux_shape(kIdx)});
+            output.CheckAndAlloc({rhs.aux_shape(kIdx)}
+#if MXNET_USE_MEMORY_PROFILER
+              , "placeholder:elementwise_binary_op:output"
+#endif // MXNET_USE_MEMORY_PROFILER
+                );
           } else if (req == kWriteInplace && lhs.IsSame(output)) {
             LOG(FATAL) << "Inplace on an empty lhs is not supported";
           }

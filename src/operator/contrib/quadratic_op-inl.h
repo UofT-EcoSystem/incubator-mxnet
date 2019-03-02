@@ -160,7 +160,11 @@ void QuadraticOpForwardCsrImpl(const QuadraticParam& param,
   }
   const nnvm::dim_t nnz = input.storage_shape()[0];
   const nnvm::dim_t num_rows = output.shape()[0];
-  output.CheckAndAlloc({Shape1(num_rows + 1), Shape1(nnz)});
+  output.CheckAndAlloc({Shape1(num_rows + 1), Shape1(nnz)}
+#if MXNET_USE_MEMORY_PROFILER
+    , "placeholder:quadratic_op:output"
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
   CHECK_EQ(output.aux_type(kIdx), output.aux_type(kIndPtr))
     << "The dtypes of indices and indptr don't match";
   MSHADOW_TYPE_SWITCH(output.dtype(), DType, {

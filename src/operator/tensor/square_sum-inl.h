@@ -303,7 +303,11 @@ void SquareSumRspImpl(const nnvm::NodeAttrs& attrs,
   }
 
   if (output->storage_type() == kRowSparseStorage) {
-    output->CheckAndAlloc({input.aux_shape(rowsparse::kIdx)});
+    output->CheckAndAlloc({input.aux_shape(rowsparse::kIdx)}
+#if MXNET_USE_MEMORY_PROFILER
+      , "placeholder:square_sum:output"
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
   }
   const TBlob& out_data = output->data();
   const int64_t nnr = input.storage_shape()[0];
@@ -403,7 +407,11 @@ void SquareSumRspGradImpl(const nnvm::NodeAttrs& attrs,
   const TBlob& in_data = input.data();
   const TBlob in_row_idx = input.aux_data(rowsparse::kIdx);
   if (ograd.storage_type() == kDefaultStorage) {
-    igrad->CheckAndAlloc({input.aux_shape(rowsparse::kIdx)});
+    igrad->CheckAndAlloc({input.aux_shape(rowsparse::kIdx)}
+#if MXNET_USE_MEMORY_PROFILER
+      , "in_grad:square_sum"
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
     const TBlob& igrad_data = igrad->data();
     const TBlob igrad_row_idx = igrad->aux_data(rowsparse::kIdx);
     if (0 == axis[0]) {  // forward is sum per column
@@ -435,7 +443,11 @@ void SquareSumRspGradImpl(const nnvm::NodeAttrs& attrs,
     CHECK_EQ(ograd.shape().ndim(), 2U);
     const TBlob ograd_row_idx = ograd.aux_data(rowsparse::kIdx);
     CHECK(ograd_row_idx.Size() == in_row_idx.Size() || in_row_idx.Size() == in_data.shape_[0]);
-    igrad->CheckAndAlloc({ograd.aux_shape(rowsparse::kIdx)});
+    igrad->CheckAndAlloc({ograd.aux_shape(rowsparse::kIdx)}
+#if MXNET_USE_MEMORY_PROFILER
+      , "in_grad:square_sum"
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
     const TBlob& igrad_data = igrad->data();
     const TBlob igrad_row_idx = igrad->aux_data(rowsparse::kIdx);
     MSHADOW_IDX_TYPE_SWITCH(igrad_row_idx.type_flag_, IType, {

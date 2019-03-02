@@ -329,7 +329,11 @@ inline void FillDnsZerosRspImpl(mshadow::Stream<xpu> *s, NDArray *dst) {
   CHECK_EQ(dst->storage_type(), kRowSparseStorage);
   MSHADOW_IDX_TYPE_SWITCH(dst->aux_type(kIdx), IType, {
     const index_t num_rows = dst->shape()[0];
-    dst->CheckAndAlloc({Shape1(num_rows)});
+    dst->CheckAndAlloc({Shape1(num_rows)}
+#if MXNET_USE_MEMORY_PROFILER
+      , "placeholder:init_op:dst"
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
     Fill<true>(s, dst->data(), kWriteTo, 0);
     auto idx = dst->aux_data(kIdx).FlatTo1D<xpu, IType>(s);
     Kernel<PopulateFullIdxRspKernel, xpu>::Launch(s, num_rows, idx.dptr_);
@@ -359,7 +363,11 @@ void FillZerosRspImpl(mshadow::Stream<xpu> *, const NDArray& dst) {
 inline void FillZerosCsrImpl(mshadow::Stream<mshadow::cpu> *s, const NDArray& dst) {
   CHECK_EQ(dst.storage_type(), kCSRStorage) << "dst is not a CSR NDArray";
   dst.set_aux_shape(csr::kIdx, mshadow::Shape1(0));
-  dst.CheckAndAllocAuxData(csr::kIndPtr, mshadow::Shape1(dst.shape()[0] + 1));
+  dst.CheckAndAllocAuxData(csr::kIndPtr, mshadow::Shape1(dst.shape()[0] + 1)
+#if MXNET_USE_MEMORY_PROFILER
+    , "aux:init_op:dst:ind_ptr"
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
   TBlob indptr_data = dst.aux_data(csr::kIndPtr);
   Fill<true>(s, dst.aux_data(csr::kIndPtr), kWriteTo, 0);
 }

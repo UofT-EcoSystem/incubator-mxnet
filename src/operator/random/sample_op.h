@@ -424,7 +424,11 @@ void SampleComputeEx_(const nnvm::NodeAttrs& attrs,
   if (output.storage_type() == kRowSparseStorage) {
     // indices
     nnvm::dim_t nnr = output.shape()[0];
-    output.CheckAndAlloc({mshadow::Shape1(nnr)});
+    output.CheckAndAlloc({mshadow::Shape1(nnr)}
+#if MXNET_USE_MEMORY_PROFILER
+      , "placeholder:sample_op:output"
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
     MSHADOW_IDX_TYPE_SWITCH(output.aux_type(rowsparse::kIdx), IType, {
       IType* idx = output.aux_data(rowsparse::kIdx).dptr<IType>();
       mxnet_op::Kernel<PopulateFullIdxRspKernel, xpu>::Launch(s, nnr, idx);

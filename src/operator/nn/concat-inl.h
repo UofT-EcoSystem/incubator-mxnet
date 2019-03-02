@@ -213,14 +213,26 @@ void ConcatCSRImpl(const nnvm::NodeAttrs& attrs,
     return;
   }
   const nnvm::dim_t num_rows = out.shape()[0];
-  out.CheckAndAllocAuxData(kIndPtr, Shape1(num_rows+1));
+  out.CheckAndAllocAuxData(kIndPtr, Shape1(num_rows+1)
+#if MXNET_USE_MEMORY_PROFILER
+    , "aux:concat:out:ind_ptr"
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
 
   MSHADOW_IDX_TYPE_SWITCH(inputs[0].aux_type(kIndPtr), RType, {
     MSHADOW_IDX_TYPE_SWITCH(inputs[0].aux_type(kIdx), IType, {
       MSHADOW_TYPE_SWITCH(inputs[0].dtype(), DType, {
         RType* out_indptr = out.aux_data(kIndPtr).dptr<RType>();
-        out.CheckAndAllocAuxData(kIdx, Shape1(nnz));
-        out.CheckAndAllocData(Shape1(nnz));
+        out.CheckAndAllocAuxData(kIdx, Shape1(nnz)
+#if MXNET_USE_MEMORY_PROFILER
+          , "aux:concat:out:idx"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
+        out.CheckAndAllocData(Shape1(nnz)
+#if MXNET_USE_MEMORY_PROFILER
+          , "placeholder:concat:out"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
         IType* out_idx = out.aux_data(kIdx).dptr<IType>();
         DType* out_data = out.data().dptr<DType>();
         nnvm::dim_t indptr_offset = 0;

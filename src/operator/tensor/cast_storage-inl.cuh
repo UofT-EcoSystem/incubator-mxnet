@@ -170,7 +170,11 @@ void CastStorageDnsRspGPUImpl_(const OpContext& ctx,
   CUDA_CALL(cudaMemcpy(&nnr, &row_flg[num_rows - 1], sizeof(dim_t), cudaMemcpyDeviceToHost));
 
   // Allocate rsp tensor row index array and fill
-  rsp->CheckAndAllocAuxData(rowsparse::kIdx, Shape1(nnr));
+  rsp->CheckAndAllocAuxData(rowsparse::kIdx, Shape1(nnr)
+#if MXNET_USE_MEMORY_PROFILER
+    , "aux:cast_storage:rsp:idx"
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
   if (0 == nnr) return;
   RType *row_idx = rsp->aux_data(rowsparse::kIdx).dptr<RType>();
   num_threads = num_rows;
@@ -180,7 +184,11 @@ void CastStorageDnsRspGPUImpl_(const OpContext& ctx,
   // Construct shape of rsp tensor data, allocate, and fill
   auto storage_shape = dns.shape_;
   storage_shape[0] = nnr;
-  rsp->CheckAndAllocData(storage_shape);
+  rsp->CheckAndAllocData(storage_shape
+#if MXNET_USE_MEMORY_PROFILER
+    , "placeholder:cast_storage:rsp"
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
   num_threads = nnr * row_length;
   Kernel<CastDnsRspValsKernel, gpu>::Launch(s, num_threads,
                                             rsp->data().dptr<DType>(), row_idx, dns.dptr<DType>(),
@@ -491,7 +499,11 @@ inline void CastStorageDnsCsrImpl(const OpContext& ctx,
         if (threads_per_warp != 32) {
           LOG(FATAL) << "CastStorageDnsCsrImpl GPU kernels expect warpSize=32";
         }
-        csr->CheckAndAllocAuxData(csr::kIndPtr, Shape1(num_rows+1));
+        csr->CheckAndAllocAuxData(csr::kIndPtr, Shape1(num_rows+1)
+#if MXNET_USE_MEMORY_PROFILER
+          , "aux:cast_storage:csr:ind_ptr"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
         IType* indptr = csr->aux_data(csr::kIndPtr).dptr<IType>();
         DType* dns_data = dns.dptr<DType>();
 
@@ -567,8 +579,16 @@ inline void CastStorageDnsCsrImpl(const OpContext& ctx,
         CUDA_CALL(cudaMemcpy(&nnz, &(indptr[num_rows]), sizeof(IType), cudaMemcpyDeviceToHost));
 
         // Allocate column index array and data array of the csr matrix
-        csr->CheckAndAllocAuxData(csr::kIdx, Shape1(static_cast<dim_t>(nnz)));
-        csr->CheckAndAllocData(Shape1(static_cast<dim_t>(nnz)));
+        csr->CheckAndAllocAuxData(csr::kIdx, Shape1(static_cast<dim_t>(nnz))
+#if MXNET_USE_MEMORY_PROFILER
+          , "aux:cast_storage:csr:idx"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
+        csr->CheckAndAllocData(Shape1(static_cast<dim_t>(nnz))
+#if MXNET_USE_MEMORY_PROFILER
+          , "placeholder:cast_storage:csr"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
 
         // Compute and fill column index array and data array of the csr matrix
         switch (kernel_version) {

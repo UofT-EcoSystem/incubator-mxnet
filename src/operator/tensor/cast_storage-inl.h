@@ -86,7 +86,11 @@ inline void CastStorageDnsRspImpl(const OpContext& ctx,
     MSHADOW_IDX_TYPE_SWITCH(rsp->aux_type(kIdx), RType, {  // row idx type
       const dim_t num_rows = dns.shape_[0];
       const dim_t row_length = dns.shape_.ProdShape(1, dns.shape_.ndim());
-      rsp->CheckAndAllocAuxData(kIdx, Shape1(num_rows));
+      rsp->CheckAndAllocAuxData(kIdx, Shape1(num_rows)
+#if MXNET_USE_MEMORY_PROFILER
+        , "aux:cast_storage:rsp:idx"
+#endif // MXNET_USE_MEMORY_PROFILER
+          );
       TBlob row_idx_blob = rsp->aux_data(kIdx);
       RType* row_idx = row_idx_blob.dptr<RType>();
       dim_t num_threads = num_rows;
@@ -98,7 +102,11 @@ inline void CastStorageDnsRspImpl(const OpContext& ctx,
       if (0 == nnr) return;
       auto storage_shape = dns.shape_;
       storage_shape[0] = nnr;
-      rsp->CheckAndAllocData(storage_shape);
+      rsp->CheckAndAllocData(storage_shape
+#if MXNET_USE_MEMORY_PROFILER
+        , "placeholder:cast_storage:rsp"
+#endif // MXNET_USE_MEMORY_PROFILER
+          );
       auto dns_data = dns.get_with_shape<cpu, 2, DType>(Shape2(num_rows, row_length), s);
       auto rsp_data = rsp->data().get_with_shape<cpu, 2, DType>(Shape2(nnr, row_length), s);
       dim_t idx = 0;
@@ -245,7 +253,11 @@ inline void CastStorageDnsCsrImpl(const OpContext& ctx,
       MSHADOW_IDX_TYPE_SWITCH(csr->aux_type(csr::kIdx), CType, {  // col idx type
         const dim_t num_rows = dns.shape_[0];
         const dim_t num_cols = dns.shape_[1];
-        csr->CheckAndAllocAuxData(csr::kIndPtr, mshadow::Shape1(num_rows+1));
+        csr->CheckAndAllocAuxData(csr::kIndPtr, mshadow::Shape1(num_rows+1)
+#if MXNET_USE_MEMORY_PROFILER
+          , "aux:cast_storage:csr:ind_ptr"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
         IType* indptr = csr->aux_data(csr::kIndPtr).dptr<IType>();
         DType* dns_data = dns.dptr<DType>();
         dim_t num_threads = num_rows;
@@ -258,8 +270,16 @@ inline void CastStorageDnsCsrImpl(const OpContext& ctx,
           indptr[i+1] += indptr[i];
         }
         // allocate column idx array and value array
-        csr->CheckAndAllocAuxData(csr::kIdx, Shape1(static_cast<index_t>(indptr[num_rows])));
-        csr->CheckAndAllocData(Shape1(static_cast<index_t>(indptr[num_rows])));
+        csr->CheckAndAllocAuxData(csr::kIdx, Shape1(static_cast<index_t>(indptr[num_rows]))
+#if MXNET_USE_MEMORY_PROFILER
+          , "aux:cast_storage:csr:idx"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
+        csr->CheckAndAllocData(Shape1(static_cast<index_t>(indptr[num_rows]))
+#if MXNET_USE_MEMORY_PROFILER
+          , "placeholder:cast_storage:csr"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
         // fill col_idx and value arrays of the csr
         mxnet_op::Kernel<FillCsrColIdxAndVals, cpu>::Launch(s, num_threads,
             csr->data().dptr<DType>(), csr->aux_data(csr::kIdx).dptr<CType>(),
@@ -341,7 +361,11 @@ void CastStorageCsrCsrImpl(const OpContext& ctx, const NDArray& csr,
     return;
   }
   std::vector<TShape> aux_shapes({csr.aux_shape(csr::kIndPtr), csr.aux_shape(csr::kIdx)});
-  output->CheckAndAlloc(aux_shapes);
+  output->CheckAndAlloc(aux_shapes
+#if MXNET_USE_MEMORY_PROFILER
+    , "placeholder:cast_storage:output"
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
   const TBlob& val = output->data();
   const TBlob& indptr = output->aux_data(csr::kIndPtr);
   const TBlob& idx = output->aux_data(csr::kIdx);
@@ -364,7 +388,11 @@ void CastStorageRspRspImpl(const OpContext& ctx, const NDArray& rsp,
     return;
   }
   auto aux_shape = rsp.aux_shape(rowsparse::kIdx);
-  output->CheckAndAlloc({aux_shape});
+  output->CheckAndAlloc({aux_shape}
+#if MXNET_USE_MEMORY_PROFILER
+    , "placeholder:cast_storage:output"
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
   const TBlob& val = output->data();
   const TBlob& idx = output->aux_data(rowsparse::kIdx);
   const TBlob& from_val = rsp.data();

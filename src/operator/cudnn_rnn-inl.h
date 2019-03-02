@@ -467,7 +467,11 @@ class CuDNNRNNOp : public Operator{
       if (param_.p > 0) {
         CUDNN_CALL(cudnnDropoutGetStatesSize(s->dnn_handle_, &dropout_byte_));
         dropout_size_ = dropout_byte_ / sizeof(DType);
-        dropout_states_ = Storage::Get()->Alloc(dropout_byte_, Context::GPU());
+        dropout_states_ = Storage::Get()->Alloc(dropout_byte_, Context::GPU()
+#if MXNET_USE_MEMORY_PROFILER
+          , "feature_maps:cudnn_rnn:dropout_states"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
       } else {
         dropout_states_ = {};
         dropout_byte_ = 0;
@@ -519,7 +523,11 @@ class CuDNNRNNOp : public Operator{
                                                 &reserve_space_byte_));
       workspace_size_ = workspace_byte_ / sizeof(DType);
       // Allocate the reserve space
-      reserve_space_ = Storage::Get()->Alloc(reserve_space_byte_, Context::GPU());
+      reserve_space_ = Storage::Get()->Alloc(reserve_space_byte_, Context::GPU()
+#if MXNET_USE_MEMORY_PROFILER
+        , "feature_maps:cudnn_rnn:reserve_space"
+#endif // MXNET_USE_MEMORY_PROFILER
+          );
 
       // Check that number of params are correct
       size_t cudnn_param_size;

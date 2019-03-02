@@ -336,7 +336,11 @@ void BinaryBroadcastCsrDnsCsrImpl(const OpContext& ctx,
   if (csr.storage_initialized()) {
     const nnvm::dim_t nnz = csr.storage_shape()[0];
     const nnvm::dim_t num_rows = output.shape()[0];
-    output.CheckAndAlloc({Shape1(num_rows + 1), Shape1(nnz)});
+    output.CheckAndAlloc({Shape1(num_rows + 1), Shape1(nnz)}
+#if MXNET_USE_MEMORY_PROFILER
+      , "placeholder:elementwise_binary_broadcast_op:output"
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
 
     MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
       MSHADOW_IDX_TYPE_SWITCH(output.aux_type(kIdx), CType, {

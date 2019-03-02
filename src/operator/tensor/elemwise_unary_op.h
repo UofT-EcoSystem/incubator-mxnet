@@ -70,17 +70,33 @@ class OpBase {
     if (req != kNullOp) {
       if (clone_from) {
         const TShape& ishape = clone_from->storage_shape();
-        dest->CheckAndAllocData(ishape);
+        dest->CheckAndAllocData(ishape
+#if MXNET_USE_MEMORY_PROFILER
+          , "placeholder:elementwise_unary_op:dest"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
         CHECK_EQ(dest->storage_type(), clone_from->storage_type());
         for (size_t i = 0, n = clone_from->aux_shapes().size(); i < n; ++i) {
-          dest->CheckAndAllocAuxData(i, clone_from->aux_shape(i));
+          dest->CheckAndAllocAuxData(i, clone_from->aux_shape(i)
+#if MXNET_USE_MEMORY_PROFILER
+            , "aux:elementwise_unary_op:dest:i"
+#endif // MXNET_USE_MEMORY_PROFILER
+              );
         }
         DCHECK_EQ(dest->aux_shapes().size(), clone_from->aux_shapes().size());
       } else {
         for (size_t i = 0, n = dest->aux_shapes().size(); i < n; ++i) {
-          dest->CheckAndAllocAuxData(i, dest->aux_shape(i));
+          dest->CheckAndAllocAuxData(i, dest->aux_shape(i)
+#if MXNET_USE_MEMORY_PROFILER
+            , "aux:elementwise_unary_op:dest:i"
+#endif // MXNET_USE_MEMORY_PROFILER
+              );
         }
-        dest->CheckAndAllocData(dest->storage_shape());
+        dest->CheckAndAllocData(dest->storage_shape()
+#if MXNET_USE_MEMORY_PROFILER
+          , "placeholder:elementwise_unary_op:dest"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
       }
     }
   }
@@ -194,7 +210,11 @@ class UnaryOp : public OpBase {
         for (size_t j = 0; j < aux_shape_count; ++j) {
           aux_shapes.emplace_back(input.aux_shape(j));
         }
-        output->CheckAndAlloc(aux_shapes);
+        output->CheckAndAlloc(aux_shapes
+#if MXNET_USE_MEMORY_PROFILER
+          , "placeholder:elementwise_unary_op:output"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
         DCHECK_EQ(output->storage_shape(), input.storage_shape());
       }
       return true;
@@ -223,7 +243,11 @@ class UnaryOp : public OpBase {
     CHECK_EQ(inputs[0].storage_type(), outputs[0].storage_type());
     AllocateGeometry(&outputs[0], req[0], &inputs[0]);
     CopyGeometryBlobs<xpu>(ctx.get_stream<xpu>(), &outputs[0], req[0], inputs[0]);
-    outputs[0].CheckAndAllocData(inputs[0].storage_shape());
+    outputs[0].CheckAndAllocData(inputs[0].storage_shape()
+#if MXNET_USE_MEMORY_PROFILER
+      , "placeholder:elementwise_unary_op:output"
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
     if (inputs[0].storage_shape().Size()) {
       OpBase::MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, computer);
     }

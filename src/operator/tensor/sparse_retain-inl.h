@@ -280,7 +280,11 @@ void SparseRetainOpForwardRspImpl(mshadow::Stream<xpu> *s,
   const TBlob input_data = input_nd.data();
   const TBlob input_idx = input_nd.aux_data(rowsparse::kIdx);
 
-  output_nd->CheckAndAlloc({mshadow::Shape1(idx_data.Size())});
+  output_nd->CheckAndAlloc({mshadow::Shape1(idx_data.Size())}
+#if MXNET_USE_MEMORY_PROFILER
+    , "output_nd:sparse_retain"
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
   TBlob output_data = output_nd->data();
   TBlob output_idx = output_nd->aux_data(rowsparse::kIdx);
   const auto row_length = input_data.shape_.ProdShape(1, input_data.shape_.ndim());
@@ -394,7 +398,11 @@ void SparseRetainOpBackwardEx(const nnvm::NodeAttrs& attrs,
   const TBlob out_grad_data = inputs[sr::kOut].data();
 
   NDArray in_grad_nd = outputs[sr::kArr];
-  in_grad_nd.CheckAndAlloc({mshadow::Shape1(idx_data.Size())});
+  in_grad_nd.CheckAndAlloc({mshadow::Shape1(idx_data.Size())}
+#if MXNET_USE_MEMORY_PROFILER
+    , "in_grad:sparse_retain"
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
   TBlob in_grad_data = in_grad_nd.data();
   TBlob in_grad_idx = in_grad_nd.aux_data(rowsparse::kIdx);
   const auto row_length = out_grad_data.shape_.ProdShape(1, out_grad_data.shape_.ndim());

@@ -703,7 +703,11 @@ inline void DotCsrDnsRspImpl(const OpContext& ctx,
           SortByKey(col_idx_copy, original_idx, true, &temp_storage, 0, num_bits);
 
           // over-allocate aux indices
-          ret->CheckAndAllocAuxData(rowsparse::kIdx, Shape1(nnz));
+          ret->CheckAndAllocAuxData(rowsparse::kIdx, Shape1(nnz)
+#if MXNET_USE_MEMORY_PROFILER
+            , "aux:dot:ret:idx"
+#endif // MXNET_USE_MEMORY_PROFILER
+              );
           // compute unique indices
           IType* ret_idx_ptr = ret->aux_data(rowsparse::kIdx).dptr<IType>();
           cub::DeviceSelect::Unique(temp_storage_ptr, unique_temp_bytes, col_idx_copy_ptr, ret_idx_ptr,
@@ -712,7 +716,11 @@ inline void DotCsrDnsRspImpl(const OpContext& ctx,
           size_t nnr = 0;
           CUDA_CALL(cudaMemcpy(&nnr, nnr_ptr, nnr_bytes, cudaMemcpyDeviceToHost));
           // allocate data
-          ret->CheckAndAllocData(mshadow::Shape2(nnz, num_cols_r));
+          ret->CheckAndAllocData(mshadow::Shape2(nnz, num_cols_r)
+#if MXNET_USE_MEMORY_PROFILER
+            , "placeholder:dot:ret"
+#endif // MXNET_USE_MEMORY_PROFILER
+              );
           // generate lookup table
           Kernel<MarkLookupTable, gpu>::Launch(s, nnr, lookup_table_ptr, ret_idx_ptr);
 
@@ -837,7 +845,11 @@ inline void DotCsrRspRspImpl(const OpContext& ctx,
             }
 
             // Allocate output matrix space
-            ret->CheckAndAlloc({mshadow::Shape1(nnr_out)});
+            ret->CheckAndAlloc({mshadow::Shape1(nnr_out)}
+#if MXNET_USE_MEMORY_PROFILER
+              , "placeholder:dot:ret"
+#endif // MXNET_USE_MEMORY_PROFILER
+                );
             const TBlob data_out_blob = ret->data();
             const TBlob row_idx_out_blob = ret->aux_data(rowsparse::kIdx);
             DType* data_out = data_out_blob.dptr<DType>();

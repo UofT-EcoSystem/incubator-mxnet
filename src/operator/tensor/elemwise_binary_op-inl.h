@@ -86,17 +86,33 @@ void ElemwiseBinaryOp::RspRspOp(mshadow::Stream<cpu> *s,
       const size_t num_rows_r = rhs_is_dense ? rhs.shape()[0] :
                                                rhs.aux_shape(rowsparse::kIdx).Size();
       if (is_dense_result) {
-        output.CheckAndAlloc();
+        output.CheckAndAlloc(
+#if MXNET_USE_MEMORY_PROFILER
+          "placeholder:elementwise_binary_op:output"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
       } else {
         if (rhs_is_dense || scatter) {
-          output.CheckAndAlloc({mshadow::Shape1(num_rows_l)});
+          output.CheckAndAlloc({mshadow::Shape1(num_rows_l)}
+#if MXNET_USE_MEMORY_PROFILER
+            , "placeholder:elementwise_binary_op:output"
+#endif // MXNET_USE_MEMORY_PROFILER
+              );
         } else if (lhs_is_dense) {
-          output.CheckAndAlloc({mshadow::Shape1(num_rows_r)});
+          output.CheckAndAlloc({mshadow::Shape1(num_rows_r)}
+#if MXNET_USE_MEMORY_PROFILER
+            , "placeholder:elementwise_binary_op:output"
+#endif // MXNET_USE_MEMORY_PROFILER
+              );
         } else {
           lhs_in_place = IsSameArray(lhs, output);
           rhs_in_place = IsSameArray(rhs, output);
           if (!lhs_in_place && !rhs_in_place) {
-            output.CheckAndAlloc({mshadow::Shape1(num_rows_l + num_rows_r)});
+            output.CheckAndAlloc({mshadow::Shape1(num_rows_l + num_rows_r)}
+#if MXNET_USE_MEMORY_PROFILER
+              , "placeholder:elementwise_binary_op:output"
+#endif // MXNET_USE_MEMORY_PROFILER
+                );
           } else {
             CHECK_EQ(allow_inplace, true);
             CHECK_EQ(is_dense_result, false);
@@ -294,7 +310,11 @@ void ElemwiseBinaryOp::CsrCsrOp(mshadow::Stream<cpu> *s,
   const size_t output_nnz_guess = same_lhs_rhs ? lhs_nnz : lhs_nnz + rhs_nnz;
 
   output.CheckAndAlloc({mshadow::Shape1(lhs.shape()[0] + 1),
-                        mshadow::Shape1(std::min(output_nnz_guess, lhs.shape().Size()))});
+                        mshadow::Shape1(std::min(output_nnz_guess, lhs.shape().Size()))}
+#if MXNET_USE_MEMORY_PROFILER
+                      , "placeholder:elementwise_binary_op:output"
+#endif // MXNET_USE_MEMORY_PROFILER
+                        );
   DCHECK_EQ(output.aux_shape(csr::kIndPtr), lhs.aux_shape(csr::kIndPtr));
 
   MSHADOW_IDX_TYPE_SWITCH(lhs.aux_type(csr::kIdx), IType, {
@@ -568,7 +588,11 @@ void ElemwiseBinaryOp::DnsCsrCsrOp(const nnvm::NodeAttrs &attrs,
   const nnvm::dim_t nnz = csr.storage_shape()[0];
   Stream<xpu> *s = ctx.get_stream<xpu>();
 
-  output.CheckAndAlloc({Shape1(num_csr_rows + 1), Shape1(nnz)});
+  output.CheckAndAlloc({Shape1(num_csr_rows + 1), Shape1(nnz)}
+#if MXNET_USE_MEMORY_PROFILER
+    , "placeholder:elementwise_binary_op:output"
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
   if (csr.storage_initialized()) {
     TBlob csr_data = csr.data();
     TBlob csr_indices = csr.aux_data(kIdx);

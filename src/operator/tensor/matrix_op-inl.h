@@ -483,7 +483,11 @@ void SliceDimOneCsrImpl(const TShape &begin, const TShape &end, const OpContext&
   nnvm::dim_t begin_row = begin[0];
   nnvm::dim_t end_row = end[0];
   nnvm::dim_t indptr_len = end_row - begin_row + 1;
-  out.CheckAndAllocAuxData(kIndPtr, Shape1(indptr_len));
+  out.CheckAndAllocAuxData(kIndPtr, Shape1(indptr_len)
+#if MXNET_USE_MEMORY_PROFILER
+    , "aux:matrix_op:out:ind_ptr"
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
   // assume idx indptr share the same type
   MSHADOW_IDX_TYPE_SWITCH(in.aux_type(kIndPtr), RType, {
     MSHADOW_IDX_TYPE_SWITCH(in.aux_type(kIdx), IType, {
@@ -503,8 +507,16 @@ void SliceDimOneCsrImpl(const TShape &begin, const TShape &end, const OpContext&
           return;
         }
         // copy indices and values
-        out.CheckAndAllocAuxData(kIdx, Shape1(nnz));
-        out.CheckAndAllocData(Shape1(nnz));
+        out.CheckAndAllocAuxData(kIdx, Shape1(nnz)
+#if MXNET_USE_MEMORY_PROFILER
+          , "aux:matrix_op:out:idx"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
+        out.CheckAndAllocData(Shape1(nnz)
+#if MXNET_USE_MEMORY_PROFILER
+          , "placeholder:matrix_op:out"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
         IType* in_idx = in.aux_data(kIdx).dptr<IType>();
         IType* out_idx = out.aux_data(kIdx).dptr<IType>();
         DType* in_data = in.data().dptr<DType>();
