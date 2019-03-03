@@ -136,7 +136,11 @@ def _new_alloc_handle(shape, ctx, delay_alloc, dtype=mx_real_t):
         ctypes.c_int(ctx.device_id),
         ctypes.c_int(int(delay_alloc)),
         ctypes.c_int(int(_DTYPE_NP_TO_MX[np.dtype(dtype).type])),
-        ctypes.byref(hdl)))
+        ctypes.byref(hdl)
+        # @MXNET_USE_MEMORY_PROFILER
+      , ctypes.create_string_buffer(str.encode(ctx.name))
+        # /MXNET_USE_MEMORY_PROFILER
+        ))
     return hdl
 
 
@@ -148,11 +152,7 @@ def _new_from_shared_mem(shared_pid, shared_id, shape, dtype):
         c_array(mx_uint, shape),
         mx_uint(len(shape)),
         ctypes.c_int(int(_DTYPE_NP_TO_MX[np.dtype(dtype).type])),
-        ctypes.byref(hdl)
-        # @MXNET_USE_MEMORY_PROFILER
-        , ctypes.create_string_buffer(str.encode(ctx.name))
-        # /MXNET_USE_MEMORY_PROFILER
-        ))
+        ctypes.byref(hdl)))
     return hdl
 
 
