@@ -162,7 +162,7 @@ struct Resource {
   template<typename xpu, int ndim, typename DType>
   inline mshadow::Tensor<xpu, ndim, DType> get_space_typed(
       mshadow::Shape<ndim> shape, mshadow::Stream<xpu> *stream,
-      const std::string & tag) const {
+      const std::string & tag = "<unk>") const {
     CHECK_EQ(req.type, ResourceRequest::kTempSpace);
     if (std::is_same<xpu, gpu>::value)
       return mshadow::Tensor<xpu, ndim, DType>(
@@ -205,7 +205,7 @@ struct Resource {
    * \return The allocated space.
    */
 #if MXNET_USE_MEMORY_PROFILER
-  void* get_space_internal(size_t size, const std::string & tag) const;
+  void* get_space_internal(size_t size, const std::string & tag = "<unk>") const;
 #else
   void* get_space_internal(size_t size) const;
 #endif // MXNET_USE_MEMORY_PROFILER

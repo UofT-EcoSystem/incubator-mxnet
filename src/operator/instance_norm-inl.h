@@ -143,7 +143,7 @@ class InstanceNormOp : public Operator {
     // Get temp space
     Tensor<xpu, 2> workspace =
         ctx.requested[instance_norm::kTempSpace].get_space<xpu>(
-            mshadow::Shape2(3, mean.shape_[0]), s,
+            mshadow::Shape2(3, mean.shape_[0]), s
 #if MXNET_USE_MEMORY_PROFILER
               , "workspace:instance_norm"
 #endif // MXNET_USE_MEMORY_PROFILER

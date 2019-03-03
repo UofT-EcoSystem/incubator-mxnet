@@ -395,7 +395,8 @@ class ResourceManagerImpl : public ResourceManager {
 }  // namespace resource
 
 #if MXNET_USE_MEMORY_PROFILER
-void* Resource::get_space_internal(size_t size) const {
+void* Resource::get_space_internal(size_t size, 
+                                   const std::string & tag) const {
   return static_cast<resource::SpaceAllocator*>(ptr_)->GetSpace(size, tag);
 }
 #else

@@ -455,7 +455,11 @@ class CTCLossOp : public Operator {
     int num_tmp_elems = (size_bytes + sizeof(real_t) - 1) / sizeof(real_t);
     Tensor<xpu, 1, real_t> workspace =
         ctx.requested[ctc_loss::kTempSpace].get_space_typed<xpu, 1, real_t>(
-            Shape1(num_tmp_elems), s);
+            Shape1(num_tmp_elems), s
+#if MXNET_USE_MEMORY_PROFILER
+          , "workspace:ctc_loss"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
 
     compute_ctc_cost(data, costs.dptr_, grad.dptr_, packed_labels->data(),
                      label_lengths->data(), data_lengths->data(),

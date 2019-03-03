@@ -295,7 +295,7 @@ class ThreadedEnginePerDevice : public ThreadedEngine {
     while (task_queue->Pop(&opr_block)) {
 #if MXNET_USE_MEMORY_PROFILER
       // @ArmageddonKnight CAUTION: Should we assignment the RunContext on each operator run?
-      run_ctx.ctx.name = opr_block->opr_stat->opr_name;
+      run_ctx.ctx.name = opr_block->opr->opr_name;
 #endif // MXNET_USE_MEMORY_PROFILER
       this->ExecuteOprBlock(run_ctx, opr_block);
     }

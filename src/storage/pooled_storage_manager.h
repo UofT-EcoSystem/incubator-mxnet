@@ -300,9 +300,9 @@ void GPUPooledRoundedStorageManager::Alloc(Storage::Handle* handle) {
     void* ret = nullptr;
 #if MXNET_USE_MEMORY_PROFILER
     g_gpu_memory_profiler.addEntry(tag, size);
-#else
-    cudaError_t e = cudaMalloc(&ret, size);
 #endif // MXNET_USE_MEMORY_PROFILER
+    cudaError_t e = cudaMalloc(&ret, size);
+
     if (e != cudaSuccess && e != cudaErrorCudartUnloading) {
       LOG(FATAL) << "cudaMalloc failed: " << cudaGetErrorString(e);
     }

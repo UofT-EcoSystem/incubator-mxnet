@@ -817,7 +817,7 @@ inline void DotCsrRspRspImpl(const OpContext& ctx,
                                           mshadow::Stream<gpu>::GetStream(s));
             mshadow::Tensor<gpu, 1, char> workspace = ctx.requested[0]
                 .get_space_typed<gpu, 1, char>(Shape1(num_cols_l * sizeof(dim_t) +
-                                                      temp_storage_bytes), s,
+                                                      temp_storage_bytes), s
 #if MXNET_USE_MEMORY_PROFILER
                                                     , "workspace:dot"                                               
 #endif // MXNET_USE_MEMORY_PROFILER

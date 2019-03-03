@@ -118,7 +118,11 @@ class MultiBoxTargetOp : public Operator {
     // TODO(zhreshold): use maximum valid ground-truth in batch rather than # in dataset
     Shape<4> temp_shape = Shape4(11, num_batches, num_anchors, num_labels);
     Tensor<xpu, 4, DType> temp_space = ctx.requested[mboxtarget_enum::kTempSpace]
-      .get_space_typed<xpu, 4, DType>(temp_shape, s);
+      .get_space_typed<xpu, 4, DType>(temp_shape, s
+#if MXNET_USE_MEMORY_PROFILER
+        , "workspace:multibox_target"
+#endif // MXNET_USE_MEMORY_PROFILER
+          );
     loc_target = 0.f;
     loc_mask = 0.0f;
     cls_target = param_.ignore_label;

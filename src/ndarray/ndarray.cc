@@ -129,12 +129,12 @@ NDArray::Chunk::~Chunk() {
   }, shandle.ctx, var);
 }
 
-#if MXNET_USE_MEMORY_CHUNK
+#if MXNET_USE_MEMORY_PROFILER
 void NDArray::Chunk::CheckAndAllocData(const TShape &shape, int dtype,
                                        const std::string & tag) {
 #else
 void NDArray::Chunk::CheckAndAllocData(const TShape &shape, int dtype) {
-#endif // MXNET_USE_MEMORY_CHUNK
+#endif // MXNET_USE_MEMORY_PROFILER
   CHECK_NE(aux_shapes.size(), 0)
       << "data is expected to be allocated after aux_data";
   auto dbytes = shape.Size() * mshadow::mshadow_sizeof(dtype);
@@ -1857,9 +1857,17 @@ void NDArray::SyncCopyFromNDArray(const NDArray& src, int i, int j) {
       this->ReshapeAndAlloc(src_shape);
     } else if (!this->storage_initialized()) {
       if (j < 0) {
-        this->CheckAndAllocData(src_shape);
+        this->CheckAndAllocData(src_shape
+#if MXNET_USE_MEMORY_PROFILER
+          , "placeholder:ndarray" + ctx().name
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
       } else {
-        this->CheckAndAllocAuxData(j, src_shape);
+        this->CheckAndAllocAuxData(j, src_shape
+#if MXNET_USE_MEMORY_PROFILER
+          , "aux:ndarray:" + ctx().name + ":j"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
       }
     }
     TBlob dst_data = (j >= 0? this->aux_data(j) : this->data());

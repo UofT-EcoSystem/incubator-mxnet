@@ -63,11 +63,20 @@ class Storage {
    * \param ctx Context information about the device and ID.
    * \return Handle struct.
    */
+#if MXNET_USE_MEMORY_PROFILER
+  Handle Alloc(size_t size, Context ctx, 
+               const std::string & tag = "<unk>") {
+#else
   Handle Alloc(size_t size, Context ctx) {
+#endif // MXNET_USE_MEMORY_PROFILER
     Handle hd;
     hd.size = size;
     hd.ctx = ctx;
+#if MXNET_USE_MEMORY_PROFILER
+    this->Alloc(&hd, tag);
+#else
     this->Alloc(&hd);
+#endif // MXNET_USE_MEMORY_PROFILER
     return hd;
   }
   /*!

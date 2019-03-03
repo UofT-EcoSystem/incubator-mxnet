@@ -44,8 +44,6 @@
 
 #include "./storage_manager.h"
 
-#include "profile/gpu_memory_profiler.h"
-
 namespace mxnet {
 namespace storage {
 /*!

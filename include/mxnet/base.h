@@ -300,7 +300,7 @@ inline bool Context::operator<(const Context &b) const {
 }
 #if MXNET_USE_MEMORY_PROFILER
 inline Context Context::Create(DeviceType dev_type, int32_t dev_id,
-                               const std::string & name = "<unk>")
+                               const std::string & name) {
 #else
 inline Context Context::Create(DeviceType dev_type, int32_t dev_id) {
 #endif // MXNET_USE_MEMORY_PROFILER

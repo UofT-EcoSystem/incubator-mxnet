@@ -192,7 +192,11 @@ void SetValueRspImpl(mshadow::Stream<xpu> *s,
   CHECK_EQ(dst->storage_type(), kRowSparseStorage);
   using namespace mxnet::op;
   nnvm::dim_t nnr = dst->shape()[0];
-  dst->CheckAndAlloc({mshadow::Shape1(nnr)});
+  dst->CheckAndAlloc({mshadow::Shape1(nnr)}
+#if MXNET_USE_MEMORY_PROFILER
+    , "placeholder:ndarray_function:dst"
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
   MSHADOW_IDX_TYPE_SWITCH(dst->aux_type(rowsparse::kIdx), IType, {
     IType* idx = dst->aux_data(rowsparse::kIdx).dptr<IType>();
     mxnet_op::Kernel<PopulateFullIdxRspKernel, xpu>::Launch(s, nnr, idx);

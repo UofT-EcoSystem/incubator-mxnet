@@ -183,11 +183,7 @@ class SoftmaxOutputOp : public Operator {
         int i_label = static_cast<int>(param_.ignore_label);
         Tensor<cpu, 2, DType> workspace =
           ctx.requested[softmaxout_enum::kTempSpace].get_host_space_typed<2, DType>(
-          label.shape_
-#if MXNET_USE_MEMORY_PROFILER
-        , "workspace:softmax_output"
-#endif // MXNET_USE_MEMORY_PROFILER
-          );
+          label.shape_);
         Copy(workspace, label, label.stream_);
         for (index_t i = 0; i < workspace.size(0); ++i) {
           for (index_t j = 0; j < workspace.size(1); ++j) {
@@ -247,11 +243,7 @@ class SoftmaxOutputOp : public Operator {
         int i_label = static_cast<int>(param_.ignore_label);
         Tensor<cpu, 1, DType> workspace =
           ctx.requested[softmaxout_enum::kTempSpace].get_host_space_typed<1, DType>(
-          label.shape_
-#if MXNET_USE_MEMORY_PROFILER
-        , "workspace:softmax_output"
-#endif // MXNET_USE_MEMORY_PROFILER
-          );
+          label.shape_);
         Copy(workspace, label, label.stream_);
         for (index_t i = 0; i < label.size(0); ++i) {
           if (static_cast<int>(workspace[i]) == i_label) {

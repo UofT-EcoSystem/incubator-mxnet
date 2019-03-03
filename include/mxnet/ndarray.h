@@ -591,7 +591,7 @@ class NDArray {
    * This is an internal function used by system that normal user should not use
    */
 #if MXNET_USE_MEMORY_PROFILER
-  inline void CheckAndAlloc(const std::string & tag) const {
+  inline void CheckAndAlloc(const std::string & tag = "<unk>") const {
 #else 
   inline void CheckAndAlloc() const {
 #endif // MXNET_USE_MEMORY_PROFILER
@@ -613,7 +613,8 @@ class NDArray {
    * TShape tmp = some_shape is equivalent to TShape tmp = {some_shape}.
    */
 #if MXNET_USE_MEMORY_PROFILER
-  void ReshapeAndAlloc(const TShape& shape, const std::string & tag) {
+  void ReshapeAndAlloc(const TShape& shape, 
+                       const std::string & tag = "<unk>") {
 #else
   void ReshapeAndAlloc(const TShape& shape) {
 #endif // MXNET_USE_MEMORY_PROFILER
@@ -621,7 +622,7 @@ class NDArray {
     CHECK(!is_none());
     shape_ = shape;
 #if MXNET_USE_MEMORY_PROFILER
-    ptr_->CheckAndAlloc(shape.size() * mshadow::mshadow_sizeof(dtype_), tag);
+    ptr_->CheckAndAlloc(shape.Size() * mshadow::mshadow_sizeof(dtype_), tag);
 #else
     ptr_->CheckAndAlloc(shape.Size() * mshadow::mshadow_sizeof(dtype_));
 #endif // MXNET_USE_MEMORY_PROFILER
@@ -633,7 +634,7 @@ class NDArray {
    */
 #if MXNET_USE_MEMORY_PROFILER
   inline void CheckAndAlloc(const std::vector<TShape> &aux_shapes,
-                            const std::string & tag) const {
+                            const std::string & tag = "<unk>") const {
 #else
   inline void CheckAndAlloc(const std::vector<TShape> &aux_shapes) const {
 #endif // MXNET_USE_MEMORY_PROFILER
@@ -647,7 +648,7 @@ class NDArray {
   }
 #if MXNET_USE_MEMORY_PROFILER
   inline void CheckAndAllocData(const TShape &storage_shape, 
-                                const std::string & tag) const {
+                                const std::string & tag = "<unk>") const {
 #else
   inline void CheckAndAllocData(const TShape &storage_shape) const {
 #endif // MXNET_USE_MEMORY_PROFILER
@@ -661,7 +662,7 @@ class NDArray {
   }
 #if MXNET_USE_MEMORY_PROFILER
   inline void CheckAndAllocAuxData(size_t i, const TShape &aux_shape,
-                                   const std::string & tag) const {
+                                   const std::string & tag = "<unk>") const {
 #else
   inline void CheckAndAllocAuxData(size_t i, const TShape &aux_shape) const {
 #endif // MXNET_USE_MEMORY_PROFILER
@@ -1006,7 +1007,11 @@ class NDArray {
       if (kRowSparseStorage == storage_type) {
         // For row sparse, aux_shape indicates the number of rows to allocate
         auto aux_shape = aux_shapes[rowsparse::kIdx];
-        CheckAndAllocAuxData(rowsparse::kIdx, aux_shape);
+        CheckAndAllocAuxData(rowsparse::kIdx, aux_shape
+#if MXNET_USE_MEMORY_PROFILER
+          , "aux:ndarray:rsp:idx"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
         TShape storage_shape(shape);
         storage_shape[0] = aux_shape[0];
 #if MXNET_USE_MEMORY_PROFILER
