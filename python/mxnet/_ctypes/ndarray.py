@@ -31,7 +31,10 @@ from ..base import check_call
 
 class NDArrayBase(object):
     """Base data structure for ndarray"""
-    __slots__ = ["handle", "writable"]
+    # __slots__ = ["handle", "writable"]
+    # @MXNET_USE_MEMORY_PROFILER
+    __slots__ = ["handle", "writable", "tag"]
+    # /MXNET_USE_MEMORY_PROFILER
     # pylint: disable= no-member
 
     def __init__(self, handle, writable=True):
@@ -46,6 +49,9 @@ class NDArrayBase(object):
             assert isinstance(handle, NDArrayHandle)
         self.handle = handle
         self.writable = writable
+        # @MXNET_USE_MEMORY_PROFILER
+        self.tag = None
+        # /MXNET_USE_MEMORY_PROFILER
 
     def __del__(self):
         check_call(_LIB.MXNDArrayFree(self.handle))

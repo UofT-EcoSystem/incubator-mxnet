@@ -148,7 +148,11 @@ def _new_from_shared_mem(shared_pid, shared_id, shape, dtype):
         c_array(mx_uint, shape),
         mx_uint(len(shape)),
         ctypes.c_int(int(_DTYPE_NP_TO_MX[np.dtype(dtype).type])),
-        ctypes.byref(hdl)))
+        ctypes.byref(hdl)
+        # @MXNET_USE_MEMORY_PROFILER
+        , ctypes.create_string_buffer(str.encode(ctx.name))
+        # /MXNET_USE_MEMORY_PROFILER
+        ))
     return hdl
 
 
@@ -1871,7 +1875,17 @@ fixed-size items.
         dev_id = ctypes.c_int()
         check_call(_LIB.MXNDArrayGetContext(
             self.handle, ctypes.byref(dev_typeid), ctypes.byref(dev_id)))
-        return Context(Context.devtype2str[dev_typeid.value], dev_id.value)
+        # @MXNET_USE_MEMORY_PROFILER
+        # return Context(Context.devtype2str[dev_typeid.value], dev_id.value)
+        if self.tag:
+            return Context(Context.devtype2str[dev_typeid.value], dev_id.value, self.tag)
+        else:
+            return Context(Context.devtype2str[dev_typeid.value], dev_id.value)
+        # /MXNET_USE_MEMORY_PROFILER
+
+    # @context.setter
+    def set_context_tag(self, tag):
+        self.tag = tag
 
     @property
     def dtype(self):

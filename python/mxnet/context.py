@@ -71,7 +71,11 @@ class Context(with_metaclass(_MXClassPropertyMetaClass, object)):
     _default_ctx = threading.local()
     devtype2str = {1: 'cpu', 2: 'gpu', 3: 'cpu_pinned', 5: 'cpu_shared'}
     devstr2type = {'cpu': 1, 'gpu': 2, 'cpu_pinned': 3, 'cpu_shared': 5}
-    def __init__(self, device_type, device_id=0):
+    # @MXNET_USE_MEMORY_PROFILER
+    # def __init__(self, device_type, device_id=0):
+    def __init__(self, device_type, device_id=0, name="untagged"):
+        self.name = name
+    # /MXNET_USE_MEMORY_PROFILER
         if isinstance(device_type, Context):
             self.device_typeid = device_type.device_typeid
             self.device_id = device_type.device_id
@@ -110,7 +114,10 @@ class Context(with_metaclass(_MXClassPropertyMetaClass, object)):
             self.device_id == other.device_id
 
     def __str__(self):
-        return '%s(%d)' % (self.device_type, self.device_id)
+        # @MXNET_USE_MEMORY_PROFILER
+        # return '%s(%d)' % (self.device_type, self.device_id)
+        return '%s(%d)_%s' % (self.device_type, self.device_id, self.name)
+        # /MXNET_USE_MEMORY_PROFILER
 
     def __repr__(self):
         return self.__str__()
