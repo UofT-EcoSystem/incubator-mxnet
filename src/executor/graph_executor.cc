@@ -972,7 +972,7 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
       data_context[eid] = vctx[nid];
       CHECK_NE(vstorage_type[nid], kUndefinedStorage);
 #if MXNET_USE_MEMORY_PROFILER
-      data_context[eid].name = "forward_features:" +
+      data_context[eid].name = "feature_maps:" +
                                idx[nid].source->attrs.name;
 #endif // MXNET_USE_MEMORY_PROFILER
       data_storage_type[eid] = (NDArrayStorageType) vstorage_type[nid];
