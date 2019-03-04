@@ -37,6 +37,10 @@ extern mxnet::profiler::GpuMemoryProfiler g_gpu_memory_profiler;
 namespace mxnet {
 namespace storage {
 
+#if MXNET_USE_MEMORY_PROFILER
+class PinnedMemoryStorage; // Forward Declaration
+#endif // MXNET_USE_MEMORY_PROFILER
+
 /*!
  * \brief Naive storage manager.
  */
@@ -71,7 +75,9 @@ class NaiveStorageManager final : public StorageManager {
 template <class DeviceStorage>
 void NaiveStorageManager<DeviceStorage>::Alloc(Storage::Handle* handle,
                                                const std::string & tag) {
-  g_gpu_memory_profiler.addEntry(tag, handle->size);  
+  if (std::is_same < DeviceStorage, PinnedMemoryStorage > ::value) {
+    g_gpu_memory_profiler.addEntry(tag, handle->size);
+  }
 #else
 template <class DeviceStorage>
 void NaiveStorageManager<DeviceStorage>::Alloc(Storage::Handle* handle) {
