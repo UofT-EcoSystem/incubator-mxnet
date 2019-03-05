@@ -3764,8 +3764,8 @@ def zeros(shape, ctx=None, dtype=None, **kwargs):
     # @MXNET_USE_MEMORY_PROFILER
     if "arr_name" in kwargs:
         ctx.name = kwargs["arr_name"]
-        print("Context Name: %s" % ctx.name)
         kwargs.pop("arr_name", None)
+        print("Context Name: %s" % ctx.name)
     # /MXNET_USE_MEMORY_PROFILER
 
     # pylint: disable= no-member, protected-access
