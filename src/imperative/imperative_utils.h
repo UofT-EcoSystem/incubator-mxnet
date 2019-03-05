@@ -110,7 +110,10 @@ inline void SetShapeType(
   static auto& inferstorage = nnvm::Op::GetAttr<FInferStorageType>("FInferStorageType");
   MXAPIThreadLocalEntry *ret = MXAPIThreadLocalStore::Get();
 #if MXNET_USE_MEMORY_PROFILER
-  ctx.name = attrs.op->name;
+  if (ctx.name == "untagged" || 
+      ctx.name == "<unk>") {
+    ctx.name = attrs.op->name;
+  }
 #endif // MXNET_USE_MEMORY_PROFILER
   // infer shape
   std::vector<TShape>& in_shapes  = ret->arg_shapes;

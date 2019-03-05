@@ -267,8 +267,13 @@ class ThreadedEnginePerDevice : public ThreadedEngine {
     while (task_queue->Pop(&opr_block)) {
 #if MXNET_USE_MEMORY_PROFILER
       // @ArmageddonKnight CAUTION: Should we assignment the RunContext on each operator run?
-      run_ctx.ctx.name = opr_block->opr->opr_name == nullptr ? 
-          "" : opr_block->opr->opr_name;
+      // We should not assign the name upon each operator run,
+      // the reason is because this can overwrite the information provided by the Python side.
+      if (run_ctx.ctx.name == "untagged" || 
+          run_ctx.ctx.name == "<unk>") {
+        run_ctx.ctx.name = opr_block->opr->opr_name == nullptr ? 
+            "" : opr_block->opr->opr_name;
+      }
 #endif // MXNET_USE_MEMORY_PROFILER
       this->ExecuteOprBlock(run_ctx, opr_block);
     }

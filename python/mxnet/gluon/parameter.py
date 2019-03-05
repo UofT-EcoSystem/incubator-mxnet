@@ -244,6 +244,9 @@ class Parameter(object):
         if self._stype != data.stype:
             data = data.tostype(self._stype)
         if isinstance(ctx, Context):
+            # @MXNET_USE_MEMORY_PROFILER
+            ctx.name = "param:%s" % self.name
+            # /MXNET_USE_MEMORY_PROFILER
             ctx = [ctx]
         if self._data is None:
             if self._deferred_init:
@@ -303,8 +306,14 @@ class Parameter(object):
             self._grad = None
             return
 
+        # @MXNET_USE_MEMORY_PROFILER
+        # self._grad = [ndarray.zeros(shape=i.shape, dtype=i.dtype, ctx=i.context,
+        #                             stype=self._grad_stype) for i in self._data]
         self._grad = [ndarray.zeros(shape=i.shape, dtype=i.dtype, ctx=i.context,
-                                    stype=self._grad_stype) for i in self._data]
+                                    stype=self._grad_stype, 
+                                    arr_name="param_grad:%s"%self.name) \
+                                        for i in self._data]
+        # /MXNET_USE_MEMORY_PROFILER
 
         autograd.mark_variables(self._check_and_get(self._data, list),
                                 self._grad, self.grad_req)
@@ -377,6 +386,9 @@ class Parameter(object):
         if ctx is None:
             ctx = [context.current_context()]
         if isinstance(ctx, Context):
+            # @MXNET_USE_MEMORY_PROFILER
+            ctx.name = "param:%s" % self.name
+            # /MXNET_USE_MEMORY_PROFILER
             ctx = [ctx]
         if init is None:
             init = default_init if self.init is None else self.init
