@@ -401,7 +401,7 @@ inline Context Context::FromString(const std::string& str) {
     } else if (type == "gpu") {
       ret = GPU(id);
 #if MXNET_USE_MEMORY_PROFILER
-      ret.name = str.substr(r+1);
+      ret.name = str.substr(r + 2);
 #endif // MXNET_USE_MEMORY_PROFILER
     } else if (type == "cpu_pinned") {
       ret = CPUPinned(id);
