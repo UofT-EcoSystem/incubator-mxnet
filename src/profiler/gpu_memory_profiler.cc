@@ -41,11 +41,11 @@ void GpuMemoryProfiler::addEntry(const std::string & tag,
 	    tag == "_zeros"   || tag == "broadcast_lesser")
 	{
 		// unknown tags from the Python end	
-		    _ferr << dmlc::StackTrace() << std::endl;
-		    _ferr << "[gpu_memory_profiler:info] " << 
+		_ferr << dmlc::StackTrace() << std::endl;
+		_ferr << "[gpu_memory_profiler:info] " << 
 			"Allocating " << alloc_size / MB << " "
 			"with Context Tag " << tag << std::endl;
-		std::cerr << dmlc::StackTrace() << std::endl;
+		// std::cerr << dmlc::StackTrace() << std::endl;
 	}
 #undef MB
 }
