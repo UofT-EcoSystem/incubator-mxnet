@@ -112,7 +112,7 @@ inline void SetShapeType(
 #if MXNET_USE_MEMORY_PROFILER
   if (ctx.name == "untagged" || 
       ctx.name == "<unk>") {
-    ctx.name = attrs.op->name;
+    ctx.name = attrs.name;
   }
 #endif // MXNET_USE_MEMORY_PROFILER
   // infer shape
@@ -721,6 +721,15 @@ inline std::vector<Context> PlaceDevice(const nnvm::IndexedGraph& idx) {
         break;
       }
     }
+    /*
+#if MXNET_USE_MEMORY_PROFILER
+    for (size_t src_oid = 0; src_oid < idx[i].source->num_outputs(); ++src_oid) {
+      auto eid = idx.entry_id(i, src_oid);
+      vctx[eid].name = "feature_maps:" +
+                       idx[i].source->attrs.name;
+    }
+#endif // MXNET_USE_MEMORY_PROFILER
+     */
   }
   // backward pass
   for (int i = idx.num_nodes() - 1; i >= 0; --i) {
