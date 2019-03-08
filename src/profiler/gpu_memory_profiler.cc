@@ -33,19 +33,14 @@ void GpuMemoryProfiler::addEntry(const std::string & tag,
 {
 #define MB (1024.0 * 1024.0)
 	_fout << tag << "," << alloc_size / MB << std::endl;
-	std::cout << "[gpu_memory_profiler:info] " << 
-		"Allocating " << alloc_size / MB << " "
-		"with Context Tag " << tag << std::endl;
 
 	if (tag == "untagged" || tag == "<unk>" || 
 	    tag == "_zeros"   || tag == "broadcast_lesser")
 	{
-		// unknown tags from the Python end	
 		_ferr << dmlc::StackTrace() << std::endl;
 		_ferr << "[gpu_memory_profiler:info] " << 
 			"Allocating " << alloc_size / MB << " "
 			"with Context Tag " << tag << std::endl;
-		// std::cerr << dmlc::StackTrace() << std::endl;
 	}
 #undef MB
 }
