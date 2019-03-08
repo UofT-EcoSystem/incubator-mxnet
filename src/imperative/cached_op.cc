@@ -518,10 +518,23 @@ void CachedOp::StaticAllocMemory(
     }
   }
 
+#if MXNET_USE_MEMORY_PROFILER
+  std::vector < std::string > name_tags (idx.num_node_entries());
+  for (uint32_t nid = 0; nid < idx.num_nodes(); ++nid) {
+    for (uint32_t i = 0; i < idx[nid].source->num_outputs(); ++i) {
+      auto eid = idx.entry_id(nid, i);
+      name_tags[eid] = "static:feature_maps:" + idx[nid].source->attrs.name;
+    }
+  }
+#endif // MXNET_USE_MEMORY_PROFILER
   auto& reuse_pool = keep_fwd ? state.bwd_reuse_pool : state.fwd_reuse_pool;
   reuse_pool = imperative::AllocateMemory(
       g, idx, default_ctx, start_eid, end_eid, mem_plan,
-      state.arrays, &state.array_reqs, std::move(reuse_pool));
+      state.arrays, &state.array_reqs, std::move(reuse_pool)
+#if MXNET_USE_MEMORY_PROFILER
+    , &name_tags
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
 
   state.recording = recording;
   if (keep_fwd) {
@@ -804,8 +817,22 @@ OpStatePtr CachedOp::DynamicForward(
 
   const auto& mem_plan = g.GetAttr<MemoryPlanVector >(
       recording ? "full_mem_plan" : "forward_mem_plan");
+#if MXNET_USE_MEMORY_PROFILER
+  std::vector < std::string > name_tags (idx.num_node_entries());
+  for (uint32_t nid = 0; nid < idx.num_nodes(); ++nid) {
+    for (uint32_t i = 0; i < idx[nid].source->num_outputs(); ++i) {
+      auto eid = idx.entry_id(nid, i);
+      name_tags[eid] = "dyn_fw:feature_maps:" + idx[nid].source->attrs.name;
+    }
+  }
+#endif // MXNET_USE_MEMORY_PROFILER
   AllocateMemory(g, idx, default_ctx, 0, idx.num_node_entries(),
-                 mem_plan, arrays, &array_reqs);
+                 mem_plan, arrays, &array_reqs
+#if MXNET_USE_MEMORY_PROFILER
+               , std::multimap<size_t, NDArray>()
+               , &name_tags
+#endif // MXNET_USE_MEMORY_PROFILER
+                 );
 
   const auto& dtypes = g.GetAttr<DTypeVector>("dtype");
   const auto& shapes = g.GetAttr<ShapeVector>("shape");
@@ -940,9 +967,23 @@ void CachedOp::DynamicBackward(
     if (ref_count[i] == 0) array_reqs[i] = kNullOp;
   }
 
+#if MXNET_USE_MEMORY_PROFILER
+  std::vector < std::string > name_tags (idx.num_node_entries());
+  for (uint32_t nid = 0; nid < idx.num_nodes(); ++nid) {
+    for (uint32_t i = 0; i < idx[nid].source->num_outputs(); ++i) {
+      auto eid = idx.entry_id(nid, i);
+      name_tags[eid] = "dyn_bw:feature_maps:" + idx[nid].source->attrs.name;
+    }
+  }
+#endif // MXNET_USE_MEMORY_PROFILER
   const auto& mem_plan = g.GetAttr<MemoryPlanVector >("backward_mem_plan");
   AllocateMemory(g, idx, default_ctx, num_forward_entries, idx.num_node_entries(),
-                 mem_plan, arrays, &array_reqs);
+                 mem_plan, arrays, &array_reqs
+#if MXNET_USE_MEMORY_PROFILER
+               , std::multimap<size_t, NDArray>()
+               , &name_tags
+#endif // MXNET_USE_MEMORY_PROFILER
+                 );
 
   const auto& dispatch_modes = g.GetAttr<DispatchModeVector>("dispatch_mode");
 
