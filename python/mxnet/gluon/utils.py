@@ -121,12 +121,17 @@ def clip_global_norm(arrays, max_norm):
     def _norm(array):
         if array.stype == 'default':
             x = array.reshape((-1,))
-            return ndarray.dot(x, x)
+            # @MXNET_USE_MEMORY_PROFILER
+            return ndarray.dot(x, x, name="clip_global_norm_dot")
+            # /MXNET_USE_MEMORY_PROFILER
         return array.norm().square()
     assert len(arrays) > 0
     ctx = arrays[0].context
-    total_norm = ndarray.add_n(*[_norm(arr).as_in_context(ctx) for arr in arrays])
-    total_norm = ndarray.sqrt(total_norm).asscalar()
+    # @MXNET_USE_MEMORY_PROFILER
+    total_norm = ndarray.add_n(*[_norm(arr).as_in_context(ctx) for arr in arrays],
+                               **{"name" : "clip_global_norm_add_n"})
+    total_norm = ndarray.sqrt(total_norm, name="clip_global_norm_sqrt").asscalar()
+    # /MXNET_USE_MEMORY_PROFILER
     if not np.isfinite(total_norm):
         warnings.warn(UserWarning('nan or inf is detected. Clipping results will be undefined.'),
                       stacklevel=2)
