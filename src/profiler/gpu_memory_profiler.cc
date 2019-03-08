@@ -34,8 +34,7 @@ void GpuMemoryProfiler::addEntry(const std::string & tag,
 #define MB (1024.0 * 1024.0)
 	_fout << tag << "," << alloc_size / MB << std::endl;
 
-	if (tag == "untagged" || tag == "<unk>" || 
-	    tag == "_zeros"   || tag == "broadcast_lesser")
+	if (tag == "untagged" || tag == "<unk>" || tag == "")
 	{
 		_ferr << dmlc::StackTrace() << std::endl;
 		_ferr << "[gpu_memory_profiler:info] " << 
