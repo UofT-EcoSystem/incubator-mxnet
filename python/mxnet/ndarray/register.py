@@ -137,6 +137,15 @@ def %s(%s):"""%(func_name, ', '.join(signature)))
         keys.append('%s')
         vals.append(np.dtype(%s).name)"""%(dtype_name, dtype_name, dtype_name))
 
+    # @MXNET_USE_MEMORY_PROFILER
+    code.append("""
+    try:
+        if name is None:
+            name = '{func_name}'
+    except NameError:
+        name = '{func_name}'""".format(func_name=func_name))
+    # /MXNET_USE_MEMORY_PROFILER
+
     if not signature_only:
         code.append("""
     return _imperative_invoke(%d, ndargs, keys, vals, out)"""%(
