@@ -64,7 +64,7 @@ struct SpaceAllocator {
     }
   }
 #if MXNET_USE_MEMORY_PROFILER
-  inline void* GetSpace(size_t size, const std::string & tag = "") {
+  inline void* GetSpace(size_t size, const std::string & tag = "<unk>") {
 #else
   inline void* GetSpace(size_t size) {
 #endif // MXNET_USE_MEMORY_PROFILER
