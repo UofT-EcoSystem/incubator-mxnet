@@ -1854,12 +1854,16 @@ void NDArray::SyncCopyFromNDArray(const NDArray& src, int i, int j) {
   // else if dst is not initialized, allocate corresponding data blob for it
   auto get_dst_data = [&](const TShape& src_shape) {
     if (this->storage_type() == kDefaultStorage) {
-      this->ReshapeAndAlloc(src_shape);
+      this->ReshapeAndAlloc(src_shape
+#if MXNET_USE_MEMORY_PROFILER
+        , "placeholder:ndarray:" + ctx().name
+#endif // MXNET_USE_MEMORY_PROFILER
+          );
     } else if (!this->storage_initialized()) {
       if (j < 0) {
         this->CheckAndAllocData(src_shape
 #if MXNET_USE_MEMORY_PROFILER
-          , "placeholder:ndarray" + ctx().name
+          , "placeholder:ndarray:" + ctx().name
 #endif // MXNET_USE_MEMORY_PROFILER
         );
       } else {
