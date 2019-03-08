@@ -311,6 +311,15 @@ class Block(object):
             ret.update(child._collect_params_with_prefix(prefix + name))
         return ret
 
+    # @MXNET_USE_MEMORY_PROFILER
+    # Function call that prints all the names of the children leaf node.
+    def print_children_name(self, prefix=''):
+        if not self._children:
+            print(self._name)
+        for child in self._children.values():
+            child.print_children_name(prefix)
+    # /MXNET_USE_MEMORY_PROFILER
+
     def save_parameters(self, filename):
         """Save parameters to file.
 
