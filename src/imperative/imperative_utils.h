@@ -808,7 +808,11 @@ inline std::multimap<size_t, NDArray> AllocateMemory(
     const MemoryPlanVector& mem_plan,
     const std::vector<NDArray*>& arrays,
     std::vector<OpReqType> *array_reqs,
-    std::multimap<size_t, NDArray>&& pool = std::multimap<size_t, NDArray>()) {
+    std::multimap<size_t, NDArray>&& pool = std::multimap<size_t, NDArray>()
+#if MXNET_USE_MEMORY_PROFILER
+  , std::vector < std::string > * p_name_tags = nullptr
+#endif // MXNET_USE_MEMORY_PROFILER
+    ) {
   using namespace nnvm;
   const auto& dtypes = g.GetAttr<DTypeVector>("dtype");
   const auto& shapes = g.GetAttr<ShapeVector>("shape");
@@ -817,11 +821,22 @@ inline std::multimap<size_t, NDArray> AllocateMemory(
   std::multimap<size_t, NDArray> new_pool;
 
   for (uint32_t i = entry_start; i < entry_end; ++i) {
+#if MXNET_USE_MEMORY_PROFILER
+    std::string name_tag = p_name_tags == nullptr ? "" : (*p_name_tags)[i];
+    Context data_context = default_ctx;
+    data_context.name = name_tag;
+#endif // MXNET_USE_MEMORY_PROFILER
     if (mem_plan[i].storage_id == exec::kExternalStorageID) continue;
     CHECK(arrays[i]->is_none());
     if (mem_plan[i].storage_id == exec::kDynamicStorageID) {
       *arrays[i] = NDArray(static_cast<NDArrayStorageType>(stypes[i]),
-                           shapes[i], default_ctx, true, dtypes[i]);
+                           shapes[i],
+#if MXNET_USE_MEMORY_PROFILER
+                           data_context,
+#else  
+                           default_ctx,
+#endif // MXNET_USE_MEMORY_PROFILER
+                           true, dtypes[i]);
       continue;
     }
     CHECK_EQ(stypes[i], kDefaultStorage);
@@ -834,7 +849,12 @@ inline std::multimap<size_t, NDArray> AllocateMemory(
         pool.erase(iter);
       } else {
         NDArray buff(TShape({static_cast<nnvm::dim_t>(mem_plan[i].size)}),
-                     default_ctx, true, mshadow::kUint8);
+#if MXNET_USE_MEMORY_PROFILER
+                     data_context,
+#else
+                     default_ctx, 
+#endif // MXNET_USE_MEMORY_PROFILER
+                     true, mshadow::kUint8);
         *arrays[i] = buff.AsArray(shapes[i], dtypes[i]);
         new_pool.insert({mem_plan[i].size, buff});
       }
