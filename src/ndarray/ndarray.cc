@@ -143,7 +143,7 @@ void NDArray::Chunk::CheckAndAllocData(const TShape &shape, int dtype) {
     if (shandle.size > 0) Storage::Get()->Free(shandle);
     // init storage
 #if MXNET_USE_MEMORY_PROFILER
-    shandle = Storage::Get()->Alloc(dbytes, ctx);
+    shandle = Storage::Get()->Alloc(dbytes, ctx, tag);
 #else
     shandle = Storage::Get()->Alloc(dbytes, ctx);
 #endif // MXNET_USE_MEMORY_PROFILER
