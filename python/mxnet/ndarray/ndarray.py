@@ -1883,9 +1883,11 @@ fixed-size items.
             return Context(Context.devtype2str[dev_typeid.value], dev_id.value)
         # /MXNET_USE_MEMORY_PROFILER
 
+    # @MXNET_USE_MEMORY_PROFILER
     # @context.setter
     def set_context_tag(self, tag):
         self.tag = tag
+    # /MXNET_USE_MEMORY_PROFILER
 
     @property
     def dtype(self):
@@ -3760,13 +3762,6 @@ def zeros(shape, ctx=None, dtype=None, **kwargs):
     if ctx is None:
         ctx = current_context()
     dtype = mx_real_t if dtype is None else dtype
-
-    # @MXNET_USE_MEMORY_PROFILER
-    if "arr_name" in kwargs:
-        ctx.name = kwargs["arr_name"]
-        kwargs.pop("arr_name", None)
-        # print("Context Name: %s" % ctx.name)
-    # /MXNET_USE_MEMORY_PROFILER
 
     # pylint: disable= no-member, protected-access
     return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype, **kwargs)
