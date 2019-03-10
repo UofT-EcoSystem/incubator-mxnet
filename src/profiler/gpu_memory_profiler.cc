@@ -34,12 +34,14 @@ void GpuMemoryProfiler::addEntry(const std::string & tag,
 #define MB (1024.0 * 1024.0)
 	_fout << tag << "," << alloc_size / MB << std::endl;
 
-	if (tag == "untagged" || tag == "<unk>" || tag == "")
+	if (tag == "untagged" || tag == "<unk>" || 
+	    tag == "" || 
+	    tag == "parameter:bertencoder0_transformer11_bertpositionwiseffn0_bertlayernorm0_gamma")
 	{
 		_ferr << dmlc::StackTrace() << std::endl;
 		_ferr << "[gpu_memory_profiler:info] " << 
-			"Allocating " << alloc_size / MB << " "
-			"with Context Tag " << tag << std::endl;
+		         "Allocating " << alloc_size / MB << " "
+		         "with Context Tag " << tag << std::endl;
 	}
 #undef MB
 }

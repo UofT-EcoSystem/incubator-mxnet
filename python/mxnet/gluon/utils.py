@@ -128,8 +128,7 @@ def clip_global_norm(arrays, max_norm):
     assert len(arrays) > 0
     ctx = arrays[0].context
     # @MXNET_USE_MEMORY_PROFILER
-    total_norm = ndarray.add_n(*[_norm(arr).as_in_context(ctx) for arr in arrays],
-                               **{"name" : "clip_global_norm_add_n"})
+    total_norm = ndarray.add_n(*[_norm(arr).as_in_context(ctx) for arr in arrays])
     total_norm = ndarray.sqrt(total_norm, name="clip_global_norm_sqrt").asscalar()
     # /MXNET_USE_MEMORY_PROFILER
     if not np.isfinite(total_norm):
