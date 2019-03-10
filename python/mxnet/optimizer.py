@@ -1068,7 +1068,7 @@ class Adam(Optimizer):
                       name='optimizer_state:mean:%s'%weight.name),  # mean
                 zeros(weight.shape, weight.context, dtype=weight.dtype,
                       stype=stype, 
-                      name='optimizer_state:variance:'))  # variance
+                      name='optimizer_state:variance:%s'%weight.name))  # variance
         # /MXNET_USE_MEMORY_PROFILER
 
     def update(self, index, weight, grad, state):
