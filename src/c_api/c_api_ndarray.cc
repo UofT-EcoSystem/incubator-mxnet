@@ -85,13 +85,20 @@ void MXImperativeInvokeImpl(AtomicSymbolCreator creator,
                             NDArrayHandle **outputs,
                             int num_params,
                             const char **param_keys,
-                            const char **param_vals) {
+                            const char **param_vals
+#if MXNET_USE_MEMORY_PROFILER
+                          , const char * name = nullptr
+#endif // MXNET_USE_MEMORY_PROFILER
+                            ) {
   const nnvm::Op* op = static_cast<nnvm::Op*>(creator);
   MXAPIThreadLocalEntry *ret = MXAPIThreadLocalStore::Get();
 
   nnvm::NodeAttrs attrs = imperative::ParseAttrs(op, num_inputs, num_params,
                                                  param_keys, param_vals);
 
+#if MXNET_USE_MEMORY_PROFILER
+  attrs.name = name == nullptr ? "" : name;
+#endif // MXNET_USE_MEMORY_PROFILER
   int infered_num_outputs;
   int num_visible_outputs;
   imperative::SetNumOutputs(op, attrs, num_inputs, &infered_num_outputs, &num_visible_outputs);
@@ -137,11 +144,19 @@ int MXImperativeInvokeEx(AtomicSymbolCreator creator,
                          int num_params,
                          const char **param_keys,
                          const char **param_vals,
-                         const int **out_stypes) {  // outputs storage types
+                         const int **out_stypes
+#if MXNET_USE_MEMORY_PROFILER
+                       , const char * name
+#endif // MXNET_USE_MEMORY_PROFILER
+                         ) {  // outputs storage types
   MXAPIThreadLocalEntry *ret = MXAPIThreadLocalStore::Get();
   API_BEGIN();
   MXImperativeInvokeImpl(creator, num_inputs, inputs, num_outputs, outputs,
-                         num_params, param_keys, param_vals);
+                         num_params, param_keys, param_vals
+#if MXNET_USE_MEMORY_PROFILER
+                       , name
+#endif // MXNET_USE_MEMORY_PROFILER
+                         );
   NDArray** out_array = *reinterpret_cast<NDArray***>(outputs);
   ret->out_types.clear();
   ret->out_types.reserve(*num_outputs);

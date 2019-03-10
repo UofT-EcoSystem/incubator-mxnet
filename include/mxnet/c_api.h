@@ -952,7 +952,11 @@ MXNET_DLL int MXImperativeInvokeEx(AtomicSymbolCreator creator,
                                    int num_params,
                                    const char **param_keys,
                                    const char **param_vals,
-                                   const int **out_stypes);
+                                   const int **out_stypes
+#if MXNET_USE_MEMORY_PROFILER
+                                 , const char * name
+#endif // MXNET_USE_MEMORY_PROFILER
+                                   );
 /*!
  * \brief set whether to record operator for autograd
  * \param is_recording 1 when recording, 0 when not recording.
