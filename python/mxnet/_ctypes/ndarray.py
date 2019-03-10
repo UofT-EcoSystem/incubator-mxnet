@@ -67,8 +67,10 @@ def _set_ndarray_class(cls):
     global _ndarray_cls
     _ndarray_cls = cls
 
-
-def _imperative_invoke(handle, ndargs, keys, vals, out):
+# @MXNET_USE_MEMORY_PROFILER
+# def _imperative_invoke(handle, ndargs, keys, vals, out):
+def _imperative_invoke(handle, ndargs, keys, vals, out, name):
+# /MXNET_USE_MEMORY_PROFILER
     """ctypes implementation of imperative invoke wrapper"""
     if out is not None:
         original_output = out
@@ -95,7 +97,11 @@ def _imperative_invoke(handle, ndargs, keys, vals, out):
         ctypes.c_int(len(keys)),
         c_str_array(keys),
         c_str_array([str(s) for s in vals]),
-        ctypes.byref(out_stypes)))
+        ctypes.byref(out_stypes)
+        # @MXNET_USE_MEMORY_PROFILER
+      , ctypes.create_string_buffer(str.encode(name))
+        # /MXNET_USE_MEMORY_PROFILER
+        ))
 
     if original_output is not None:
         return original_output

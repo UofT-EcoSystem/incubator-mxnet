@@ -147,9 +147,14 @@ def %s(%s):"""%(func_name, ', '.join(signature)))
     # /MXNET_USE_MEMORY_PROFILER
 
     if not signature_only:
+        # @MXNET_USE_MEMORY_PROFILER
+    #     code.append("""
+    # return _imperative_invoke(%d, ndargs, keys, vals, out)"""%(
+    #     handle.value))
         code.append("""
-    return _imperative_invoke(%d, ndargs, keys, vals, out)"""%(
+    return _imperative_invoke(%d, ndargs, keys, vals, out, name)"""%(
         handle.value))
+        # /MXNET_USE_MEMORY_PROFILER
     else:
         code.append("""
     return (0,)""")

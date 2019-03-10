@@ -3757,12 +3757,6 @@ def zeros(shape, ctx=None, dtype=None, **kwargs):
         ctx = current_context()
     dtype = mx_real_t if dtype is None else dtype
 
-    # @MXNET_USE_MEMORY_PROFILER
-    if 'name' in kwargs:
-        ctx.name = kwargs['name']
-        kwargs.pop('name')
-    # /MXNET_USE_MEMORY_PROFILER
-
     # pylint: disable= no-member, protected-access
     return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype, **kwargs)
     # pylint: enable= no-member, protected-access
