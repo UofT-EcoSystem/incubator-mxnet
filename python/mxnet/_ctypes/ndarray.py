@@ -31,9 +31,9 @@ from ..base import check_call
 
 class NDArrayBase(object):
     """Base data structure for ndarray"""
-    # __slots__ = ["handle", "writable"]
     # @MXNET_USE_MEMORY_PROFILER
-    __slots__ = ["handle", "writable", "tag"]
+    # __slots__ = ["handle", "writable"]
+    __slots__ = ["handle", "writable", "name"]
     # /MXNET_USE_MEMORY_PROFILER
     # pylint: disable= no-member
 
@@ -50,7 +50,7 @@ class NDArrayBase(object):
         self.handle = handle
         self.writable = writable
         # @MXNET_USE_MEMORY_PROFILER
-        self.tag = None
+        self.name = None
         # /MXNET_USE_MEMORY_PROFILER
 
     def __del__(self):

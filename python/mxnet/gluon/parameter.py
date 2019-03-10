@@ -245,7 +245,7 @@ class Parameter(object):
             data = data.tostype(self._stype)
         if isinstance(ctx, Context):
             # @MXNET_USE_MEMORY_PROFILER
-            ctx.name = "param:%s" % self.name
+            ctx.name = "parameter:%s" % self.name
             # /MXNET_USE_MEMORY_PROFILER
             ctx = [ctx]
         if self._data is None:
@@ -297,7 +297,15 @@ class Parameter(object):
                 dev_list.append(None)
             dev_list[ctx.device_id] = i
 
+        # @MXNET_USE_MEMORY_PROFILER
+        for ctx in self._ctx_list:
+            ctx.name = 'parameter:%s' % self.name
+        # /MXNET_USE_MEMORY_PROFILER
         self._data = [data.copyto(ctx) for ctx in self._ctx_list]
+        # @MXNET_USE_MEMORY_PROFILER
+        for i in self._data:
+            i.name = "parameter:%s" % self.name
+        # /MXNET_USE_MEMORY_PROFILER
         self._init_grad()
 
     def _init_grad(self):
@@ -311,8 +319,7 @@ class Parameter(object):
         #                             stype=self._grad_stype) for i in self._data]
         self._grad = [ndarray.zeros(shape=i.shape, dtype=i.dtype, ctx=i.context,
                                     stype=self._grad_stype, 
-                                    arr_name="param_grad:%s"%self.name) \
-                                        for i in self._data]
+                                    name='grad:%s'%i.name) for i in self._data]
         # /MXNET_USE_MEMORY_PROFILER
 
         autograd.mark_variables(self._check_and_get(self._data, list),

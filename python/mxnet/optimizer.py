@@ -1058,10 +1058,18 @@ class Adam(Optimizer):
 
     def create_state(self, index, weight):
         stype = weight.stype if self.lazy_update else 'default'
+        # @MXNET_USE_MEMORY_PROFILER
+        # return (zeros(weight.shape, weight.context, dtype=weight.dtype,
+        #               stype=stype),  # mean
+        #         zeros(weight.shape, weight.context, dtype=weight.dtype,
+        #               stype=stype))  # variance
         return (zeros(weight.shape, weight.context, dtype=weight.dtype,
-                      stype=stype),  # mean
+                      stype=stype, 
+                      name='optimizer_state:mean:%s'%weight.name),  # mean
                 zeros(weight.shape, weight.context, dtype=weight.dtype,
-                      stype=stype))  # variance
+                      stype=stype, 
+                      name='optimizer_state:variance:'))  # variance
+        # /MXNET_USE_MEMORY_PROFILER
 
     def update(self, index, weight, grad, state):
         assert(isinstance(weight, NDArray))
