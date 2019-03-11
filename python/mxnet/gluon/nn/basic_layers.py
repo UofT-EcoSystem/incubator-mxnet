@@ -219,7 +219,7 @@ class Dense(HybridBlock):
     def hybrid_forward(self, F, x, weight, bias=None):
         # @MXNET_USE_MEMORY_PROFILER
         act = F.FullyConnected(x, weight, bias, no_bias=bias is None, num_hidden=self._units,
-                               flatten=self._flatten, name=self.name)
+                               flatten=self._flatten, name='dense')
         # /MXNET_USE_MEMORY_PROFILER
         if self.act is not None:
             act = self.act(act)
@@ -265,7 +265,7 @@ class Dropout(HybridBlock):
 
     def hybrid_forward(self, F, x):
         # @MXNET_USE_MEMORY_PROFILER
-        return F.Dropout(x, p=self._rate, axes=self._axes, name=self.name)
+        return F.Dropout(x, p=self._rate, axes=self._axes, name='dropout')
         # /MXNET_USE_MEMORY_PROFILER
 
     def __repr__(self):
