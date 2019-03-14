@@ -101,11 +101,7 @@ class IdentityAttachKLSparseRegOp : public Operator {
     Tensor<xpu, 2> grad_out = out_grad[sparsereg::kOut].FlatTo2D<xpu, real_t>(s);
     Tensor<xpu, 1> moving_avg = aux_args[sparsereg::kMovingAvg].get<xpu, 1, real_t>(s);
     Tensor<xpu, 1> avg = ctx.requested[sparsereg::kTempSpace].get_space<xpu>(
-        mshadow::Shape1(moving_avg.shape_[0]), s
-#if MXNET_USE_MEMORY_PROFILER
-      , "workspace:identity_attach_sparse_reg:backward"
-#endif // MXNET_USE_MEMORY_PROFILER
-        );
+        mshadow::Shape1(moving_avg.shape_[0]), s);
     avg = sumall_except_dim<1>(data_in);
     avg /= data_in.shape_[0];
     moving_avg = param_.momentum * moving_avg + (1 - param_.momentum) * avg;

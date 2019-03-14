@@ -274,11 +274,7 @@ MSHADOW_FORCE_INLINE Tensor<xpu, 1, unsigned int> GetSeeds(index_t N, const OpCo
   Stream<xpu> *s = ctx.get_stream<xpu>();
   const index_t nSeeds(OptSampleSeedNum<xpu>(N));
   Tensor<xpu, 1, unsigned int> seeds
-    = ctx.requested[1].get_space_typed<xpu, 1, unsigned int>(Shape1(nSeeds), ctx.get_stream<xpu>()
-#if MXNET_USE_MEMORY_PROFILER
-      , "workspace:sample:seeds"
-#endif // MXNET_USE_MEMORY_PROFILER
-        );
+    = ctx.requested[1].get_space_typed<xpu, 1, unsigned int>(Shape1(nSeeds), ctx.get_stream<xpu>());
   ctx.requested[0].get_random<xpu, float>(s)->GetRandInt(seeds);
   return seeds;
 }

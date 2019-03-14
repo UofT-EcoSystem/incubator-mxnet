@@ -184,11 +184,7 @@ class BatchNormV1Op : public Operator {
     if (ctx.is_train && !param_.use_global_stats) {
       // get requested temp space
       Tensor<xpu, 2> workspace = ctx.requested[batchnorm_v1::kTempSpace].get_space<xpu>(
-          mshadow::Shape2(3, mean.shape_[0]), s
-#if MXNET_USE_MEMORY_PROFILER
-        , "workspace:batch_norm_v1:backward"
-#endif // MXNET_USE_MEMORY_PROFILER
-          );
+          mshadow::Shape2(3, mean.shape_[0]), s);
       Tensor<xpu, 1> gmean = workspace[0];
       Tensor<xpu, 1> gvar = workspace[1];
       Tensor<xpu, 1> tmp = workspace[2];

@@ -152,11 +152,7 @@ void SampleMultinomialForward(const nnvm::NodeAttrs& attrs,
   MSHADOW_REAL_TYPE_SWITCH(inputs[0].type_flag_, DType, {
     Random<xpu, float> *prnd = ctx.requested[0].get_random<xpu, float>(s);
     Tensor<xpu, 1, float> uniform =
-      ctx.requested[1].get_space_typed<xpu, 1, float>(Shape1(N*M), s
-#if MXNET_USE_MEMORY_PROFILER
-        , "workspace:sample_multinomial:forward"
-#endif // MXNET_USE_MEMORY_PROFILER
-          );
+      ctx.requested[1].get_space_typed<xpu, 1, float>(Shape1(N*M), s);
     prnd->SampleUniform(&uniform, 0, 1);
     Kernel<SampleMultinomialKernel, xpu>::Launch(
       s, N, K, M, inputs[0].dptr<DType>(), uniform.dptr_, outputs[0].dptr<int>(),

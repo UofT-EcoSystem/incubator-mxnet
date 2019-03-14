@@ -125,11 +125,7 @@ class DeformableConvolutionOp : public Operator {
     Stream<xpu>* s = ctx.get_stream<xpu>();
     // allocate workspace for col_buffer
     Tensor<xpu, 1, DType> workspace = ctx.requested[conv::kTempSpace]
-      .get_space_typed<xpu, 1, DType>(Shape1(col_buffer_size_), s
-#if MXNET_USE_MEMORY_PROFILER
-        , "workspace:deformable_convolution:forward"
-#endif // MXNET_USE_MEMORY_PROFILER
-          );
+      .get_space_typed<xpu, 1, DType>(Shape1(col_buffer_size_), s);
     // calculate the shape of col_buffer
     TShape col_buffer_shape(num_spatial_axes_ + 1);
     col_buffer_shape[0] = conv_in_channels_ * param_.kernel.Size();
@@ -191,11 +187,7 @@ class DeformableConvolutionOp : public Operator {
     Stream<xpu> *s = ctx.get_stream<xpu>();
     // allocate workspace for col_buffer
     Tensor<xpu, 1, DType> workspace = ctx.requested[conv::kTempSpace]
-      .get_space_typed<xpu, 1, DType>(Shape1(col_buffer_size_), s
-#if MXNET_USE_MEMORY_PROFILER
-        , "workspace:deformable_convolution:backward"
-#endif // MXNET_USE_MEMORY_PROFILER
-          );
+      .get_space_typed<xpu, 1, DType>(Shape1(col_buffer_size_), s);
     // calculate the shape of col_buffer
     TShape col_buffer_shape(num_spatial_axes_ + 1);
     col_buffer_shape[0] = conv_in_channels_ * param_.kernel.Size();

@@ -163,11 +163,7 @@ class GridGeneratorOp : public Operator {
         Tensor<xpu, 4, DType> grad = out_grad[grid::kOut].get<xpu, 4, DType>(s);
         Tensor<xpu, 4, DType> gdata = in_grad[grid::kData].get<xpu, 4, DType>(s);
         Tensor<xpu, 2, DType> workspace = ctx.requested[grid::kTempSpace]
-          .get_space_typed<xpu, 2, DType>(Shape2(2, 1), s
-#if MXNET_USE_MEMORY_PROFILER
-            , "workspace:grid_generator:backward"
-#endif // MXNET_USE_MEMORY_PROFILER
-              );
+          .get_space_typed<xpu, 2, DType>(Shape2(2, 1), s);
         workspace[0] = scalar<DType>((DType(gdata.size(3)) - 1.0) / 2.0);
         workspace[1] = scalar<DType>((DType(gdata.size(2)) - 1.0) / 2.0);
         Assign(gdata, req[grid::kData],

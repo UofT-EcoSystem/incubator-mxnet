@@ -100,11 +100,7 @@ class FFTOp : public Operator {
     // need temp space to pad the data into complex numbers due to cufft interface
     Tensor<xpu, 1, DType> workspace =
             ctx.requested[fft::kTempSpace].get_space_typed<xpu, 1, DType>(
-                Shape1(param_.compute_size*dim_*2), s
-#if MXNET_USE_MEMORY_PROFILER
-              , "workspace:fft:forward"
-#endif // MXNET_USE_MEMORY_PROFILER
-                );
+                Shape1(param_.compute_size*dim_*2), s);
     Tensor<xpu, 2, DType> complex_data = Tensor<xpu, 2, DType>(workspace.dptr_,
                                               Shape2(param_.compute_size, dim_*2), s);
     // start fft
@@ -165,11 +161,7 @@ class FFTOp : public Operator {
     // need temp space to pad the data into complex numbers due to cufft interface
     Tensor<xpu, 1, DType> workspace =
             ctx.requested[fft::kTempSpace].get_space_typed<xpu, 1, DType>(
-                Shape1(param_.compute_size*dim_*2), s
-#if MXNET_USE_MEMORY_PROFILER
-              , "workspace:fft:backward"
-#endif // MXNET_USE_MEMORY_PROFILER
-                );
+                Shape1(param_.compute_size*dim_*2), s);
     Tensor<xpu, 2, DType> complex_data = Tensor<xpu, 2, DType>(workspace.dptr_,
                                               Shape2(param_.compute_size, dim_*2), s);
 
