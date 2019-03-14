@@ -52,7 +52,11 @@ class GPUDeviceStorage {
   inline static void Free(void* ptr);
 };  // class GPUDeviceStorage
 
-inline void* GPUDeviceStorage::Alloc(size_t size) {
+inline void* GPUDeviceStorage::Alloc(size_t size
+#if MXNET_USE_MEMORY_PROFILER
+  , const std::string & tag = "<unk:GPUDeviceStorage>"
+#endif // MXNET_USE_MEMORY_PROFILER
+    ) {
   void* ret = nullptr;
 #if MXNET_USE_CUDA
   cudaError_t e = cudaMalloc(&ret, size);

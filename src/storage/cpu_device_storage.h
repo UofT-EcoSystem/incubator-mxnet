@@ -42,7 +42,11 @@ class CPUDeviceStorage {
    * \param size Size to allocate.
    * \return Pointer to the storage.
    */
-  inline static void* Alloc(size_t size);
+  inline static void* Alloc(size_t size
+#if MXNET_USE_MEMORY_PROFILER
+    , const std::string & tag
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
   /*!
    * \brief Deallocation.
    * \param ptr Pointer to deallocate.
@@ -56,7 +60,11 @@ class CPUDeviceStorage {
   static constexpr size_t alignment_ = 16;
 };  // class CPUDeviceStorage
 
-inline void* CPUDeviceStorage::Alloc(size_t size) {
+inline void* CPUDeviceStorage::Alloc(size_t size
+#if MXNET_USE_MEMORY_PROFILER
+  , const std::string & tag = "<unk:CPUDeviceStorage>"
+#endif // MXNET_USE_MEMORY_PROFILER
+    ) {
   void* ptr;
 #if _MSC_VER
   ptr = _aligned_malloc(size, alignment_);

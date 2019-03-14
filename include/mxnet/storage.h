@@ -27,6 +27,8 @@
 #include <memory>
 #include "./base.h"
 
+#define MXNET_USE_MEMORY_PROFILER 1
+
 namespace mxnet {
 
 /*!
@@ -57,7 +59,11 @@ class Storage {
    * \param ctx Context information about the device and ID.
    * \return Handle struct.
    */
-  virtual Handle Alloc(size_t size, Context ctx) = 0;
+  virtual Handle Alloc(size_t size, Context ctx
+#if MXNET_USE_MEMORY_PROFILER
+    , const std::string & tag = "<unk:Storage>"
+#endif
+      ) = 0;
   /*!
    * \brief Free storage.
    * \param handle Handle struect.

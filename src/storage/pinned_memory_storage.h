@@ -39,7 +39,11 @@ class PinnedMemoryStorage {
    * \param size Size to allocate.
    * \return Pointer to the storage.
    */
-  inline static void* Alloc(size_t size);
+  inline static void* Alloc(size_t size
+#if MXNET_USE_MEMORY_PROFILER
+    , const std::string & tag = "<unk:PinnedMemoryStorage>"
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
 
   /*!
    * \brief Deallocation.
@@ -48,7 +52,11 @@ class PinnedMemoryStorage {
   inline static void Free(void* ptr);
 };
 
-inline void* PinnedMemoryStorage::Alloc(size_t size) {
+inline void* PinnedMemoryStorage::Alloc(size_t size
+#if MXNET_USE_MEMORY_PROFILER
+  , const std::string & tag
+#endif // MXNET_USE_MEMORY_PROFILER
+    ) {
   void* ret = nullptr;
   // make the memory available across all devices
   CUDA_CALL(cudaHostAlloc(&ret, size, cudaHostAllocPortable));

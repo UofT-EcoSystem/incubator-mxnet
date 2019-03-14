@@ -58,7 +58,11 @@ class GPUPooledStorageManager final : public StorageManager {
     ReleaseAll();
   }
 
-  void* Alloc(size_t raw_size) override;
+  void* Alloc(size_t raw_size
+#if MXNET_USE_MEMORY_PROFILER
+    , const std::string & tag = "<unk:GPUPooledStorageManager>"
+#endif // MXNET_USE_MEMORY_PROFILER
+      ) override;
   void Free(void* ptr, size_t raw_size) override;
 
   void DirectFree(void* ptr, size_t raw_size) override {
@@ -86,7 +90,11 @@ class GPUPooledStorageManager final : public StorageManager {
   DISALLOW_COPY_AND_ASSIGN(GPUPooledStorageManager);
 };  // class GPUPooledStorageManager
 
-void* GPUPooledStorageManager::Alloc(size_t raw_size) {
+void* GPUPooledStorageManager::Alloc(size_t raw_size
+#if MXNET_USE_MEMORY_PROFILER
+  , const std::string & tag
+#endif // MXNET_USE_MEMORY_PROFILER
+    ) {
   std::lock_guard<std::mutex> lock(mutex_);
   size_t size = raw_size + NDEV;
   auto&& reuse_it = memory_pool_.find(size);

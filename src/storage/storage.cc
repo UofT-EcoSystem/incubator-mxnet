@@ -36,7 +36,11 @@ namespace mxnet {
 // consider change storage as a pure abstract class
 class StorageImpl : public Storage {
  public:
-  Handle Alloc(size_t size, Context ctx) override;
+  Handle Alloc(size_t size, Context ctx
+#if MXNET_USE_MEMORY_PROFILER
+  , const std::string & tag = "<unk:StorageImpl>"
+#endif // MXNET_USE_MEMORY_PROFILER
+      ) override;
   void Free(Handle handle) override;
   void DirectFree(Handle handle) override;
   StorageImpl() {}
@@ -73,7 +77,11 @@ class StorageImpl : public Storage {
 int StorageImpl::num_gpu_device = 0;
 #endif  // MXNET_USE_CUDA
 
-Storage::Handle StorageImpl::Alloc(size_t size, Context ctx) {
+Storage::Handle StorageImpl::Alloc(size_t size, Context ctx
+#if MXNET_USE_MEMORY_PROFILER
+  , const std::string & tag 
+#endif // MXNET_USE_MEMORY_PROFILER
+    ) {
   // space already recycled, ignore request
   Handle hd;
   hd.ctx = ctx;
@@ -119,7 +127,11 @@ Storage::Handle StorageImpl::Alloc(size_t size, Context ctx) {
         return ptr;
       });
   this->ActivateDevice(ctx);
-  hd.dptr = manager->Alloc(size);
+  hd.dptr = manager->Alloc(size
+#if MXNET_USE_MEMORY_PROFILER
+    , tag
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
   return hd;
 }
 

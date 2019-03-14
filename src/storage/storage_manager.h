@@ -39,7 +39,11 @@ class StorageManager {
    * \param size Size to allocate.
    * \return Pointer to the storage.
    */
-  virtual void* Alloc(size_t size) = 0;
+  virtual void* Alloc(size_t size
+#if MXNET_USE_MEMORY_PROFILER
+    , const std::string & tag = "<unk:StorageManager>"
+#endif // MXNET_USE_MEMORY_PROFILER
+      ) = 0;
   /*!
    * \brief Deallocation.
    * \param ptr Pointer to deallocate.
