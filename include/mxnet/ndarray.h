@@ -69,7 +69,11 @@ enum NDArrayStorageType {
 class NDArray {
  public:
   /*! \brief default constructor */
-  NDArray() {
+  NDArray(
+#if MXNET_USE_MEMORY_PROFILER
+          const std::string & name = "<unk:ndarray>"
+#endif // MXNET_USE_MEMORY_PROFILER
+          ) {
 #if MKL_EXPERIMENTAL == 1
     Mkl_mem_ = MKLMemHolder::create();
 #endif
@@ -82,8 +86,16 @@ class NDArray {
    * \param dtype data type of this ndarray
    */
   NDArray(const TShape &shape, Context ctx,
-          bool delay_alloc = false, int dtype = mshadow::default_type_flag)
-      : ptr_(std::make_shared<Chunk>(shape, ctx, delay_alloc, dtype)),
+          bool delay_alloc = false, int dtype = mshadow::default_type_flag
+#if MXNET_USE_MEMORY_PROFILER
+        , const std::string & name = "<unk:ndarray>"
+#endif // MXNET_USE_MEMORY_PROFILER
+          )
+      : ptr_(std::make_shared<Chunk>(shape, ctx, delay_alloc, dtype
+#if MXNET_USE_MEMORY_PROFILER
+          , name
+#endif // MXNET_USE_MEMORY_PROFILER
+            )),
         shape_(shape), dtype_(dtype), storage_type_(kDefaultStorage),
         entry_({nullptr, 0, 0}) {
 #if MKL_EXPERIMENTAL == 1
@@ -95,7 +107,11 @@ class NDArray {
   NDArray(const NDArrayStorageType stype, const TShape &shape, Context ctx,
           bool delay_alloc = true, int dtype = mshadow::default_type_flag,
           std::vector<int> aux_types = {}, std::vector<TShape> aux_shapes = {},
-          TShape storage_shape = TShape(mshadow::Shape1(0)))
+          TShape storage_shape = TShape(mshadow::Shape1(0))
+#if MXNET_USE_MEMORY_PROFILER   
+        , const std::string & name = "<unk:ndarray>"
+#endif // MXNET_USE_MEMORY_PROFILER
+          )
       : shape_(shape), dtype_(dtype), storage_type_(stype),
         entry_({nullptr, 0, 0}) {
       // Assign default aux types if not given
@@ -131,7 +147,11 @@ class NDArray {
         }
       }
       ptr_ = std::make_shared<Chunk>(stype, storage_shape, ctx, delay_alloc,
-                                     dtype, aux_types, aux_shapes);
+                                     dtype, aux_types, aux_shapes
+#if MXNET_USE_MEMORY_PROFILER
+                                   , name  
+#endif // MXNET_USE_MEMORY_PROFILER
+                                     );
 #if MKL_EXPERIMENTAL == 1
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
@@ -143,8 +163,16 @@ class NDArray {
    * \param data the memory content of static data
    * \param dev_id the device id this tensor sits at
    */
-  NDArray(const TBlob &data, int dev_id)
-      : ptr_(std::make_shared<Chunk>(data, dev_id)), shape_(data.shape_),
+  NDArray(const TBlob &data, int dev_id
+#if MXNET_USE_MEMORY_PROFILER
+    , const std::string & name = "<unk:ndarray>"
+#endif // MXNET_USE_MEMORY_PROFILER
+      )
+      : ptr_(std::make_shared<Chunk>(data, dev_id
+#if MXNET_USE_MEMORY_PROFILER
+                                   , name
+#endif // MXNET_USE_MEMORY_PROFILER
+                                     )), shape_(data.shape_),
         dtype_(data.type_flag_), storage_type_(kDefaultStorage),
         entry_({nullptr, 0, 0}) {
 #if MKL_EXPERIMENTAL == 1
@@ -163,8 +191,16 @@ class NDArray {
    * \param dev_id the device id this tensor sits at
    */
   NDArray(const NDArrayStorageType stype, const TShape &shape,
-          const TBlob &data, const std::vector<TBlob> &aux_data, int dev_id)
-      : ptr_(std::make_shared<Chunk>(stype, data, aux_data, dev_id)), shape_(shape),
+          const TBlob &data, const std::vector<TBlob> &aux_data, int dev_id
+#if MXNET_USE_MEMORY_PROFILER
+        , const std::string & name = "<unk:ndarray>"    
+#endif // MXNET_USE_MEMORY_PROFILER
+          )
+      : ptr_(std::make_shared<Chunk>(stype, data, aux_data, dev_id
+#if MXNET_USE_MEMORY_PROFILER
+                                   , name
+#endif // MXNET_USE_MEMORY_PROFILER
+                                     )), shape_(shape),
         dtype_(data.type_flag_), storage_type_(stype), entry_({nullptr, 0, 0}) {
 #if MKL_EXPERIMENTAL == 1
     Mkl_mem_ = std::make_shared<MKLMemHolder>();
@@ -633,13 +669,32 @@ class NDArray {
     // The shape of aux data. The default value for the shape depends on the type of storage.
     // If aux_shapes[i].Size() is zero, aux data i is empty.
     std::vector<TShape> aux_shapes;
+#if MXNET_USE_MEMORY_PROFILER
+    std::string name = "<unk:ndarray_chunk>";
+#endif // MXNET_USE_MEMORY_PROFILER
 
     /*! \brief default cosntructor */
-    Chunk() : static_data(true), delay_alloc(false) {}
+    Chunk(
+#if MXNET_USE_MEMORY_PROFILER
+          const std::string & name_
+#endif // MXNET_USE_MEMORY_PROFILER
+          ) : static_data(true), delay_alloc(false) 
+#if MXNET_USE_MEMORY_PROFILER
+            , name(name_)
+#endif // MXNET_USE_MEMORY_PROFILER
+    {}
 
     /*! \brief construct a new chunk */
-    Chunk(TShape shape, Context ctx_, bool delay_alloc_, int dtype)
-        : static_data(false), delay_alloc(true), ctx(ctx_) {
+    Chunk(TShape shape, Context ctx_, bool delay_alloc_, int dtype
+#if MXNET_USE_MEMORY_PROFILER
+      , const std::string & name_
+#endif // MXNET_USE_MEMORY_PROFILER
+        )
+        : static_data(false), delay_alloc(true), ctx(ctx_) 
+#if MXNET_USE_MEMORY_PROFILER
+        , name(name_)
+#endif // MXNET_USE_MEMORY_PROFILER
+        {
       auto size = shape.Size();
       storage_shape = shape;
       var = Engine::Get()->NewVariable();
@@ -648,8 +703,16 @@ class NDArray {
       if (!delay_alloc_) this->CheckAndAlloc();
     }
 
-    Chunk(const TBlob &data, int dev_id)
-        : static_data(true), delay_alloc(false) {
+    Chunk(const TBlob &data, int dev_id
+#if MXNET_USE_MEMORY_PROFILER
+        , const std::string & name_
+#endif // MXNET_USE_MEMORY_PROFILER
+          )
+        : static_data(true), delay_alloc(false) 
+#if MXNET_USE_MEMORY_PROFILER
+        , name(name_)
+#endif // MXNET_USE_MEMORY_PROFILER
+        {
       CHECK(storage_type == kDefaultStorage);
       var = Engine::Get()->NewVariable();
       if (data.dev_mask() == cpu::kDevMask) {
@@ -667,15 +730,27 @@ class NDArray {
     // Constructor for a non-default storage chunk
     Chunk(NDArrayStorageType storage_type_, const TShape &storage_shape_, Context ctx_,
           bool delay_alloc_, int dtype, const std::vector<int> &aux_types_,
-          const std::vector<TShape> &aux_shapes_)
+          const std::vector<TShape> &aux_shapes_
+#if MXNET_USE_MEMORY_PROFILER
+        , const std::string & name_
+#endif // MXNET_USE_MEMORY_PROFIELR
+          )
         : static_data(false), delay_alloc(delay_alloc_), storage_type(storage_type_),
           aux_types(aux_types_), ctx(ctx_), storage_shape(storage_shape_),
-          aux_shapes(aux_shapes_) {
+          aux_shapes(aux_shapes_) 
+#if MXNET_USE_MEMORY_PROFILER
+        , name(name_)
+#endif // MXNET_USE_MEMORY_PROFILER
+          {
       shandle.ctx = ctx;
       var = Engine::Get()->NewVariable();
       // aux_handles always reflect the correct number of aux data
       for (size_t i = 0; i < aux_shapes.size(); i++) {
-        CheckAndAllocAuxData(i, aux_shapes[i]);
+        CheckAndAllocAuxData(i, aux_shapes[i]
+#if MXNET_USE_MEMORY_PROFILER
+          , "aux:" + name
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
         // this line is needed in case when aux_shapes[i].Size() = 0
         // aux_handles[i] will not be updated and take only default value.
         aux_handles[i].ctx = ctx;
@@ -686,8 +761,16 @@ class NDArray {
     }
 
     Chunk(const NDArrayStorageType storage_type_, const TBlob &data,
-          const std::vector<TBlob> &aux_data, int dev_id)
-        : static_data(true), delay_alloc(false), storage_type(storage_type_) {
+          const std::vector<TBlob> &aux_data, int dev_id
+#if MXNET_USE_MEMORY_PROFILER
+        , const std::string & name_
+#endif // MXNET_USE_MEMORY_PROFILER
+          )
+        : static_data(true), delay_alloc(false), storage_type(storage_type_) 
+#if MXNET_USE_MEMORY_PROFILER
+        , name(name_)
+#endif // MXNET_USE_MEMORY_PROFILER
+          {
       using namespace mshadow;
       CHECK_NE(storage_type, kDefaultStorage);
       // init var
@@ -731,7 +814,11 @@ class NDArray {
     /*! \brief check if delay alloc is on, do alloc if not yet done */
     inline void CheckAndAlloc(void) {
       if (delay_alloc) {
-        shandle = Storage::Get()->Alloc(shandle.size, shandle.ctx);
+        shandle = Storage::Get()->Alloc(shandle.size, shandle.ctx
+#if MXNET_USE_MEMORY_PROFILER
+                                      , name                     
+#endif // MXNET_USE_MEMORY_PROFILER
+                                        );
         delay_alloc = false;
       }
     }
@@ -742,13 +829,21 @@ class NDArray {
       CHECK_EQ(kDefaultStorage, storage_type)
               << "CheckAndAlloc(dbytes) is not intended for kDefaultStorage";
       if (delay_alloc) {
-        shandle = Storage::Get()->Alloc(dbytes, shandle.ctx);
+        shandle = Storage::Get()->Alloc(dbytes, shandle.ctx
+#if MXNET_USE_MEMORY_PROFILER
+                                      , name
+#endif // MXNET_USE_MEMORY_PROFILER
+                                        );
         delay_alloc = false;
       } else if (shandle.size < dbytes) {
         // free storage if necessary and alloc again
         if (shandle.size > 0) Storage::Get()->Free(shandle);
         // init storage
-        shandle = Storage::Get()->Alloc(dbytes, shandle.ctx);
+        shandle = Storage::Get()->Alloc(dbytes, shandle.ctx
+#if MXNET_USE_MEMORY_PROFILER
+                                      , name
+#endif // MXNET_USE_MEMORY_PROFILER
+                                        );
       }
     }
 
@@ -758,13 +853,25 @@ class NDArray {
       if (kRowSparseStorage == storage_type) {
         // For row sparse, aux_shape indicates the number of rows to allocate
         auto aux_shape = aux_shapes[rowsparse::kIdx];
-        CheckAndAllocAuxData(rowsparse::kIdx, aux_shape);
+        CheckAndAllocAuxData(rowsparse::kIdx, aux_shape
+#if MXNET_USE_MEMORY_PROFILER
+          , "aux:idx:" + name
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
         TShape storage_shape(shape);
         storage_shape[0] = aux_shape[0];
         CheckAndAllocData(storage_shape, dtype);
       } else if (kCSRStorage == storage_type) {
-        CheckAndAllocAuxData(csr::kIndPtr, aux_shapes[csr::kIndPtr]);
-        CheckAndAllocAuxData(csr::kIdx, aux_shapes[csr::kIdx]);
+        CheckAndAllocAuxData(csr::kIndPtr, aux_shapes[csr::kIndPtr]
+#if MXNET_USE_MEMORY_PROFILER
+          , "aux:ind_ptr:" + name
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
+        CheckAndAllocAuxData(csr::kIdx, aux_shapes[csr::kIdx]
+#if MXNET_USE_MEMORY_PROFILER
+          , "aux:idx:" + name
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
         CheckAndAllocData(aux_shapes[csr::kIdx], dtype);
       } else {
         LOG(FATAL) << "Storage type " << storage_type << " not implemented for CheckAndAlloc";
@@ -781,7 +888,11 @@ class NDArray {
         // free storage if necessary and alloc again
         if (shandle.size > 0) Storage::Get()->Free(shandle);
         // init storage
-        shandle = Storage::Get()->Alloc(dbytes, ctx);
+        shandle = Storage::Get()->Alloc(dbytes, ctx
+#if MXNET_USE_MEMORY_PROFILER
+                                      , name
+#endif // MXNET_USE_MEMORY_PROFILER
+                                        );
       }
       // init shape
       storage_shape = shape;
@@ -793,7 +904,11 @@ class NDArray {
     // aux shape is also updated
     // if aux data is already allocated, try reuse the storage. Otherwise, free the current one
     // and allocate new storage
-    inline void CheckAndAllocAuxData(size_t i, const TShape &shape) {
+    inline void CheckAndAllocAuxData(size_t i, const TShape &shape
+#if MXNET_USE_MEMORY_PROFILER  
+      , tag
+#endif // MXNET_USE_MEMORY_PROFILER
+                                     ) {
       CHECK_EQ(shape.ndim(), 1) << "shape must be 1D in CheckAndAllocAuxData";
       CHECK_NE(storage_type, kUndefinedStorage)
         << "storage type cannot be kUndefinedStorage in CheckAndAllocAuxData";
@@ -807,7 +922,11 @@ class NDArray {
         // free storage if necessary and alloc again
         if (aux_handles[i].size > 0) Storage::Get()->Free(aux_handles[i]);
         // init aux storage
-        aux_handles[i] = Storage::Get()->Alloc(aux_bytes, ctx);
+        aux_handles[i] = Storage::Get()->Alloc(aux_bytes, ctx
+#if MXNET_USE_MEMORY_PROFILER
+          , tag
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
       }
       // init shape
       set_aux_shape(i, shape);

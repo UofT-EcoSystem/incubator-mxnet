@@ -81,7 +81,11 @@ struct Resource {
    */
   template<typename xpu, typename DType>
   inline mshadow::Random<xpu, DType>* get_random(
-      mshadow::Stream<xpu> *stream) const {
+      mshadow::Stream<xpu> *stream
+#if MXNET_USE_MEMORY_PROFILER
+    , const std::string & tag
+#endif // MXNET_USE_MEMORY_PROFILER
+      ) const {
     CHECK_EQ(req.type, ResourceRequest::kRandom);
     mshadow::Random<xpu, DType> *ret =
         static_cast<mshadow::Random<xpu, DType>*>(ptr_);
@@ -106,8 +110,16 @@ struct Resource {
    */
   template<typename xpu, int ndim>
   inline mshadow::Tensor<xpu, ndim, real_t> get_space(
-      mshadow::Shape<ndim> shape, mshadow::Stream<xpu> *stream) const {
-    return get_space_typed<xpu, ndim, real_t>(shape, stream);
+      mshadow::Shape<ndim> shape, mshadow::Stream<xpu> *stream
+#if MXNET_USE_MEMORY_PROFILER
+    , const std::string & tag = "<unk:Resource:get_space>"
+#endif // MXNET_USE_MEMORY_PROFILER
+      ) const {
+    return get_space_typed<xpu, ndim, real_t>(shape, stream
+#if MXNET_USE_MEMORY_PROFILER
+      , tag
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
   }
   /*!
    * \brief Get cpu space requested as mshadow Tensor.
@@ -134,11 +146,19 @@ struct Resource {
    */
   template<typename xpu, int ndim, typename DType>
   inline mshadow::Tensor<xpu, ndim, DType> get_space_typed(
-      mshadow::Shape<ndim> shape, mshadow::Stream<xpu> *stream) const {
+      mshadow::Shape<ndim> shape, mshadow::Stream<xpu> *stream
+#if MXNET_USE_MEMORY_PROFILER
+    , const std::string & tag = "<unk:Resource:get_space_typed>"
+#endif // MXNET_USE_MEMORY_PROFILER
+      ) const {
     CHECK_EQ(req.type, ResourceRequest::kTempSpace);
     return mshadow::Tensor<xpu, ndim, DType>(
         reinterpret_cast<DType*>(get_space_internal(shape.Size() * sizeof(DType))),
-        shape, shape[ndim - 1], stream);
+        shape, shape[ndim - 1], stream
+#if MXNET_USE_MEMORY_PROFILER
+      , tag
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
   }
   /*!
    * \brief Get CPU space as mshadow Tensor in specified type.
@@ -161,7 +181,11 @@ struct Resource {
    * \param size The size of the space.
    * \return The allocated space.
    */
-  void* get_space_internal(size_t size) const;
+  void* get_space_internal(size_t size
+#if MXNET_USE_MEMORY_PROFILER
+    , const std::string & tag = "<unk:Resource:get_space_internal>"
+#endif // MXNET_USE_MEMORY_PROFILER
+      ) const;
   /*!
    * \brief internal function to get cpu space from resources.
    * \param size The size of space.

@@ -60,12 +60,20 @@ struct SpaceAllocator {
       host_handle.size = 0;
     }
   }
-  inline void* GetSpace(size_t size) {
+  inline void* GetSpace(size_t size
+#if MXNET_USE_MEMORY_PROFILER
+    , const std::string & tag = "<unk:SpaceAllocator:GetSpace>"
+#endif // MXNET_USE_MEMORY_PROFILER
+      ) {
     if (handle.size >= size) return handle.dptr;
     if (handle.size != 0) {
       Storage::Get()->DirectFree(handle);
     }
-    handle = Storage::Get()->Alloc(size, ctx);
+    handle = Storage::Get()->Alloc(size, ctx
+#if MXNET_USE_MEMORY_PROFILER
+      , tag
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
     return handle.dptr;
   }
 
@@ -261,8 +269,16 @@ class ResourceManagerImpl : public ResourceManager {
 };
 }  // namespace resource
 
-void* Resource::get_space_internal(size_t size) const {
-  return static_cast<resource::SpaceAllocator*>(ptr_)->GetSpace(size);
+void* Resource::get_space_internal(size_t size
+#if MXNET_USE_MEMORY_PROFILER
+  , const std::string & tag
+#endif // MXNET_USE_MEMORY_PROFILER
+    ) const {
+  return static_cast<resource::SpaceAllocator*>(ptr_)->GetSpace(size
+#if MXNET_USE_MEMORY_PROFILER
+    , tag
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
 }
 
 void* Resource::get_host_space_internal(size_t size) const {
