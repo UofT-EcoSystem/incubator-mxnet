@@ -46,7 +46,7 @@ class NaiveStorageManager final : public StorageManager {
   ~NaiveStorageManager() = default;
   void* Alloc(size_t size
 #if MXNET_USE_MEMORY_PROFILER
-    , const std::string & tag = "<unk:NaiveStorageManager>"
+    , const std::string & tag = DEFAULT_MEMORY_TAG("unknown")
 #endif // MXNET_USE_MEMORY_PROFILER
       ) override;
   void Free(void* ptr, size_t) override;

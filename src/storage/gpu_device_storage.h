@@ -54,7 +54,7 @@ class GPUDeviceStorage {
 
 inline void* GPUDeviceStorage::Alloc(size_t size
 #if MXNET_USE_MEMORY_PROFILER
-  , const std::string & tag = "<unk:GPUDeviceStorage>"
+  , const std::string & tag = DEFAULT_MEMORY_TAG("unknown")
 #endif // MXNET_USE_MEMORY_PROFILER
     ) {
   void* ret = nullptr;

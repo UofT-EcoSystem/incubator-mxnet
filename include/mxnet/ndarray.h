@@ -71,7 +71,7 @@ class NDArray {
   /*! \brief default constructor */
   NDArray(
 #if MXNET_USE_MEMORY_PROFILER
-          const std::string & name = "<unk:ndarray>"
+          const std::string & name = DEFAULT_MEMORY_TAG("unknown")
 #endif // MXNET_USE_MEMORY_PROFILER
           ) {
 #if MKL_EXPERIMENTAL == 1
@@ -88,7 +88,7 @@ class NDArray {
   NDArray(const TShape &shape, Context ctx,
           bool delay_alloc = false, int dtype = mshadow::default_type_flag
 #if MXNET_USE_MEMORY_PROFILER
-        , const std::string & name = "<unk:ndarray>"
+        , const std::string & name = DEFAULT_MEMORY_TAG("unknown")
 #endif // MXNET_USE_MEMORY_PROFILER
           )
       : ptr_(std::make_shared<Chunk>(shape, ctx, delay_alloc, dtype
@@ -109,7 +109,7 @@ class NDArray {
           std::vector<int> aux_types = {}, std::vector<TShape> aux_shapes = {},
           TShape storage_shape = TShape(mshadow::Shape1(0))
 #if MXNET_USE_MEMORY_PROFILER   
-        , const std::string & name = "<unk:ndarray>"
+        , const std::string & name = DEFAULT_MEMORY_TAG("unknown")
 #endif // MXNET_USE_MEMORY_PROFILER
           )
       : shape_(shape), dtype_(dtype), storage_type_(stype),
@@ -165,7 +165,7 @@ class NDArray {
    */
   NDArray(const TBlob &data, int dev_id
 #if MXNET_USE_MEMORY_PROFILER
-    , const std::string & name = "<unk:ndarray>"
+    , const std::string & name = DEFAULT_MEMORY_TAG("unknown")
 #endif // MXNET_USE_MEMORY_PROFILER
       )
       : ptr_(std::make_shared<Chunk>(data, dev_id
@@ -193,7 +193,7 @@ class NDArray {
   NDArray(const NDArrayStorageType stype, const TShape &shape,
           const TBlob &data, const std::vector<TBlob> &aux_data, int dev_id
 #if MXNET_USE_MEMORY_PROFILER
-        , const std::string & name = "<unk:ndarray>"    
+        , const std::string & name = DEFAULT_MEMORY_TAG("unknown")   
 #endif // MXNET_USE_MEMORY_PROFILER
           )
       : ptr_(std::make_shared<Chunk>(stype, data, aux_data, dev_id

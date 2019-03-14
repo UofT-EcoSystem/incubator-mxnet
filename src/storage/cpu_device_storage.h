@@ -62,7 +62,7 @@ class CPUDeviceStorage {
 
 inline void* CPUDeviceStorage::Alloc(size_t size
 #if MXNET_USE_MEMORY_PROFILER
-  , const std::string & tag = "<unk:CPUDeviceStorage>"
+  , const std::string & tag = DEFAULT_MEMORY_TAG("unknown")
 #endif // MXNET_USE_MEMORY_PROFILER
     ) {
   void* ptr;

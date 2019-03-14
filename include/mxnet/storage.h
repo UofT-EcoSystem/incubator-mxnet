@@ -26,8 +26,9 @@
 
 #include <memory>
 #include "./base.h"
-
-#define MXNET_USE_MEMORY_PROFILER 1
+// @MXNET_USE_MEMORY_PROFILER
+#include "./memory_profiler.h"
+// /MXNET_USE_MEMORY_PROFILER
 
 namespace mxnet {
 
@@ -61,7 +62,7 @@ class Storage {
    */
   virtual Handle Alloc(size_t size, Context ctx
 #if MXNET_USE_MEMORY_PROFILER
-    , const std::string & tag = "<unk:Storage>"
+    , const std::string & tag = DEFAULT_MEMORY_TAG("unknown")
 #endif
       ) = 0;
   /*!

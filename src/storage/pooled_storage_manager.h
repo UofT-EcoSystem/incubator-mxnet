@@ -60,7 +60,7 @@ class GPUPooledStorageManager final : public StorageManager {
 
   void* Alloc(size_t raw_size
 #if MXNET_USE_MEMORY_PROFILER
-    , const std::string & tag = "<unk:GPUPooledStorageManager>"
+    , const std::string & tag = DEFAULT_MEMORY_TAG("unknown")
 #endif // MXNET_USE_MEMORY_PROFILER
       ) override;
   void Free(void* ptr, size_t raw_size) override;

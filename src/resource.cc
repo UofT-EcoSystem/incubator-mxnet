@@ -62,7 +62,7 @@ struct SpaceAllocator {
   }
   inline void* GetSpace(size_t size
 #if MXNET_USE_MEMORY_PROFILER
-    , const std::string & tag = "<unk:SpaceAllocator:GetSpace>"
+    , const std::string & tag = DEFAULT_MEMORY_TAG("unknown")
 #endif // MXNET_USE_MEMORY_PROFILER
       ) {
     if (handle.size >= size) return handle.dptr;

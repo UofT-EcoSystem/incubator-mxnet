@@ -27,8 +27,9 @@
 #include <dmlc/logging.h>
 #include "./base.h"
 #include "./engine.h"
-
-#define MXNET_USE_MEMORY_PROFILER 1
+// @MXNET_USE_MEMORY_PROFILER
+#include "./memory_profiler.h"
+// /MXNET_USE_MEMORY_PROFILER
 
 namespace mxnet {
 
@@ -110,10 +111,7 @@ struct Resource {
   inline mshadow::Tensor<xpu, ndim, real_t> get_space(
       mshadow::Shape<ndim> shape, mshadow::Stream<xpu> *stream
 #if MXNET_USE_MEMORY_PROFILER
-    , const std::string & tag = std::string("workspace:")
-        + __builtin_FILE() + ":"
-        + __builtin_FUNCTION() + ":"
-        + std::to_string(__builtin_LINE())
+    , const std::string & tag = DEFAULT_MEMORY_TAG("workspace")
 #endif // MXNET_USE_MEMORY_PROFILER
       ) const {
     return get_space_typed<xpu, ndim, real_t>(shape, stream
@@ -149,10 +147,7 @@ struct Resource {
   inline mshadow::Tensor<xpu, ndim, DType> get_space_typed(
       mshadow::Shape<ndim> shape, mshadow::Stream<xpu> *stream
 #if MXNET_USE_MEMORY_PROFILER
-    , const std::string & tag = std::string("workspace:")
-        + __builtin_FILE() + ":"
-        + __builtin_FUNCTION() + ":"
-        + std::to_string(__builtin_LINE())
+    , const std::string & tag = DEFAULT_MEMORY_TAG("workspace")
 #endif // MXNET_USE_MEMORY_PROFILER
       ) const {
     CHECK_EQ(req.type, ResourceRequest::kTempSpace);

@@ -38,7 +38,7 @@ class StorageImpl : public Storage {
  public:
   Handle Alloc(size_t size, Context ctx
 #if MXNET_USE_MEMORY_PROFILER
-  , const std::string & tag = "<unk:StorageImpl>"
+  , const std::string & tag = DEFAULT_MEMORY_TAG("unknown")
 #endif // MXNET_USE_MEMORY_PROFILER
       ) override;
   void Free(Handle handle) override;
