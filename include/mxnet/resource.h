@@ -28,6 +28,8 @@
 #include "./base.h"
 #include "./engine.h"
 
+#define MXNET_USE_MEMORY_PROFILER 1
+
 namespace mxnet {
 
 /*!
@@ -81,11 +83,7 @@ struct Resource {
    */
   template<typename xpu, typename DType>
   inline mshadow::Random<xpu, DType>* get_random(
-      mshadow::Stream<xpu> *stream
-#if MXNET_USE_MEMORY_PROFILER
-    , const std::string & tag
-#endif // MXNET_USE_MEMORY_PROFILER
-      ) const {
+      mshadow::Stream<xpu> *stream) const {
     CHECK_EQ(req.type, ResourceRequest::kRandom);
     mshadow::Random<xpu, DType> *ret =
         static_cast<mshadow::Random<xpu, DType>*>(ptr_);
@@ -112,7 +110,10 @@ struct Resource {
   inline mshadow::Tensor<xpu, ndim, real_t> get_space(
       mshadow::Shape<ndim> shape, mshadow::Stream<xpu> *stream
 #if MXNET_USE_MEMORY_PROFILER
-    , const std::string & tag = "<unk:Resource:get_space>"
+    , const std::string & tag = std::string("workspace:")
+        + __builtin_FILE() + ":"
+        + __builtin_FUNCTION() + ":"
+        + std::to_string(__builtin_LINE())
 #endif // MXNET_USE_MEMORY_PROFILER
       ) const {
     return get_space_typed<xpu, ndim, real_t>(shape, stream
@@ -148,17 +149,20 @@ struct Resource {
   inline mshadow::Tensor<xpu, ndim, DType> get_space_typed(
       mshadow::Shape<ndim> shape, mshadow::Stream<xpu> *stream
 #if MXNET_USE_MEMORY_PROFILER
-    , const std::string & tag = "<unk:Resource:get_space_typed>"
+    , const std::string & tag = std::string("workspace:")
+        + __builtin_FILE() + ":"
+        + __builtin_FUNCTION() + ":"
+        + std::to_string(__builtin_LINE())
 #endif // MXNET_USE_MEMORY_PROFILER
       ) const {
     CHECK_EQ(req.type, ResourceRequest::kTempSpace);
     return mshadow::Tensor<xpu, ndim, DType>(
-        reinterpret_cast<DType*>(get_space_internal(shape.Size() * sizeof(DType))),
-        shape, shape[ndim - 1], stream
+        reinterpret_cast<DType*>(get_space_internal(shape.Size() * sizeof(DType)
 #if MXNET_USE_MEMORY_PROFILER
-      , tag
+                                                  , tag
 #endif // MXNET_USE_MEMORY_PROFILER
-        );
+                                                    )),
+        shape, shape[ndim - 1], stream);
   }
   /*!
    * \brief Get CPU space as mshadow Tensor in specified type.
@@ -183,9 +187,9 @@ struct Resource {
    */
   void* get_space_internal(size_t size
 #if MXNET_USE_MEMORY_PROFILER
-    , const std::string & tag = "<unk:Resource:get_space_internal>"
+    , const std::string & tag
 #endif // MXNET_USE_MEMORY_PROFILER
-      ) const;
+      ) const; 
   /*!
    * \brief internal function to get cpu space from resources.
    * \param size The size of space.

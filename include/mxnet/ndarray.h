@@ -608,7 +608,11 @@ class NDArray {
   inline void CheckAndAllocAuxData(size_t i, const TShape &aux_shape) const {
     CHECK_NE(storage_type(), kDefaultStorage)
              << "CheckAndAllocAuxData is not intended for kDefaultStorage";
-    ptr_->CheckAndAllocAuxData(i, aux_shape);
+    ptr_->CheckAndAllocAuxData(i, aux_shape
+#if MXNET_USE_MEMORY_PROFILER
+      , "aux:"
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
   }
   /*!
    * \brief Save list of ndarray into the Stream.x
@@ -748,7 +752,7 @@ class NDArray {
       for (size_t i = 0; i < aux_shapes.size(); i++) {
         CheckAndAllocAuxData(i, aux_shapes[i]
 #if MXNET_USE_MEMORY_PROFILER
-          , "aux:" + name
+          , "aux:"
 #endif // MXNET_USE_MEMORY_PROFILER
             );
         // this line is needed in case when aux_shapes[i].Size() = 0
@@ -855,7 +859,7 @@ class NDArray {
         auto aux_shape = aux_shapes[rowsparse::kIdx];
         CheckAndAllocAuxData(rowsparse::kIdx, aux_shape
 #if MXNET_USE_MEMORY_PROFILER
-          , "aux:idx:" + name
+          , "aux:idx:"
 #endif // MXNET_USE_MEMORY_PROFILER
             );
         TShape storage_shape(shape);
@@ -864,12 +868,12 @@ class NDArray {
       } else if (kCSRStorage == storage_type) {
         CheckAndAllocAuxData(csr::kIndPtr, aux_shapes[csr::kIndPtr]
 #if MXNET_USE_MEMORY_PROFILER
-          , "aux:ind_ptr:" + name
+          , "aux:ind_ptr:"
 #endif // MXNET_USE_MEMORY_PROFILER
             );
         CheckAndAllocAuxData(csr::kIdx, aux_shapes[csr::kIdx]
 #if MXNET_USE_MEMORY_PROFILER
-          , "aux:idx:" + name
+          , "aux:idx:"
 #endif // MXNET_USE_MEMORY_PROFILER
         );
         CheckAndAllocData(aux_shapes[csr::kIdx], dtype);
@@ -906,7 +910,7 @@ class NDArray {
     // and allocate new storage
     inline void CheckAndAllocAuxData(size_t i, const TShape &shape
 #if MXNET_USE_MEMORY_PROFILER  
-      , tag
+                                   , const std::string & tag_prefix
 #endif // MXNET_USE_MEMORY_PROFILER
                                      ) {
       CHECK_EQ(shape.ndim(), 1) << "shape must be 1D in CheckAndAllocAuxData";
@@ -924,7 +928,7 @@ class NDArray {
         // init aux storage
         aux_handles[i] = Storage::Get()->Alloc(aux_bytes, ctx
 #if MXNET_USE_MEMORY_PROFILER
-          , tag
+          , tag_prefix + name
 #endif // MXNET_USE_MEMORY_PROFILER
             );
       }
