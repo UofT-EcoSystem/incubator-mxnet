@@ -399,7 +399,11 @@ class CTCLossOp : public Operator {
 
     Tensor<xpu, 1, real_t> temp_space =
       ctx.requested[ctc_loss::kTempSpace].get_space_typed<xpu, 1, real_t>(
-          mshadow::Shape1(workspace_size+data.shape_.FlatTo1D()[0]), s);
+          mshadow::Shape1(workspace_size+data.shape_.FlatTo1D()[0]), s
+#if MXNET_USE_MEMORY_PROFILER
+            , "workspace:ctc_loss:cudnn_forward"
+#endif // MXNET_USE_MEMORY_PROFILER
+              );
 
     Tensor<gpu, 1, real_t> work_space(temp_space.dptr_,
                                       mshadow::Shape1(workspace_size), s);
@@ -454,7 +458,11 @@ class CTCLossOp : public Operator {
     int num_tmp_elems = (size_bytes + sizeof(real_t) - 1) / sizeof(real_t);
     Tensor<xpu, 1, real_t> workspace =
         ctx.requested[ctc_loss::kTempSpace].get_space_typed<xpu, 1, real_t>(
-            Shape1(num_tmp_elems), s);
+            Shape1(num_tmp_elems), s
+#if MXNET_USE_MEMORY_PROFILER
+          , "workspace:ctc_loss:baidu_forward"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
 
     compute_ctc_cost(data, costs.dptr_, grad.dptr_, packed_labels->data(),
                      label_lengths->data(), data_lengths->data(),

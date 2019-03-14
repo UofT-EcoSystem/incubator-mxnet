@@ -179,7 +179,11 @@ void MultiSampleOpForward(const nnvm::NodeAttrs& attrs,
   // Generate multiple seeds for the different threads.
   const int nSeeds(OptSampleSeedNum<xpu>(outputs[0].Size()));
   Tensor<xpu, 1, unsigned> seeds
-    = ctx.requested[1].get_space_typed<xpu, 1, unsigned> (Shape1(nSeeds), ctx.get_stream<xpu>());
+    = ctx.requested[1].get_space_typed<xpu, 1, unsigned> (Shape1(nSeeds), ctx.get_stream<xpu>()
+#if MXNET_USE_MEMORY_PROFILER
+      , "workspace:multisample:forward"
+#endif // MXNET_USE_MEMORY_PROFILER
+    );
   ctx.requested[0].get_random<xpu, float>(s)->GetRandInt(seeds);
   MSHADOW_TYPE_SWITCH(inputs[0].type_flag_, IType, {
     MSHADOW_REAL_TYPE_SWITCH(outputs[0].type_flag_, OType, {

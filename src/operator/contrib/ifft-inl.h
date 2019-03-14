@@ -96,7 +96,11 @@ class IFFTOp : public Operator {
     // need temp space to store the intermediate complex matrices
     Tensor<xpu, 1, DType> workspace =
             ctx.requested[ifft::kTempSpace].get_space_typed<xpu, 1, DType>(
-                Shape1(param_.compute_size*dim_*2), s);
+                Shape1(param_.compute_size*dim_*2), s
+#if MXNET_USE_MEMORY_PROFILER
+              , "workspace:ifft:forward"
+#endif // MXNET_USE_MEMORY_PROFILER
+                );
     Tensor<xpu, 2, DType> complex_data = Tensor<xpu, 2, DType>(workspace.dptr_,
                                               Shape2(param_.compute_size, dim_*2), s);
     // start ifft
@@ -154,7 +158,11 @@ class IFFTOp : public Operator {
     Tensor<xpu, 2, DType> gdata = in_grad[ifft::kData].get_with_shape<xpu, 2, DType>(
           Shape2(n_iffts, dim_*2), s);
     Tensor<xpu, 2, DType> grad = out_grad[ifft::kOut].get_with_shape<xpu, 2, DType>(
-          Shape2(n_iffts, dim_), s);
+          Shape2(n_iffts, dim_), s
+#if MXNET_USE_MEMORY_PROFILER
+        , "workspace:ifft:backward"
+#endif // MXNET_USE_MEMORY_PROFILER
+          );
     // need temp space to pad the data into complex numbers due to cufft interface
     Tensor<xpu, 1, DType> workspace =
             ctx.requested[ifft::kTempSpace].get_space_typed<xpu, 1, DType>(

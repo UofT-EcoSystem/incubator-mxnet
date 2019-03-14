@@ -155,7 +155,11 @@ class L2NormalizationOp : public Operator {
         .get_with_shape<xpu, 2, real_t>(dshape, s);
       Tensor<xpu, 1> norm = out_data[l2_normalization::kNorm].get<xpu, 1, real_t>(s);
       Tensor<xpu, 1> temp = ctx.requested[l2_normalization::kTempSpace]
-        .get_space<xpu>(mshadow::Shape1(data.shape_[0]), s);
+        .get_space<xpu>(mshadow::Shape1(data.shape_[0]), s
+#if MXNET_USE_MEMORY_PROFILER
+          , "workspace:l2_normalization:backward"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
       temp = sumall_except_dim<0>(grad_out * data);
       Assign(grad_in, req[l2_normalization::kData],
         (grad_out - data * broadcast<0>(temp, data.shape_)) /
@@ -174,7 +178,11 @@ class L2NormalizationOp : public Operator {
       Tensor<xpu, 2> norm = out_data[l2_normalization::kNorm]
         .get_with_shape<xpu, 2, real_t>(norm_shape, s);
       Tensor<xpu, 2> temp = ctx.requested[l2_normalization::kTempSpace]
-        .get_space<xpu>(mshadow::Shape2(data.shape_[0], data.shape_[2]), s);
+        .get_space<xpu>(mshadow::Shape2(data.shape_[0], data.shape_[2]), s
+#if MXNET_USE_MEMORY_PROFILER
+          , "workspace:l2_normalization:backward"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
       temp = reduce_with_axis<red::sum, false>(grad_out * data, 1);
       Assign(grad_in, req[l2_normalization::kData],
         (grad_out - data * broadcast_with_axis(temp, 0, orig_shape[1])) /
@@ -193,7 +201,11 @@ class L2NormalizationOp : public Operator {
       Tensor<xpu, 2> norm = out_data[l2_normalization::kNorm]
         .get_with_shape<xpu, 2, real_t>(norm_shape, s);
       Tensor<xpu, 2> temp = ctx.requested[l2_normalization::kTempSpace]
-        .get_space<xpu>(mshadow::Shape2(data.shape_[0], data.shape_[1]), s);
+        .get_space<xpu>(mshadow::Shape2(data.shape_[0], data.shape_[1]), s
+#if MXNET_USE_MEMORY_PROFILER
+          , "workspace:l2_normalization:backward"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
       temp = reduce_with_axis<red::sum, false>(grad_out * data, 2);
       Assign(grad_in, req[l2_normalization::kData],
         (grad_out - data * broadcast_with_axis(temp, 1, dshape[2])) /

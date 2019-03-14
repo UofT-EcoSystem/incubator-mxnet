@@ -215,7 +215,11 @@ public:
 		}
 
 		Tensor < gpu, 1, DType > workspace = ctx.requested[int(EnumOpWorkspace::TempSpace)]
-			.get_space_typed < gpu, 1, DType > (Shape1(_temp_space_size), cuda_stream);
+			.get_space_typed < gpu, 1, DType > (Shape1(_temp_space_size), cuda_stream
+#if MXNET_USE_MEMORY_PROFILER
+		      , "workspace:lstm_cell:forward"
+#endif // MXNET_USE_MEMORY_PROFILER
+			);
 
 		const unsigned BxH = _param.batch_size * _param.state_size;
 
@@ -326,7 +330,11 @@ public:
 		CHECK_EQ(state_c_out_grad.CheckContiguous(), true);
 
 		Tensor < gpu, 1, DType > workspace = ctx.requested[int(EnumOpWorkspace::TempSpace)]
-			.get_space_typed < gpu, 1, DType > (Shape1(_temp_space_size), cuda_stream);
+			.get_space_typed < gpu, 1, DType > (Shape1(_temp_space_size), cuda_stream
+#if MXNET_USE_MEMORY_PROFILER
+		      , "workspace:lstm_cell:backward"
+#endif // MXNET_USE_MEMORY_PROFILER
+			);
 
 		const unsigned BxH = _param.batch_size * _param.state_size;
 	

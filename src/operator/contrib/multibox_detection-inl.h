@@ -99,7 +99,11 @@ class MultiBoxDetectionOp : public Operator {
      Tensor<xpu, 3, DType> out = out_data[mboxdet_enum::kOut]
        .get<xpu, 3, DType>(s);
      Tensor<xpu, 3, DType> temp_space = ctx.requested[mboxdet_enum::kTempSpace]
-       .get_space_typed<xpu, 3, DType>(out.shape_, s);
+       .get_space_typed<xpu, 3, DType>(out.shape_, s
+#if MXNET_USE_MEMORY_PROFILER
+     , "workspace:multibox_detection:forward"
+#endif // MXNET_USE_MEMORY_PROFILER
+       );
      out = -1.f;
      MultiBoxDetectionForward(out, cls_prob, loc_pred, anchors, temp_space,
        param_.threshold, param_.clip, param_.variances, param_.nms_threshold,

@@ -147,7 +147,11 @@ class ConvolutionV1Op : public Operator {
     const index_t nbatch = data.size(0);
     Tensor<xpu, 1, DType> workspace =
         ctx.requested[conv_v1::kTempSpace].get_space_typed<xpu, 1, DType>(
-            Shape1(this->InitTemp(data.shape_, out.shape_)), s);
+            Shape1(this->InitTemp(data.shape_, out.shape_)), s
+#if MXNET_USE_MEMORY_PROFILER
+          , "workspace:convolution_v1:forward"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
     for (index_t i = 0; i < nbatch; i += nstep_) {
       const index_t step = std::min(nstep_, nbatch - i);
       Tensor<xpu, 2, DType> temp_col = Tensor<xpu, 2, DType>(workspace.dptr_,
@@ -236,7 +240,11 @@ class ConvolutionV1Op : public Operator {
     const index_t nbatch = data.size(0);
     Tensor<xpu, 1, DType> workspace =
         ctx.requested[conv_v1::kTempSpace].get_space_typed<xpu, 1, DType>(
-            Shape1(this->InitTemp(data.shape_, grad.shape_)), s);
+            Shape1(this->InitTemp(data.shape_, grad.shape_)), s
+#if MXNET_USE_MEMORY_PROFILER
+          , "workspace:convolution_v1:"
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
     for (index_t i = 0; i < nbatch; i += nstep_) {
       const index_t step = std::min(nstep_, nbatch - i);
       Tensor<xpu, 2, DType> temp_col = Tensor<xpu, 2, DType>(workspace.dptr_,
