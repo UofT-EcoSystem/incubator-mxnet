@@ -54,27 +54,53 @@ GraphExecutor::~GraphExecutor() {
 }
 
 inline NDArray InitZeros(const NDArrayStorageType stype, const TShape &shape,
-                                const Context &ctx, const int dtype) {
+                         const Context &ctx, const int dtype
+#if MXNET_USE_MEMORY_PROFILER
+                       , const std::string & name = DEFAULT_MEMORY_TAG("unknown")
+#endif // MXNET_USE_MEMORY_PROFILER
+                         ) {
   // NDArray with default storage
   if (stype == kDefaultStorage) {
-    NDArray ret(shape, ctx, false, dtype);
+    NDArray ret(shape, ctx, false, dtype
+#if MXNET_USE_MEMORY_PROFILER
+      , name
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
     ret = 0;
     return ret;
   }
   // NDArray with non-default storage. Storage allocation is always delayed.
-  return NDArray(stype, shape, ctx, true, dtype);
+  return NDArray(stype, shape, ctx, true, dtype
+#if MXNET_USE_MEMORY_PROFILER
+    , {}, {}, TShape(mshadow::Shape1(0)), name
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
 }
 
 inline void EmplaceBackZeros(const NDArrayStorageType stype, const TShape &shape,
                              const Context &ctx, const int dtype,
-                             std::vector<NDArray> *vec) {
+                             std::vector<NDArray> *vec
+#if MXNET_USE_MEMORY_PROFILER
+                           , const std::string & name = DEFAULT_MEMORY_TAG("unknown")
+#endif // MXNET_USE_MEMORY_PROFILER
+                             ) {
   // NDArray with default storage
   if (stype == kDefaultStorage) {
-    vec->emplace_back(shape, ctx, false, dtype);
+    vec->emplace_back(shape, ctx, false, dtype
+#if MXNET_USE_MEMORY_PROFILER
+      , name
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
     vec->back() = 0;
   } else {
     // NDArray with non-default storage. Storage allocation is always delayed.
-    vec->emplace_back(stype, shape, ctx, true, dtype);
+    vec->emplace_back(stype, shape, ctx, true, dtype
+#if MXNET_USE_MEMORY_PROFILER
+      , std::vector < int > ()
+      , std::vector < TShape > ()
+      , TShape(mshadow::Shape1(0)), name
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
   }
 }
 void GraphExecutor::Forward(bool is_train) {
@@ -634,7 +660,11 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
     const std::string& arg_name = idx[nid].source->attrs.name;
     if (mutable_nodes.count(nid)) {  // aux_states
       EmplaceBackZeros(inferred_stype, inferred_shape, aux_state_ctxes[aux_top],
-                       inferred_dtype, aux_state_vec);
+                       inferred_dtype, aux_state_vec
+#if MXNET_USE_MEMORY_PROFILER
+                     , "aux_state:" + arg_name
+#endif // MXNET_USE_MEMORY_PROFILER
+                       );
       data_entry_[eid] = aux_state_vec->back();
       aux_state_map_.emplace(arg_name, aux_state_vec->back());
       ++aux_top;
@@ -644,7 +674,11 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
       }
     } else {  // in_args
       EmplaceBackZeros(inferred_stype, inferred_shape, in_arg_ctxes[arg_top],
-                       inferred_dtype, in_arg_vec);
+                       inferred_dtype, in_arg_vec
+#if MXNET_USE_MEMORY_PROFILER
+                     , "in_arg" + arg_name
+#endif // MXNET_USE_MEMORY_PROFILER
+                       );
       data_entry_[eid] = in_arg_vec->back();
       if (log_verbose_) {
         LOG(INFO) << "\tassign data entry\t" << eid << "\tas "
@@ -659,7 +693,12 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
         auto grad_eid = idx.entry_id(idx.outputs()[grad_oid]);
         auto grad_stype = (NDArrayStorageType) inferred_stypes[grad_eid];
         EmplaceBackZeros(grad_stype, inferred_shape, arg_grad_ctxes[arg_top],
-                         inferred_dtype, arg_grad_vec);
+                         inferred_dtype, arg_grad_vec
+#if MXNET_USE_MEMORY_PROFILER
+                       , 
+                       "arg_grad" + arg_name                 
+#endif // MXNET_USE_MEMORY_PROFILER
+                         );
         if (log_verbose_) {
           LOG(INFO) << "\tassign grad entry\t" << grad_eid << "\tas "
                     << common::stype_string(grad_stype);
@@ -685,6 +724,14 @@ NDArray ReshapeOrCreate(const std::string& name,
                         const NDArrayStorageType dest_arg_stype,
                         const Context& ctx,
                         std::unordered_map<std::string, NDArray>* shared_buffer) {
+#if MXNET_USE_MEMORY_PROFILER
+  std::string ndarray_chunk_tag = name;
+  if (name.find("grad of ") == std::string::npos) {
+    ndarray_chunk_tag = "in_arg:" + name;
+  } else {
+    ndarray_chunk_tag = "arg_grad:" + name.substr(sizeof("grad of "));
+  }
+#endif // MXNET_USE_MEMORY_PROFILER
   if (dest_arg_dtype != kDefaultStorage) {
     return InitZeros(dest_arg_stype, dest_arg_shape, ctx, dest_arg_dtype);
   }
@@ -761,7 +808,11 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
         aux_state_vec->emplace_back(aux_nd);
       } else {
         EmplaceBackZeros(inferred_stype, inferred_shape, aux_state_ctxes[aux_top],
-                         inferred_dtype, aux_state_vec);
+                         inferred_dtype, aux_state_vec
+#if MXNET_USE_MEMORY_PROFILER
+                       , "aux_state:" + arg_name
+#endif // MXNET_USE_MEMORY_PROFILER
+                         );
       }  // if (has_shared_exec)
       data_entry_[eid] = aux_state_vec->back();
       aux_state_map_.emplace(arg_name, aux_state_vec->back());
@@ -787,7 +838,11 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
         } else {
           // doesn't have shared_exec, or non-default storage
           EmplaceBackZeros(inferred_stype, inferred_shape, in_arg_ctxes[arg_top],
-                           inferred_dtype, in_arg_vec);
+                           inferred_dtype, in_arg_vec
+#if MXNET_USE_MEMORY_PROFILER
+                         , "in_arg:" + arg_name
+#endif // MXNET_USE_MEMORY_PROFILER
+                           );
         }
         // gradient for model parameter
         if (kNullOp == grad_req_types[arg_top]) {
@@ -802,7 +857,11 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
             arg_grad_vec->emplace_back(shared_exec->arg_grad_map().at(arg_name));
           } else {
             EmplaceBackZeros(grad_stype, inferred_shape, arg_grad_ctxes[arg_top],
-                             inferred_dtype, arg_grad_vec);
+                             inferred_dtype, arg_grad_vec
+#if MXNET_USE_MEMORY_PROFILER
+                           , "arg_grad:" + arg_name
+#endif // MXNET_USE_MEMORY_PROFILER
+                             );
           }
           grad_store_.emplace_back(grad_req_types[arg_top], arg_grad_vec->back());
         }
@@ -1054,6 +1113,9 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
   CHECK_EQ(idx.num_node_entries(), vdtype.size());
   CHECK_EQ(idx.num_node_entries(), vstorage.size());
   CHECK_EQ(data_entry_.size(), vshape.size());
+#if MXNET_USE_MEMORY_PROFILER
+  std::vector < std::string > node_attrs_name (idx.num_node_entries());
+#endif // MXNET_USE_MEMORY_PROFILER
   std::vector<Context> data_context(idx.num_node_entries());
   std::vector<NDArrayStorageType> data_storage_type(idx.num_node_entries(), kUndefinedStorage);
   for (uint32_t nid = 0; nid < idx.num_nodes(); ++nid) {
@@ -1062,6 +1124,9 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
       data_context[eid] = vctx[nid];
       CHECK_NE(vstorage_type[nid], kUndefinedStorage);
       data_storage_type[eid] = (NDArrayStorageType) vstorage_type[nid];
+#if MXNET_USE_MEMORY_PROFILER
+      node_attrs_name[eid] = idx[nid].source->attrs.name;
+#endif // MXNET_USE_MEMORY_PROFILER
     }
   }
 
@@ -1084,9 +1149,17 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     auto data_eid = idx.entry_id(nid, 0);
     // initialize based on storage_type
     if (stype != kDefaultStorage) {
-      data_entry_[data_eid] = NDArray(stype, vshape[eid], data_context[eid], true, vdtype[eid]);
+      data_entry_[data_eid] = NDArray(stype, vshape[eid], data_context[eid], true, vdtype[eid]
+#if MXNET_USE_MEMORY_PROFILER
+        , {}, {}, TShape(mshadow::Shape1(0)), "feature_maps:" + node_attrs_name[eid]
+#endif // MXNET_USU_MEMORY_PROFILER
+          );
     } else {
-      data_entry_[data_eid] = NDArray(vshape[eid], data_context[eid], false, vdtype[eid]);
+      data_entry_[data_eid] = NDArray(vshape[eid], data_context[eid], false, vdtype[eid]
+#if MXNET_USE_MEMORY_PROFILER
+        , "feature_maps:" + node_attrs_name[eid]
+#endif // MXNET_USE_MEMORY_PROFILER
+          );
     }
     if (log_verbose_) {
       LOG(INFO) << "\tinit head_grad entry\t" << data_eid << "\tas "
@@ -1178,6 +1251,9 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     if (log_verbose_) {
       LOG(INFO) << "\tinit data entry\t" << i << "\tas " << common::stype_string(storage_type);
     }
+#if MXNET_USE_MEMORY_PROFILER
+    data_entry_[i].setName("feature_maps:" + node_attrs_name[i]);
+#endif // MXNET_USE_MEMORY_PROFILER
   }
 }
 
