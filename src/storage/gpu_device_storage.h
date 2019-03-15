@@ -31,6 +31,10 @@
 #endif  // MXNET_USE_CUDA
 #include <new>
 
+#if MXNET_USE_MEMORY_PROFILER
+#include "../profiler/memory_profiler.h"
+#endif // MXNET_USE_MEMORY_PROFILER
+
 namespace mxnet {
 namespace storage {
 
@@ -57,6 +61,9 @@ inline void* GPUDeviceStorage::Alloc(size_t size
   , const std::string & tag = DEFAULT_MEMORY_TAG("unknown")
 #endif // MXNET_USE_MEMORY_PROFILER
     ) {
+#if MXNET_USE_MEMORY_PROFILER
+  profiler::MemoryProfiler::Get()->addEntry(size, tag);
+#endif // MXNET_USE_MEMORY_PROFILER
   void* ret = nullptr;
 #if MXNET_USE_CUDA
   cudaError_t e = cudaMalloc(&ret, size);

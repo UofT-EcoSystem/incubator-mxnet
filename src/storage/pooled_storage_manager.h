@@ -35,6 +35,9 @@
 #include "./storage_manager.h"
 #include "../common/cuda_utils.h"
 
+#if MXNET_USE_MEMORY_PROFILER
+#include "../profiler/memory_profiler.h"
+#endif // MXNET_USE_MEMORY_PROFILER
 
 namespace mxnet {
 namespace storage {
@@ -104,6 +107,9 @@ void* GPUPooledStorageManager::Alloc(size_t raw_size
     if (free <= total * reserve_ / 100 || size > free - total * reserve_ / 100)
       ReleaseAll();
 
+#if MXNET_USE_MEMORY_PROFILER
+    profiler::MemoryProfiler::Get()->addEntry(size, tag);
+#endif // MXNET_USE_MEMORY_PROFILER
     void* ret = nullptr;
     cudaError_t e = cudaMalloc(&ret, size);
     if (e != cudaSuccess && e != cudaErrorCudartUnloading) {

@@ -29,6 +29,10 @@
 #include "mxnet/base.h"
 #include "../common/cuda_utils.h"
 
+#if MXNET_USE_MEMORY_PROFILER
+#include "../profiler/memory_profiler.h"
+#endif // MXNET_USE_MEMORY_PROFILER
+
 namespace mxnet {
 namespace storage {
 
@@ -57,6 +61,9 @@ inline void* PinnedMemoryStorage::Alloc(size_t size
   , const std::string & tag
 #endif // MXNET_USE_MEMORY_PROFILER
     ) {
+#if MXNET_USE_MEMORY_PROFILER
+  profiler::MemoryProfiler::Get()->addEntry(size, tag);
+#endif // MXNET_USE_MEMORY_PROFILER
   void* ret = nullptr;
   // make the memory available across all devices
   CUDA_CALL(cudaHostAlloc(&ret, size, cudaHostAllocPortable));

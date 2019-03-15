@@ -28,7 +28,7 @@
 #include "./base.h"
 #include "./engine.h"
 // @MXNET_USE_MEMORY_PROFILER
-#include "./memory_profiler.h"
+#include "./memory_profiling.h"
 // /MXNET_USE_MEMORY_PROFILER
 
 namespace mxnet {
