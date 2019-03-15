@@ -266,7 +266,11 @@ MXNET_DLL int MXNDArrayCreate(const mx_uint *shape,
                               int dev_type,
                               int dev_id,
                               int delay_alloc,
-                              NDArrayHandle *out);
+                              NDArrayHandle *out
+#if MXNET_USE_MEMORY_PROFILER
+                            , const char * name = nullptr
+#endif // MXNET_USE_MEMORY_PROFILER
+                              );
 
 /*!
  * \brief create a NDArray with specified shape and data type
@@ -286,7 +290,11 @@ MXNET_DLL int MXNDArrayCreateEx(const mx_uint *shape,
                               int dev_id,
                               int delay_alloc,
                               int dtype,
-                              NDArrayHandle *out);
+                              NDArrayHandle *out
+#if MXNET_USE_MEMORY_PROFILER
+                            , const char * name = nullptr
+#endif // MXNET_USE_MEMORY_PROFILER
+                              );
 
 
 /*!
@@ -670,7 +678,11 @@ MXNET_DLL int MXImperativeInvoke(AtomicSymbolCreator creator,
                                  NDArrayHandle **outputs,
                                  int num_params,
                                  const char **param_keys,
-                                 const char **param_vals);
+                                 const char **param_vals
+#if MXNET_USE_MEMORY_PROFILER
+                               , const char * name = nullptr
+#endif // MXNET_USE_MEMORY_PROFILER
+                                 );
 /*!
  * \brief invoke a nnvm op and imperative function
  * \param creator the op
@@ -692,7 +704,11 @@ MXNET_DLL int MXImperativeInvokeEx(AtomicSymbolCreator creator,
                                    int num_params,
                                    const char **param_keys,
                                    const char **param_vals,
-                                   const int **out_stypes);
+                                   const int **out_stypes
+#if MXNET_USE_MEMORY_PROFILER
+                                 , const char * name = nullptr
+#endif // MXNET_USE_MEMORY_PROFILER
+                                   );
 /*!
  * \brief set whether to record operator for autograd
  * \param is_recording 1 when recording, 0 when not recording.

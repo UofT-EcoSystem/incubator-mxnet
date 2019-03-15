@@ -112,7 +112,11 @@ def _new_empty_handle():
     return hdl
 
 
-def _new_alloc_handle(shape, ctx, delay_alloc, dtype=mx_real_t):
+def _new_alloc_handle(shape, ctx, delay_alloc, dtype=mx_real_t
+                      # @MXNET_USE_MEMORY_PROFILER
+                    , name="unknown:_new_alloc_handle"
+                      # /MXNET_USE_MEMORY_PROFILER
+                      ):
     """Return a new handle with specified shape and context.
 
     Empty handle is only used to hold results.
@@ -130,7 +134,11 @@ def _new_alloc_handle(shape, ctx, delay_alloc, dtype=mx_real_t):
         ctypes.c_int(ctx.device_id),
         ctypes.c_int(int(delay_alloc)),
         ctypes.c_int(int(_DTYPE_NP_TO_MX[np.dtype(dtype).type])),
-        ctypes.byref(hdl)))
+        ctypes.byref(hdl)
+        # @MXNET_USE_MEMORY_PROFILER
+      , ctypes.create_string_buffer(str.encode(name))
+        # /MXNET_USE_MEMORY_PROFILER
+        ))
     return hdl
 
 

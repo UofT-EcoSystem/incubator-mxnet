@@ -698,9 +698,17 @@ class Adam(Optimizer):
 
     def create_state(self, index, weight):
         return (zeros(weight.shape, weight.context, dtype=weight.dtype,
-                      stype=weight.stype),  # mean
+                      stype=weight.stype
+                      # @MXNET_USE_MEMORY_PROFILER
+                    , name=weight.name.replace('in_arg', 'optimizer_state:mean')
+                      # /MXNET_USE_MEMORY_PROFILER
+                      ),  # mean
                 zeros(weight.shape, weight.context, dtype=weight.dtype,
-                      stype=weight.stype))  # variance
+                      stype=weight.stype
+                      # @MXNET_USE_MEMORY_PROFILER
+                    , name=weight.name.replace('in_arg', 'optimizer_state:variance')
+                      # /MXNET_USE_MEMORY_PROFILER
+                      ))  # variance
 
     def update(self, index, weight, grad, state):
         assert(isinstance(weight, NDArray))

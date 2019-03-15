@@ -153,12 +153,20 @@ int MXNDArrayCreate(const mx_uint *shape,
                     int dev_type,
                     int dev_id,
                     int delay_alloc,
-                    NDArrayHandle *out) {
+                    NDArrayHandle *out
+#if MXNET_USE_MEMORY_PROFILER
+                  , const char * name
+#endif // MXNET_USE_MEMORY_PROFILER
+                    ) {
   API_BEGIN();
   *out = new NDArray(
       TShape(shape, shape + ndim),
       Context::Create(static_cast<Context::DeviceType>(dev_type), dev_id),
-      delay_alloc != 0);
+      delay_alloc != 0
+#if MXNET_USE_MEMORY_PROFILER
+    , mshadow::default_type_flag, name
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
   API_END();
 }
 
@@ -168,13 +176,21 @@ int MXNDArrayCreateEx(const mx_uint *shape,
                     int dev_id,
                     int delay_alloc,
                     int dtype,
-                    NDArrayHandle *out) {
+                    NDArrayHandle *out
+#if MXNET_USE_MEMORY_PROFILER
+                  , const char * name
+#endif // MXNET_USE_MEMORY_PROFILER
+                    ) {
   API_BEGIN();
   *out = new NDArray(
       TShape(shape, shape + ndim),
       Context::Create(static_cast<Context::DeviceType>(dev_type), dev_id),
       delay_alloc != 0,
-      dtype);
+      dtype
+#if MXNET_USE_MEMORY_PROFILER
+    , name
+#endif // MXNET_USE_MEMORY_PROFILER
+      );
   API_END();
 }
 

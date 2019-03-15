@@ -153,9 +153,17 @@ inline void SetShapeType(const Context& ctx,
     NDArrayStorageType storage_type = static_cast<NDArrayStorageType>(out_storage_types[i]);
     if (outputs[i]->is_none()) {
       if (storage_type == kDefaultStorage) {
-        *outputs[i] = NDArray(out_shapes[i], ctx, true, out_types[i]);
+        *outputs[i] = NDArray(out_shapes[i], ctx, true, out_types[i]
+#if MXNET_USE_MEMORY_PROFILER
+          , attrs.name
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
       } else {
-        *outputs[i] = NDArray(storage_type, out_shapes[i], ctx, true, out_types[i]);
+        *outputs[i] = NDArray(storage_type, out_shapes[i], ctx, true, out_types[i]
+#if MXNET_USE_MEMORY_PROFILER
+          , {}, {}, TShape(mshadow::Shape1(0)), attrs.name
+#endif // MXNET_USE_MEMORY_PROFILER
+            );
       }
     } else {
       CHECK_EQ(outputs[i]->shape(), out_shapes[i])

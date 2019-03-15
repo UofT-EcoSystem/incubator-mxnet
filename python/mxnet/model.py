@@ -133,6 +133,9 @@ def _update_params(param_arrays, grad_arrays, updater, num_device,
             # state for the same index but on diff devs, TODO(mli)
             # use a better solution later
             w, g = p
+            # @MXNET_USE_MEMORY_PROFILER
+            w.name = "in_arg:%s" % param_names[index]
+            # /MXNET_USE_MEMORY_PROFILER
             updater(index*num_device+k, g, w)
 
 
