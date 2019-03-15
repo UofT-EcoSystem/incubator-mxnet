@@ -69,11 +69,7 @@ enum NDArrayStorageType {
 class NDArray {
  public:
   /*! \brief default constructor */
-  NDArray(
-#if MXNET_USE_MEMORY_PROFILER
-          const std::string & name = DEFAULT_MEMORY_TAG("unknown")
-#endif // MXNET_USE_MEMORY_PROFILER
-          ) {
+  NDArray() {
 #if MKL_EXPERIMENTAL == 1
     Mkl_mem_ = MKLMemHolder::create();
 #endif
@@ -207,6 +203,12 @@ class NDArray {
 #endif
   }
 
+#if MXNET_USE_MEMORY_PROFILER
+  std::string getName() const {
+    return ptr_->name;
+  }
+  void setName(const std::string & name) { ptr_->name = name; }
+#endif // MXNET_USE_MEMORY_PROFILER
 
   /*!
    * \return the shape of current NDArray.
@@ -674,7 +676,7 @@ class NDArray {
     // If aux_shapes[i].Size() is zero, aux data i is empty.
     std::vector<TShape> aux_shapes;
 #if MXNET_USE_MEMORY_PROFILER
-    std::string name = "<unk:ndarray_chunk>";
+    std::string name = "unknown:ndarray_chunk";
 #endif // MXNET_USE_MEMORY_PROFILER
 
     /*! \brief default cosntructor */
@@ -910,7 +912,7 @@ class NDArray {
     // and allocate new storage
     inline void CheckAndAllocAuxData(size_t i, const TShape &shape
 #if MXNET_USE_MEMORY_PROFILER  
-                                   , const std::string & tag_prefix
+                                   , const std::string & prefix
 #endif // MXNET_USE_MEMORY_PROFILER
                                      ) {
       CHECK_EQ(shape.ndim(), 1) << "shape must be 1D in CheckAndAllocAuxData";
@@ -928,7 +930,7 @@ class NDArray {
         // init aux storage
         aux_handles[i] = Storage::Get()->Alloc(aux_bytes, ctx
 #if MXNET_USE_MEMORY_PROFILER
-          , tag_prefix + name
+          , prefix + name
 #endif // MXNET_USE_MEMORY_PROFILER
             );
       }
