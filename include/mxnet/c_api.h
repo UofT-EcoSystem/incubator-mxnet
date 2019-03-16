@@ -24,6 +24,10 @@
 #ifndef MXNET_C_API_H_
 #define MXNET_C_API_H_
 
+// @MXNET_USE_MEMORY_PROFILER
+#include "./memory_profiling.h"
+// /MXNET_USE_MEMORY_PROFILER
+
 /*! \brief Inhibit C++ name-mangling for MXNet functions. */
 #ifdef __cplusplus
 extern "C" {
