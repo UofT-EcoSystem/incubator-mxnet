@@ -98,7 +98,7 @@ private:
 		_reserved_space = Storage::Get()->Alloc(_param.batch_size * 4 * _param.state_size * sizeof(DType), 
 		                                        Context::GPU()
 #if MXNET_USE_MEMORY_PROFILER
-						      , "feature_maps:"			
+						      , "feature_maps:ecornn:lstm_nonlin_block"			
 #endif // MXNET_USE_MEMORY_PROFILER
 							);
 		_initialized = true;
