@@ -96,7 +96,11 @@ private:
 		
 		// allocate the reserved space [B x 4H]
 		_reserved_space = Storage::Get()->Alloc(_param.batch_size * 4 * _param.state_size * sizeof(DType), 
-		                                        Context::GPU());
+		                                        Context::GPU()
+#if MXNET_USE_MEMORY_PROFILER
+						      , "feature_maps:"			
+#endif // MXNET_USE_MEMORY_PROFILER
+							);
 		_initialized = true;
 	}
 public:
