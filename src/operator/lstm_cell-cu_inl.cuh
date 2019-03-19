@@ -34,7 +34,8 @@ __global__ void _cuda_lstm_cell__forward(
 	      RealType * const __restrict__ reserved_space,
 	      RealType * const __restrict__ state_h_out,
 	      RealType * const __restrict__ state_c_out,
-	const unsigned batch_size, const unsigned state_size);
+	const unsigned batch_size, const unsigned state_size, 
+	const bool batch_minor);
 
 /**
  * Backward Pass of the LSTM Cell
@@ -78,7 +79,8 @@ static inline void FullyConnectedFW(cublasHandle_t cublas_handle,
 	const RealType * const __restrict__ W,
 	      RealType * const __restrict__ Y,
 	const OpReqType req,       const unsigned batch_size, 
-	const unsigned input_size, const unsigned state_size);
+	const unsigned input_size, const unsigned state_size,
+	const bool batch_minor);
 
 // FullyConnected Layer Y = XW^T Backward Pass on Weight (dW = dY^T X)
 // @param1  X [batch_size x input_size]
@@ -117,7 +119,7 @@ private:
 	EcoLSTMCellParam _param;
 
 	bool _initialized = false;
-
+	bool _batch_minor = false;
 	Storage::Handle _reserved_space; unsigned _temp_space_size;
 public:
 	explicit CUEcoLSTMCellOp(EcoLSTMCellParam param)
@@ -161,6 +163,23 @@ private:
 
 		// allocate the workspace size
 		_temp_space_size = _param.batch_size * 4 * _param.state_size;
+
+		const char * batch_minor = getenv("USE_BATCH_MINOR_FW");
+
+		if (batch_minor == nullptr)
+		{
+			_batch_minor = false;
+		}
+		else if (std::string(batch_minor) == "0")
+		{
+			_batch_minor = false;
+		}
+		else
+		{
+			// LOG(INFO) << "MXNet will be using batch_minor "
+			// 	"for the Fully-Connected layers.";
+			_batch_minor = true;
+		}
 
 		_initialized = true;
 	}
@@ -228,13 +247,15 @@ public:
 				 OpReqType::kWriteTo,
 				 _param.batch_size,
 				 _param.input_size,
-				 _param.state_size * 4);
+				 _param.state_size * 4,
+				 _batch_minor);
 		FullyConnectedFW(Stream < gpu > ::GetBlasHandle(cuda_stream),
 		                 state_h.dptr_, h2h_weight.dptr_, workspace.dptr_,
 				 OpReqType::kAddTo,
 				 _param.batch_size,
 				 _param.state_size,
-				 _param.state_size * 4);
+				 _param.state_size * 4,
+				 _batch_minor);
 		
 		_cuda_lstm_cell__forward < DType >
 			<<<
@@ -248,7 +269,7 @@ public:
 				ctx.is_train ? reinterpret_cast < DType * > (_reserved_space.dptr) : nullptr,
 				state_h_out.dptr_,
 				state_c_out.dptr_,
-				_param.batch_size, _param.state_size
+				_param.batch_size, _param.state_size, _batch_minor
 			);
 	}
 
@@ -406,30 +427,42 @@ __global__ void _cuda_lstm_cell__forward(
 	      RealType * const __restrict__ reserved_space,
 	      RealType * const __restrict__ state_h_out,
 	      RealType * const __restrict__ state_c_out,
-	const unsigned batch_size, const unsigned state_size)
+	const unsigned batch_size, const unsigned state_size, const bool batch_minor)
 {
 	const unsigned g_threadIdx = threadIdx.x + blockIdx.x * blockDim.x,
 		BxH = batch_size * state_size;
 
 	if (g_threadIdx >= BxH) { return ; }
 
-	const unsigned batch_idx_x4H_plus_state_idx = (g_threadIdx / state_size) * 4 * state_size + 
-						       g_threadIdx % state_size;
+	unsigned workspace_idx, workspace_stride;
+	
+	if (batch_minor)
+	{
+		workspace_idx    = (g_threadIdx % state_size) * batch_size +
+		                   (g_threadIdx / state_size);
+		workspace_stride = batch_size * state_size;
+	}
+	else
+	{
+		workspace_idx    = (g_threadIdx / state_size) * 4 * state_size + 
+		                   (g_threadIdx % state_size);
+		workspace_stride = state_size;
+	}
 	const unsigned batch_idx_x2H_plus_state_idx = (g_threadIdx / state_size) * 2 * state_size + 
 	                                               g_threadIdx % state_size;
 
-	RealType  input_gate = __cu_sigmoid(workspace[batch_idx_x4H_plus_state_idx + 0 * state_size] + 
-					         i2h_bias[g_threadIdx % state_size + 0 * state_size] + 
-						 h2h_bias[g_threadIdx % state_size + 0 * state_size]);
-	RealType forget_gate = __cu_sigmoid(workspace[batch_idx_x4H_plus_state_idx + 1 * state_size] + 
-						 i2h_bias[g_threadIdx % state_size + 1 * state_size] + 
-						 h2h_bias[g_threadIdx % state_size + 1 * state_size]);
-	RealType  input_actv =         tanh(workspace[batch_idx_x4H_plus_state_idx + 2 * state_size] + 
-						 i2h_bias[g_threadIdx % state_size + 2 * state_size] + 
-						 h2h_bias[g_threadIdx % state_size + 2 * state_size]);
-	RealType output_gate = __cu_sigmoid(workspace[batch_idx_x4H_plus_state_idx + 3 * state_size] + 
-						 i2h_bias[g_threadIdx % state_size + 3 * state_size] + 
-						 h2h_bias[g_threadIdx % state_size + 3 * state_size]);
+	RealType  input_gate = __cu_sigmoid(workspace[workspace_idx + 0 * workspace_stride] + 
+		i2h_bias[g_threadIdx % state_size + 0 * state_size] + 
+		h2h_bias[g_threadIdx % state_size + 0 * state_size]);
+	RealType forget_gate = __cu_sigmoid(workspace[workspace_idx + 1 * workspace_stride] + 
+		i2h_bias[g_threadIdx % state_size + 1 * state_size] + 
+		h2h_bias[g_threadIdx % state_size + 1 * state_size]);
+	RealType  input_actv =         tanh(workspace[workspace_idx + 2 * workspace_stride] + 
+		i2h_bias[g_threadIdx % state_size + 2 * state_size] + 
+		h2h_bias[g_threadIdx % state_size + 2 * state_size]);
+	RealType output_gate = __cu_sigmoid(workspace[workspace_idx + 3 * workspace_stride] + 
+		i2h_bias[g_threadIdx % state_size + 3 * state_size] + 
+		h2h_bias[g_threadIdx % state_size + 3 * state_size]);
 
 	RealType state_c_out_reg = forget_gate * state_c[g_threadIdx] + input_actv * input_gate;
 
@@ -527,18 +560,34 @@ inline void FullyConnectedFW < float > (cublasHandle_t cublas_handle,
 	const float * const __restrict__ X,
 	const float * const __restrict__ W,
 	      float * const __restrict__ Y,
-	const OpReqType req,     const unsigned batch_size, 
-	const unsigned input_size, const unsigned state_size)
+	const OpReqType req,       const unsigned batch_size, 
+	const unsigned input_size, const unsigned state_size,
+	const bool batch_minor)
 {
 	float alpha = 1.0, beta = float(req == kAddTo);
-	CUBLAS_CALL(cublasSgemm(cublas_handle, // cuBLAS Handle
-	                        CUBLAS_OP_T, // W.T
-				CUBLAS_OP_N, // X
-				state_size,  // Y.shape[1]
-				batch_size,  // Y.shape[0]
-				input_size,  // W.shape[1]
-				&alpha, W, input_size, X, input_size,
-				&beta,  Y, state_size));
+	
+	if (batch_minor)
+	{
+		CUBLAS_CALL(cublasSgemm(cublas_handle, // cuBLAS Handle,
+					CUBLAS_OP_T, // X.T
+					CUBLAS_OP_N, // W
+					batch_size,  // Y.shape[1]
+					state_size,  // Y.shape[0]
+					input_size,  // X.shape[1]
+					&alpha, X, input_size, W, input_size,
+					&beta , Y, batch_size));
+	}
+	else 
+	{
+		CUBLAS_CALL(cublasSgemm(cublas_handle, // cuBLAS Handle
+					CUBLAS_OP_T, // W.T
+					CUBLAS_OP_N, // X
+					state_size,  // Y.shape[1]
+					batch_size,  // Y.shape[0]
+					input_size,  // W.shape[1]
+					&alpha, W, input_size, X, input_size,
+					&beta,  Y, state_size));
+	}
 }
 template <>
 inline void FullyConnectedBWWeight < float > (cublasHandle_t cublas_handle,
