@@ -206,10 +206,20 @@ nnvm::NodeEntry AggregateGradient(std::vector<nnvm::NodeEntry>&& v) {
   if (v.size() == 1) {
     return std::move(v[0]);
   } else {
+#if MXNET_USE_MEMORY_PROFILER
+    std::string attrs_name = "sum_grad:";
+    for (size_t i = 0; i < v.size(); ++i) {
+      attrs_name += v[i].node->attrs.name + ":";
+    }
+#endif // MXNET_USE_MEMORY_PROFILER
     if (v.size() < inplace_sum_cap) {
       nnvm::NodePtr sum_node = nnvm::Node::Create();
       sum_node->attrs.op = ewise_sum_op;
+#if MXNET_USE_MEMORY_PROFILER
+      sum_node->attrs.name = attrs_name;
+#else // MXNET_USE_MEMORY_PROFILER
       sum_node->attrs.name = "sum_grad";
+#endif // MXNET_USE_MEMORY_PROFILER
       sum_node->attrs.dict["num_args"] = std::to_string(v.size());
       sum_node->attrs.op->attr_parser(&(sum_node->attrs));
       sum_node->inputs = std::move(v);
@@ -241,7 +251,11 @@ nnvm::NodeEntry AggregateGradient(std::vector<nnvm::NodeEntry>&& v) {
         os << "sum_grad_" << i;
         nnvm::NodePtr x = nnvm::Node::Create();
         x->attrs.op = ewise_plus_op;
+#if MXNET_USE_MEMORY_PROFILER
+        x->attrs.name = attrs_name + ":" + std::to_string(i);
+#else // MXNET_USE_MEMORY_PROFILER
         x->attrs.name = os.str();
+#endif // MXNET_USE_MEMORY_PROFILER
         x->inputs = {ret, v[i]};
         ret = nnvm::NodeEntry{x, 0, 0};
       }
@@ -249,7 +263,11 @@ nnvm::NodeEntry AggregateGradient(std::vector<nnvm::NodeEntry>&& v) {
       // when its output get assigned to another space.
       nnvm::NodePtr id_node = nnvm::Node::Create();
       id_node->attrs.op = identity_op;
+#if MXNET_USE_MEMORY_PROFILER
+      id_node->attrs.name = attrs_name + ":final";
+#else // MXNET_USE_MEMORY_PROFILER
       id_node->attrs.name = "sum_grad_final";
+#endif // MXNET_USE_MEMORY_PROFILER
       id_node->inputs = {ret};
       return nnvm::NodeEntry{id_node, 0, 0};
     }
