@@ -58,48 +58,48 @@ static __global__ void _cuda_fused_mlp_att_scoring_func_backward(
 	const bool layer_norm);
 
 // FullyConnected Layer Y = X W^T Forward Pass
-// @param1 X [batch_size x input_dim] :  (Input) Input  Variable  `X`
-// @param2 W [num_hidden x input_dim] :  (Input) Weight Parameter `W`
-// @param3 Y [batch_size x num_hidden]: (Output) Output Variable  `Y`
+// @param1 X [batch_size x input_size]:  (Input) Input  Variable  `X`
+// @param2 W [state_size x input_size]:  (Input) Weight Parameter `W`
+// @param3 Y [batch_size x state_size]: (Output) Output Variable  `Y`
 // @param4 batch_size: (Parameter) Batch Size
-// @param5 input_dim : (Parameter) Input Dimension
-// @param6 num_hidden: (Parameter) Number of Hidden Units
+// @param5 input_size: (Parameter) Input Size
+// @param6 state_size: (Parameter) State Size
 template < typename RealType >
 static inline void FullyConnectedFW(cublasHandle_t cublas_handle,
 	const RealType * const __restrict__ X,
 	const RealType * const __restrict__ W,
 	      RealType * const __restrict__ Y,
-	const unsigned batch_size, const unsigned input_dim, const unsigned num_hidden);
+	const unsigned batch_size, const unsigned input_size, const unsigned state_size);
 
 // FullyConnected Layer Y = XW^T Backward Pass on Weight (dW = dY^T X)
 // @param1  X [batch_size x input_dim] :  (Input)  Input Variable  `X`
 // @param2 dW [num_hidden x input_dim] : (Output) Weight Parameter Gradient `dW`
 // @param3 dY [batch_size x num_hidden]:  (Input) Output Gradient `dY`
 // @param4 batch_size: (Parameter) Batch Size
-// @param5 input_dim : (Parameter) Input Dimension
-// @param6 num_hidden: (Parameter) Number of Hidden Units
+// @param5 input_size: (Parameter) Input Size
+// @param6 state_size: (Parameter) State Size
 template < typename RealType >
 static inline void FullyConnectedBWWeight(cublasHandle_t cublas_handle,
 	const RealType * const __restrict__  X,
 	      RealType * const __restrict__ dW,
 	const RealType * const __restrict__ dY,
-	const OpReqType grad_req, const unsigned batch_size, 
-	const unsigned input_dim, const unsigned num_hidden);
+	const OpReqType req,       const unsigned batch_size, 
+	const unsigned input_size, const unsigned state_size);
 
 // FullyConnected Layer Y = XW^T Backward Pass on Data (dX = dY W)
-// @param1 dX [batch_size x input_dim] : (Output)  Input Gradient `dX`
-// @param2  W [num_hidden x input_dim] :  (Input) Weight Parameter `W`
-// @param3 dY [batch_size x num_hidden]:  (Input) Output Gradient `dY`
+// @param1 dX [batch_size x input_size]: (Output)  Input Gradient `dX`
+// @param2  W [state_size x input_size]:  (Input) Weight Parameter `W`
+// @param3 dY [batch_size x state_size]:  (Input) Output Gradient `dY`
 // @param4 batch_size: (Parameter) Batch Size
-// @param5 input_dim : (Parameter) Input Dimension
-// @param6 num_hidden: (Parameter) Number of Hidden Units
+// @param5 input_size: (Parameter) Input Size
+// @param6 state_size: (Parameter) State Size
 template < typename RealType >
 static inline void FullyConnectedBWData  (cublasHandle_t cublas_handle,
 	      RealType * const __restrict__ dX,
 	const RealType * const __restrict__  W,
 	const RealType * const __restrict__ dY,
-	const OpReqType grad_req, const unsigned batch_size, 
-	const unsigned input_dim, const unsigned num_hidden);
+	const OpReqType req,       const unsigned batch_size, 
+	const unsigned input_size, const unsigned state_size);
 
 template < typename DType >
 class CUMLPAttScoringFuncOp : public Operator
@@ -522,18 +522,18 @@ inline void FullyConnectedFW < float > (cublasHandle_t cublas_handle,
 	const float * const __restrict__ X,
 	const float * const __restrict__ W,
 	      float * const __restrict__ Y,
-	const unsigned batch_size, const unsigned input_dim, const unsigned num_hidden)
+	const unsigned batch_size, const unsigned input_size, const unsigned state_size)
 {
 	float alpha = 1.0, beta = 0.0;
 
 	CUBLAS_CALL(cublasSgemm(cublas_handle, // cuBLAS Handle
 	                        CUBLAS_OP_T, // W.T
 				CUBLAS_OP_N, // X
-				num_hidden,  // Y.shape[1]
+				state_size,  // Y.shape[1]
 				batch_size,  // Y.shape[0]
-				input_dim,   // W.shape[1]
-				&alpha, W, input_dim, X, input_dim,
-				& beta, Y, num_hidden));
+				input_size,  // W.shape[1]
+				&alpha, W, input_size, X, input_size,
+				& beta, Y, state_size));
 }
 
 template <>
@@ -541,19 +541,19 @@ inline void FullyConnectedBWWeight < float > (cublasHandle_t cublas_handle,
 	const float * const __restrict__  X,
 	      float * const __restrict__ dW,
 	const float * const __restrict__ dY,
-	const OpReqType grad_req, const unsigned batch_size,
-	const unsigned input_dim, const unsigned num_hidden)
+	const OpReqType req,       const unsigned batch_size,
+	const unsigned input_size, const unsigned state_size)
 {
-	float alpha = 1.0, beta = float(grad_req == kAddTo);
+	float alpha = 1.0, beta = float(req == kAddTo);
 
 	CUBLAS_CALL(cublasSgemm(cublas_handle, // cuBLAS Handle
 	                        CUBLAS_OP_N, //  X
 				CUBLAS_OP_T, // dY^T
-				input_dim,   // dW.shape[1]
-				num_hidden,  // dW.shape[0]
+				input_size,  // dW.shape[1]
+				state_size,  // dW.shape[0]
 				batch_size,  //  X.shape[0]
-	                        &alpha,  X, input_dim, dY, num_hidden,
-				& beta, dW, input_dim));
+	                        &alpha,  X, input_size, dY, state_size,
+				& beta, dW, input_size));
 }
 
 template <>
@@ -561,19 +561,19 @@ inline void FullyConnectedBWData < float > (cublasHandle_t cublas_handle,
 	      float * const __restrict__ dX,
 	const float * const __restrict__  W,
 	const float * const __restrict__ dY, 
-	const OpReqType grad_req, const unsigned batch_size,
-	const unsigned input_dim, const unsigned num_hidden)
+	const OpReqType req,       const unsigned batch_size,
+	const unsigned input_size, const unsigned state_size)
 {
-	float alpha = 1.0, beta = float(grad_req == kAddTo);
+	float alpha = 1.0, beta = float(req == kAddTo);
 
 	CUBLAS_CALL(cublasSgemm(cublas_handle, //cuBLAS Handle
 	                        CUBLAS_OP_N, //  W
 				CUBLAS_OP_N, // dY
-				input_dim,   // dX.shape[1]
+				input_size,  // dX.shape[1]
 				batch_size,  // dX.shape[0]
-				num_hidden,  //  W.shape[0]
-				&alpha,  W, input_dim, dY, num_hidden,
-				& beta, dX, input_dim));
+				state_size,  //  W.shape[0]
+				&alpha,  W, input_size, dY, state_size,
+				& beta, dX, input_size));
 }
 
 #endif // __CUDACC__
