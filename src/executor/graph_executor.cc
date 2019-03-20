@@ -1169,13 +1169,13 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     if (stype != kDefaultStorage) {
       data_entry_[data_eid] = NDArray(stype, vshape[eid], data_context[eid], true, vdtype[eid]
 #if MXNET_USE_MEMORY_PROFILER
-        , {}, {}, TShape(mshadow::Shape1(0)), "feature_maps:" + node_attrs_name[eid]
+        , {}, {}, TShape(mshadow::Shape1(0)), "data_entry:" + node_attrs_name[eid]
 #endif // MXNET_USU_MEMORY_PROFILER
           );
     } else {
       data_entry_[data_eid] = NDArray(vshape[eid], data_context[eid], false, vdtype[eid]
 #if MXNET_USE_MEMORY_PROFILER
-        , "feature_maps:" + node_attrs_name[eid]
+        , "data_entry:" + node_attrs_name[eid]
 #endif // MXNET_USE_MEMORY_PROFILER
           );
     }
@@ -1270,7 +1270,7 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
       LOG(INFO) << "\tinit data entry\t" << i << "\tas " << common::stype_string(storage_type);
     }
 #if MXNET_USE_MEMORY_PROFILER
-    data_entry_[i].setName("feature_maps:" + node_attrs_name[i]);
+    data_entry_[i].setName("data_entry:" + node_attrs_name[i]);
 #endif // MXNET_USE_MEMORY_PROFILER
   }
 }
