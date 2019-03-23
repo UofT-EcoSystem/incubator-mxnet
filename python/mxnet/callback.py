@@ -173,144 +173,6 @@ class Speedometer(object):
             self.tic = time.time()
 
 
-class TensorboardSpeedometer(object):
-    """
-    Log 
-      - Training Throughput (Samples per Second), 
-      - Memory Usage (from `nvidia-smi`)
-      - Evaluation Metrics 
-      - Power and Energy Consumption
-    periodically, and at the same time, dump the results using **Tensorboard**.
-    :param summary_writer: Tensorboard Summary Writer
-    :param batch_size: Training Batch Size, used for computing Throughput
-    :param frequency : How frequent will those aforementioned Metrics be Logged
-    :param auto_reset: Whether to reset the Evaluation Metrics after each Log
-    """
-    def __init__(self, summary_writer, batch_size, frequent=50, auto_reset=True):
-        self.summary_writer = summary_writer
-
-        self.batch_size = batch_size
-        self.frequent = frequent
-        self.init = False
-        self.tic = 0
-        self.last_count = 0
-        self.auto_reset = auto_reset
-        # `global_step` records the number of training batches.
-        # It is incremented every time the `Speedometer` is called.
-        self.global_step = 0
-        self.energy = 0
-
-    def __call__(self, param):
-        """
-        Callback to show Training Throughput, Memory Usage, Evaluation Metrics
-        """
-        count = param.nbatch
-
-        if self.last_count > count:
-            self.init = False
-        self.last_count = count
-
-        if self.init:
-            if count % self.frequent == 0:
-                # Training Throughput
-                time_diff = time.time() - self.tic
-                speed = self.frequent * self.batch_size / time_diff
-
-                # Memory Usage
-                # The following GPU query was learned from Sockeye developers:
-                # https://github.com/awslabs/sockeye/blob/arxiv_1217/sockeye/utils.py#L376
-                # Here, I simplied the query by assuming that we are running on SINGLE GPU.
-                import subprocess
-
-                try:
-                    import tensorflow as tf
-                except ImportError:
-                    logging.error("Please install tensorboard using `pip install tensorflow`.")
-
-                self.summary_writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='Speed',
-                                                                                   simple_value=speed)]),
-                                                global_step=self.global_step)
-
-                # ==============================================================
-
-                sp = subprocess.Popen(['nvidia-smi', 
-                                       '--query-compute-apps=gpu_name,process_name,pid,used_gpu_memory', 
-                                       '--format=csv,noheader,nounits'],
-                                       stdout=subprocess.PIPE, 
-                                       stderr=subprocess.PIPE)
-                query_result = sp.communicate()[0].decode("utf-8").rstrip().split("\n")
-                memory_usage = []
-
-                if len(query_result) > 1:
-                    logging.info("There are more than 1 compute application running on the GPU.")
-
-                for line in query_result:
-                    _, process_name, pid, used_gpu_memory = line.split(", ")
-                    pid, used_gpu_memory = int(pid), int(used_gpu_memory)
-
-                    process_uid = "%s-pid_%d" % (process_name, pid)
-
-                    memory_usage.append((process_uid, used_gpu_memory))
-                    
-                    self.summary_writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='Memory_Usage-%s' % process_uid,
-                                                                                       simple_value=used_gpu_memory)]),
-                                                    global_step=self.global_step)
-                
-                # ==============================================================
-
-                sp = subprocess.Popen(['nvidia-smi', 
-                                       '--query-gpu=power.draw',
-                                       '--format=csv,noheader,nounits'],
-                                       stdout=subprocess.PIPE, 
-                                       stderr=subprocess.PIPE)
-                query_result = sp.communicate()[0].decode("utf-8").rstrip().split("\n")
-
-                power = float(query_result[0])
-
-                self.summary_writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='Power',
-                                                                                   simple_value=power)]),
-                                                global_step=self.global_step)
-                
-                self.energy += power * time_diff
-
-                self.summary_writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='Energy',
-                                                                                   simple_value=self.energy)]),
-                                                global_step=self.global_step)
-
-                # ==============================================================
-
-                # Evaluation Metrics
-                if param.eval_metric is not None:
-                    name_value = param.eval_metric.get_name_value()
-                    if self.auto_reset:
-                        param.eval_metric.reset()
-
-                    for name, value in dict(name_value).items():
-                        self.summary_writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag=name,
-                                                                                           simple_value=value)]),
-                                                        global_step=self.global_step)
-
-                    msg  = 'Global Step[%d] Epoch[%d] Batch [%d]\tSpeed: %.2f samples/sec'
-                    msg += '\t%s=%f' * len(name_value)
-                    msg += '\tMemory Usage: '
-                    msg += '\t%s=%d' * len(memory_usage)
-                    msg += '\tPower: %.2f W'
-                    msg += '\tEnergy: %.2f J'
-                    logging.info(msg, self.global_step, param.epoch, count, speed,
-                                 *sum(name_value + memory_usage, ()), power, self.energy)
-
-                else:
-                    logging.info("Iter[%d] Batch [%d]\tSpeed: %.2f samples/sec",
-                                 param.epoch, count, speed)
-
-                self.tic = time.time()
-        else:
-            self.init = True
-            self.tic = time.time()
-
-        self.global_step += 1 # increase `global_Step` by 1
-
-
 class CSVSpeedometer(object):
     """
     Log 
@@ -366,8 +228,10 @@ class CSVSpeedometer(object):
                                       'cpu_time'   , '%f' % time.time(),
                                       'throughput' , '%f' % speed]
 
+                # NVIDIA Docker containers have trouble in querying process names.
+                # Therefore process names are temporarily ignored.
                 sp = subprocess.Popen(['nvidia-smi', 
-                                       '--query-compute-apps=gpu_name,process_name,pid,used_gpu_memory', 
+                                       '--query-compute-apps=pid,used_gpu_memory', 
                                        '--format=csv,noheader,nounits'],
                                        stdout=subprocess.PIPE, 
                                        stderr=subprocess.PIPE)
@@ -378,15 +242,13 @@ class CSVSpeedometer(object):
                     logging.info("There are more than 1 compute application running on the GPU.")
 
                 for line in query_result:
-                    _, process_name, pid, used_gpu_memory = line.split(", ")
+                    pid, used_gpu_memory = line.split(", ")
                     pid, used_gpu_memory = int(pid), int(used_gpu_memory)
 
-                    process_uid = "%s-pid_%d" % (process_name, pid)
-
-                    memory_usage.append((process_uid, used_gpu_memory))
-                    
-                    training_log_entry.extend(['memory_usage-pid_%s' % pid, 
-                                               '%d' % used_gpu_memory])
+                    memory_usage_tag = "memory_usage-pid_%d" % pid
+                    memory_usage.append((memory_usage_tag, used_gpu_memory))
+                    training_log_entry.extend([memory_usage_tag, 
+                                               '%d'%used_gpu_memory])
                 
                 sp = subprocess.Popen(['nvidia-smi', 
                                        '--query-gpu=power.draw',
@@ -394,13 +256,16 @@ class CSVSpeedometer(object):
                                        stdout=subprocess.PIPE, 
                                        stderr=subprocess.PIPE)
                 query_result = sp.communicate()[0].decode("utf-8").rstrip().split("\n")
+                pe_usage = []
                 
-                power = float(query_result[0])
-                
-                self.energy += power * time_diff
+                for i, line in enumerate(query_result):
+                    power = float(line)
+                    self.energy += power * time_diff
 
-                training_log_entry.extend(['power' , '%f' % power,
-                                           'energy', '%f' % self.energy])
+                    pe_usage_tag = "pe_usage-dev_%d" % i
+                    pe_usage.append((pe_usage_tag, power, self.energy))
+                    training_log_entry.extend(['power-dev_%d' %i, '%f'%power,
+                                               'energy-dev_%d'%i, '%f'%self.energy])
 
                 # Evaluation Metrics
                 if param.eval_metric is not None:
@@ -413,12 +278,12 @@ class CSVSpeedometer(object):
 
                     msg  = 'Global Step[%d] Epoch[%d] Batch [%d]\tSpeed: %.2f samples/sec'
                     msg += '\t%s=%f' * len(name_value)
-                    msg += '\tMemory Usage: '
+                    msg += '\tMemory Usage (MB): '
                     msg += '\t%s=%d' * len(memory_usage)
-                    msg += '\tPower: %.2f W'
-                    msg += '\tEnergy: %.2f J'
+                    msg += '\tPE Usage (W, J): '
+                    msg += '\t%s=%f,%f' * len(pe_usage)
                     logging.info(msg, self.global_step, param.epoch, count, speed,
-                                 *sum(name_value + memory_usage, ()), power, self.energy)
+                                 *sum(name_value + memory_usage + pe_usage, ()))
 
                 else:
                     logging.info("Iter[%d] Batch [%d]\tSpeed: %.2f samples/sec",
