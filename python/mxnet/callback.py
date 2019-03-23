@@ -197,7 +197,17 @@ class CSVSpeedometer(object):
         # `global_step` records the number of training batches.
         # It is incremented every time the `Speedometer` is called.
         self.global_step = 0
-        self.energy = 0
+        
+        import subprocess
+        sp = subprocess.Popen(['nvidia-smi', 
+                               '--query-gpu=power.draw',
+                               '--format=csv,noheader,nounits'],
+                               stdout=subprocess.PIPE, 
+                               stderr=subprocess.PIPE)
+        query_result = sp.communicate()[0].decode("utf-8").rstrip().split("\n")
+        # initial energy to an array of zeros
+        self.energy = [0.0 for _ in query_result]
+
         import os
         try:
             # cleanup previous output file, if there exists
@@ -225,8 +235,8 @@ class CSVSpeedometer(object):
                 import subprocess
 
                 training_log_entry = ['global_step', '%d' % self.global_step,
-                                      'cpu_time'   , '%f' % time.time(),
-                                      'throughput' , '%f' % speed]
+                                      'wc_time',     '%f' % time.time(),
+                                      'throughput',  '%f' % speed]
 
                 # NVIDIA Docker containers have trouble in querying process names.
                 # Therefore process names are temporarily ignored.
@@ -260,12 +270,12 @@ class CSVSpeedometer(object):
                 
                 for i, line in enumerate(query_result):
                     power = float(line)
-                    self.energy += power * time_diff
+                    self.energy[i] += power * time_diff
 
                     pe_usage_tag = "pe_usage-dev_%d" % i
-                    pe_usage.append((pe_usage_tag, power, self.energy))
-                    training_log_entry.extend(['power-dev_%d' %i, '%f'%power,
-                                               'energy-dev_%d'%i, '%f'%self.energy])
+                    pe_usage.append((pe_usage_tag, power, self.energy[i]))
+                    training_log_entry.extend(['power-dev_%d' %i, '%.2f'%power,
+                                               'energy-dev_%d'%i, '%.2f'%self.energy[i]])
 
                 # Evaluation Metrics
                 if param.eval_metric is not None:
@@ -281,7 +291,7 @@ class CSVSpeedometer(object):
                     msg += '\tMemory Usage (MB): '
                     msg += '\t%s=%d' * len(memory_usage)
                     msg += '\tPE Usage (W, J): '
-                    msg += '\t%s=%f,%f' * len(pe_usage)
+                    msg += '\t%s=%.2f,%.2f' * len(pe_usage)
                     logging.info(msg, self.global_step, param.epoch, count, speed,
                                  *sum(name_value + memory_usage + pe_usage, ()))
 
