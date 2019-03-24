@@ -255,9 +255,8 @@ class CSVSpeedometer(object):
                     pid, used_gpu_memory = line.split(", ")
                     pid, used_gpu_memory = int(pid), int(used_gpu_memory)
 
-                    memory_usage_tag = "memory_usage-pid_%d" % pid
-                    memory_usage.append((memory_usage_tag, used_gpu_memory))
-                    training_log_entry.extend([memory_usage_tag, 
+                    memory_usage.append(("pid_%d"%pid, used_gpu_memory))
+                    training_log_entry.extend(["memory_usage-pid_%d"%pid, 
                                                '%d'%used_gpu_memory])
                 
                 sp = subprocess.Popen(['nvidia-smi', 
@@ -272,10 +271,9 @@ class CSVSpeedometer(object):
                     power = float(line)
                     self.energy[i] += power * time_diff
 
-                    pe_usage_tag = "pe_usage-dev_%d" % i
-                    pe_usage.append((pe_usage_tag, power, self.energy[i]))
-                    training_log_entry.extend(['power-dev_%d' %i, '%.2f'%power,
-                                               'energy-dev_%d'%i, '%.2f'%self.energy[i]])
+                    pe_usage.append(("dev_%d" % i, power, self.energy[i]))
+                    training_log_entry.extend(['power-dev_%d'  % i, '%.2f' % power,
+                                               'energy-dev_%d' % i, '%.2f' % self.energy[i]])
 
                 # Evaluation Metrics
                 if param.eval_metric is not None:
@@ -284,14 +282,14 @@ class CSVSpeedometer(object):
                         param.eval_metric.reset()
 
                     for name, value in dict(name_value).items():
-                        training_log_entry.extend(['eval_metric-%s' % name, '%f' % value])
+                        training_log_entry.extend(['%s' % name, '%f' % value])
 
                     msg  = 'Global Step[%d] Epoch[%d] Batch [%d]\tSpeed: %.2f samples/sec'
                     msg += '\t%s=%f' * len(name_value)
                     msg += '\tMemory Usage (MB): '
-                    msg += '\t%s=%d' * len(memory_usage)
+                    msg += '%s=%d, ' * len(memory_usage)
                     msg += '\tPE Usage (W, J): '
-                    msg += '\t%s=%.2f,%.2f' * len(pe_usage)
+                    msg += '%s=%.2f,%.2f, ' * len(pe_usage)
                     logging.info(msg, self.global_step, param.epoch, count, speed,
                                  *sum(name_value + memory_usage + pe_usage, ()))
 
