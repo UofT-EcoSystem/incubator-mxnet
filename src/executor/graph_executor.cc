@@ -1153,6 +1153,9 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     Context ctx;
     size_t bytes;
     NDArrayStorageType stype;
+#if MXNET_USE_MEMORY_PROFILER
+    std::string name;
+#endif // MXNET_USE_MEMORY_PROFILER
   };
   std::vector<PoolEntry> pool_info;
 
@@ -1169,13 +1172,13 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     if (stype != kDefaultStorage) {
       data_entry_[data_eid] = NDArray(stype, vshape[eid], data_context[eid], true, vdtype[eid]
 #if MXNET_USE_MEMORY_PROFILER
-        , {}, {}, TShape(mshadow::Shape1(0)), "data_entry:" + node_attrs_name[eid]
+        , {}, {}, TShape(mshadow::Shape1(0)), "data_entry:head_grad:" + node_attrs_name[eid]
 #endif // MXNET_USU_MEMORY_PROFILER
           );
     } else {
       data_entry_[data_eid] = NDArray(vshape[eid], data_context[eid], false, vdtype[eid]
 #if MXNET_USE_MEMORY_PROFILER
-        , "data_entry:" + node_attrs_name[eid]
+        , "data_entry:head_grad:" + node_attrs_name[eid]
 #endif // MXNET_USE_MEMORY_PROFILER
           );
     }
@@ -1193,11 +1196,19 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     if (storage_id < 0) continue;
     size_t sid = static_cast<size_t>(storage_id);
     if (sid >= pool_info.size()) {
-      pool_info.resize(sid + 1, PoolEntry{Context::CPU(), size_t(0), kUndefinedStorage});
+      pool_info.resize(sid + 1, PoolEntry{Context::CPU(), size_t(0), kUndefinedStorage
+#if MXNET_USE_MEMORY_PROFILER
+        , "undefined_storage"
+#endif // MXNET_USE_MEMORY_PROFILER
+          });
     }
     PoolEntry& info = pool_info[sid];
     if (info.bytes == 0) {
-      info = PoolEntry{data_context[i], bytes, data_storage_type[i]};
+      info = PoolEntry{data_context[i], bytes, data_storage_type[i]
+#if MXNET_USE_MEMORY_PROFILER
+        , node_attrs_name[i]
+#endif // MXNET_USE_MEMORY_PROFILER
+          };
     } else {
       info.bytes = std::max(info.bytes, bytes);
     }
@@ -1227,6 +1238,9 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
   for (size_t i : sorted_pool_index) {
     const Context& ctx = pool_info[i].ctx;
     size_t bytes = pool_info[i].bytes;
+#if MXNET_USE_MEMORY_PROFILER
+    std::string name = pool_info[i].name;
+#endif // MXNET_USE_MEMORY_PROFILER
     bool allocated = false;
     for (auto it = free_pool.lower_bound(bytes); it != free_pool.end(); ++it) {
       if (it->second.ctx() == ctx && it->first >= bytes) {
@@ -1250,6 +1264,9 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
         shared_pool->push_back(nd);
       }
     }
+#if MXNET_USE_MEMORY_PROFILER
+    data_pool_[i].setName("data_entry:" + name);
+#endif // MXNET_USE_MEMORY_PROFILER
   }
   CHECK_EQ(data_pool_.size(), pool_info.size());
   // assign the data entries
@@ -1265,13 +1282,13 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
       data_entry_[i] = src.AsArray(vshape[i], vdtype[i]);
     } else {
       data_entry_[i] = NDArray(storage_type, vshape[i], data_context[i]);
+#if MXNET_USE_MEMORY_PROFILER
+      data_entry_[i].setName("data_entry:" + node_attrs_name[i]);
+#endif // MXNET_USE_MEMORY_PROFILER
     }
     if (log_verbose_) {
       LOG(INFO) << "\tinit data entry\t" << i << "\tas " << common::stype_string(storage_type);
     }
-#if MXNET_USE_MEMORY_PROFILER
-    data_entry_[i].setName("data_entry:" + node_attrs_name[i]);
-#endif // MXNET_USE_MEMORY_PROFILER
   }
 }
 
