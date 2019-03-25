@@ -1,13 +1,17 @@
-#include "./lstm_cell-cu_inl.cuh"
+#include "lstm_cell-cu_inl.cuh"
 
 namespace mxnet {
 	namespace op {
-		
-NNVM_REGISTER_OP(EcoLSTMCell)
-	.set_attr < FCompute > ("FCompute<gpu>", EcoLSTMCellCompute < gpu > )
 
-NNVM_REGISTER_OP(_backward_EcoLSTMCell)
-	.set_attr < FCompute > ("FCompute<gpu>", EcoLSTMCellGradCompute < gpu > )
+template <> 
+Operator * CreateOp < gpu > (EcoLSTMCellParam param, int dtype)
+{
+	Operator * op = nullptr;
+
+	MSHADOW_SGL_DBL_TYPE_SWITCH(dtype, DType, { op = new CUEcoLSTMCellOp < float > (param); });
+
+	return op;
+}
 
 	} // namespace op
 } // namespace mxnet
