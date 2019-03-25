@@ -13,7 +13,7 @@ namespace mxnet {
 enum class EnumOpInputs { Input, StateH, StateC, 
                           I2HWeight, I2HBias,
 			  H2HWeight, H2HBias };
-enum class EnumOpOutputs { StateHOut, StateCOut };
+enum class EnumOpOutputs { StateHOut, StateCOut, InputFM, ForgetFM };
 enum class EnumOpWorkspace { TempSpace };
 
 		} // anonymous namespace
@@ -76,9 +76,13 @@ public:
 	}
 	std::vector < std::string > ListOutputs  () const override
 	{
-		return { "state_h_out", "state_c_out" };
+		return { "state_h_out", "state_c_out", "input_fm", "forget_fm" };
 	}
 	int NumOutputs() const override
+	{
+		return 4;
+	}
+	int NumVisibleOutputs() const override 
 	{
 		return 2;
 	}
@@ -133,6 +137,9 @@ public:
 
 		out_shape->push_back((*in_shape)[int(EnumOpInputs::StateH)]); // state_h_out
 		out_shape->push_back((*in_shape)[int(EnumOpInputs::StateC)]); // state_c_out
+		
+		out_shape->push_back((*in_shape)[int(EnumOpInputs::StateH)]); // input_fm
+		out_shape->push_back((*in_shape)[int(EnumOpInputs::StateH)]); // forget_fm
 
 		return true;
 	}
@@ -164,6 +171,8 @@ public:
 
 		out_type->push_back(itype); // state_h_out
 		out_type->push_back(itype); // state_c_out
+		out_type->push_back(itype); // input_fm
+		out_type->push_back(itype); // forget_fm
 		
 		return true;
 	}
@@ -190,6 +199,8 @@ public:
 			 in_data[int(EnumOpInputs ::H2HWeight)],
 			out_data[int(EnumOpOutputs::StateHOut)],
 			out_data[int(EnumOpOutputs::StateCOut)],
+			out_data[int(EnumOpOutputs::  InputFM)],
+			out_data[int(EnumOpOutputs:: ForgetFM)],
 			out_grad[int(EnumOpOutputs::StateHOut)],
 			out_grad[int(EnumOpOutputs::StateCOut)]};
 	}
