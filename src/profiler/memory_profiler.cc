@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <cstring>
 
 #include <dmlc/logging.h>
 
@@ -10,18 +11,31 @@ namespace mxnet {
   namespace profiler {
 
 MemoryProfiler::MemoryProfiler() {
+  const char * use_memory_profiler = getenv("MXNET_USE_MEMORY_PROFILER");
   const char * fout_fname = getenv("MXNET_MEMORY_PROFILER_FOUT_FNAME");
   const char * ferr_fname = getenv("MXNET_MEMORY_PROFILER_FERR_FNAME");
 
-  if (fout_fname == nullptr) {
-    _fout.open("/tmp/mxnet_memory_profiler_output.csv");
+  if (use_memory_profiler == nullptr) {
+    LOG(INFO) << "set MXNET_USE_MEMORY_PROFILER=1 to enable memory profiler." << std::endl;
+    _use_memory_profiler = false;
+  } else if (strcmp(use_memory_profiler, "1")) {
+    LOG(INFO) << "MXNet has memory profiler enabled." << std::endl;
+    _use_memory_profiler = true;
   } else {
-    _fout.open(fout_fname);
+    LOG(INFO) << "MXNet has memory profiler disabled." << std::endl;
+    _use_memory_profiler = false;
   }
-  if (ferr_fname == nullptr) {
-    _ferr.open("/tmp/mxnet_memory_profiler_output.log");
-  } else {
-    _ferr.open(ferr_fname);
+  if (_use_memory_profiler) {
+    if (fout_fname == nullptr) {
+      _fout.open("/tmp/mxnet_memory_profiler_output.csv");
+    } else {
+      _fout.open(fout_fname);
+    }
+    if (ferr_fname == nullptr) {
+      _ferr.open("/tmp/mxnet_memory_profiler_output.log");
+    } else {
+      _ferr.open(ferr_fname);
+    }
   }
 }
 
@@ -35,6 +49,9 @@ void
 MemoryProfiler::addEntry(
   const std::size_t alloc_size,
   const std::string & tag) {
+  if (!_use_memory_profiler) {
+    return;
+  }
 #define MiB (1024.0 * 1024.0)
   _fout << tag << "," << alloc_size / MiB << std::endl;
 

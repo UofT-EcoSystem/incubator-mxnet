@@ -11,6 +11,7 @@ namespace mxnet {
 
 class MemoryProfiler {
  private:
+  bool _use_memory_profiler;
   std::ofstream _fout;
   std::ofstream _ferr;
  public:
