@@ -15,16 +15,18 @@ namespace mxnet {
 /**
  * Forward Pass of the LSTM Cell
  * This kernel shall be launched using the parameter <<< ceil(BxH / 128), 128, 0, cuda_stream >>>.
- * @param1 workspace      [B x 4H]
- * @param1 i2h_bias           [4H]
- * @param2 h2h_bias           [4H]
- * @param3 state_c        [B x  H]
- * @param4 input_fm       [B x  H]
- * @param5 forget_fm      [B x  H]
- * @param6 state_h_out    [B x  H]
- * @param7 state_c_out    [B x  H]
- * @param8 batch_size: (Parameter)
- * @param9 state_size: (Parameter)
+ * @param1  workspace   [B x 4H]
+ * @param1  i2h_bias        [4H]
+ * @param2  h2h_bias        [4H]
+ * @param3  state_c     [B x  H]
+ * @param4  input_fm    [B x  H]
+ * @param5  forget_fm   [B x  H]
+ * @param6  state_h_out [B x  H]
+ * @param7  state_c_out [B x  H]
+ * @param8  batch_size: (Parameter)
+ * @param9  state_size: (Parameter)
+ * @param10 is_train: (Runtime Parameter)
+ * @param11 batch_minor: (Runtime Parameter)
  */
 template < typename RealType >
 __global__ void _cuda_lstm_cell__forward(
@@ -37,7 +39,7 @@ __global__ void _cuda_lstm_cell__forward(
 	      RealType * const __restrict__ state_h_out,
 	      RealType * const __restrict__ state_c_out,
 	const unsigned batch_size, const unsigned state_size, 
-	const bool batch_minor);
+	const bool is_train, const bool batch_minor);
 
 /**
  * Backward Pass of the LSTM Cell
@@ -161,7 +163,7 @@ private:
 		{
 			_batch_minor = false;
 		}
-		else if (std::string(batch_minor) == "0")
+		else if (!strcmp(batch_minor, "0"))
 		{
 			_batch_minor = false;
 		}
@@ -262,11 +264,12 @@ public:
 				i2h_bias.dptr_,
 				h2h_bias.dptr_,
 				state_c.dptr_,
-				ctx.is_train ?  input_fm.dptr_ : nullptr,
-				ctx.is_train ? forget_fm.dptr_ : nullptr,
+				input_fm.dptr_,
+				forget_fm.dptr_,
 				state_h_out.dptr_,
 				state_c_out.dptr_,
-				_param.batch_size, _param.state_size, _batch_minor
+				_param.batch_size, _param.state_size, 
+				ctx.is_train, _batch_minor
 			);
 	}
 
@@ -431,7 +434,8 @@ __global__ void _cuda_lstm_cell__forward(
 	      RealType * const __restrict__ forget_fm,
 	      RealType * const __restrict__ state_h_out,
 	      RealType * const __restrict__ state_c_out,
-	const unsigned batch_size, const unsigned state_size, const bool batch_minor)
+	const unsigned batch_size, const unsigned state_size, 
+	const bool is_train, const bool batch_minor)
 {
 	const unsigned g_threadIdx = threadIdx.x + blockIdx.x * blockDim.x,
 		BxH = batch_size * state_size;
@@ -471,7 +475,7 @@ __global__ void _cuda_lstm_cell__forward(
 	state_c_out[g_threadIdx] =      state_c_out_reg;
 	state_h_out[g_threadIdx] = tanh(state_c_out_reg) * output_gate;
 
-	if (input_fm != nullptr && forget_fm != nullptr)
+	if (is_train)
 	{
 		// preserve the gates to be used in the backward pass
 		input_fm [g_threadIdx] = input_gate;
