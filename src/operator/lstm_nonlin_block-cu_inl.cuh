@@ -13,36 +13,46 @@ namespace mxnet {
 
 /**
  * Forward Pass of the LSTM Nonlinear Block
- * @param1 input   [B x 4H]
- * @param2 state_h [B x 4H]
- * @param3 state_c [B x  H]
- * @param4 reserved_space [B x 4H]
- * @param5 state_h_out [B x  H]
- * @param6 state_c_out [B x  H]
- * @param7 batch_size: (Parameter)
- * @param8 state_size: (Parameter)
+ * @param1  input     [B x 4H]
+ * @param2  state_h   [B x 4H]
+ * @param3  state_c   [B x  H]
+ * @param4  input_fm  [B x  H]
+ * @param5  forget_fm [B x  H]
+ * @param6  iactv_fm  [B x  H]
+ * @param7  output_fm [B x  H]
+ * @param8  state_h_out [B x  H]
+ * @param9  state_c_out [B x  H]
+ * @param10 batch_size: (Parameter)
+ * @param11 state_size: (Parameter)
+ * @param12 is_train: (Runtime Parameter)
  */
 template < typename RealType >
 static __global__ void _cuda_lstm_nonlin_block__forward(
 	const RealType * const __restrict__ input,
 	const RealType * const __restrict__ state_h,
 	const RealType * const __restrict__ state_c,
-	      RealType * const __restrict__ reserved_space,
+	      RealType * const __restrict__ input_fm,
+	      RealType * const __restrict__ forget_fm,
+	      RealType * const __restrict__ iactv_fm,
+	      RealType * const __restrict__ output_fm,
 	      RealType * const __restrict__ state_h_out,
 	      RealType * const __restrict__ state_c_out, 
-	const unsigned batch_size, const unsigned state_size);
+	const unsigned batch_size, const unsigned state_size, const bool is_train);
 
 /**
  * Backward Pass of the LSTM Nonlinear Block
- * @param1 input_grad   [B x 4H]
- * @param2 state_h_grad [B x 4H]
- * @param3 state_c_grad [B x  H]
- * @param4 state_c      [B x  H]
- * @param5 reserved_space [B x 4H]
- * @param6 state_h_out_grad [B x  H]
- * @param7 state_c_out_grad [B x  H]
- * @param8 batch_size: (Parameter)
- * @param9 state_size: (Parameter)
+ * @param1  input_grad   [B x 4H]
+ * @param2  state_h_grad [B x 4H]
+ * @param3  state_c_grad [B x  H]
+ * @param4  state_c      [B x  H]
+ * @param5  input_fm     [B x  H]
+ * @param6  forget_fm    [B x  H]
+ * @param7  iactv_fm     [B x  H]
+ * @param8  output_fm    [B x  H]
+ * @param9  state_h_out_grad [B x  H]
+ * @param10 state_c_out_grad [B x  H]
+ * @param11 batch_size: (Parameter)
+ * @param12 state_size: (Parameter)
  */
 template < typename RealType >
 static __global__ void _cuda_lstm_nonlin_block_backward(
@@ -50,7 +60,10 @@ static __global__ void _cuda_lstm_nonlin_block_backward(
 	      RealType * const __restrict__ state_h_grad,
 	      RealType * const __restrict__ state_c_grad,
 	const RealType * const __restrict__ state_c,
-	const RealType * const __restrict__ reserved_space,
+	const RealType * const __restrict__ input_fm,
+	const RealType * const __restrict__ forget_fm,
+	const RealType * const __restrict__ iactv_fm,
+	const RealType * const __restrict__ output_fm,
 	const RealType * const __restrict__ state_h_out_grad,
 	const RealType * const __restrict__ state_c_out_grad,
 	const unsigned batch_size, const unsigned state_size);
@@ -62,21 +75,13 @@ private:
 	LSTMNonLinBlockParam _param; 
 	
 	bool _initialized = false;
-
-	// ReserveSpace
-	Storage::Handle _reserved_space, _state_c_out_actv;
 public:
 	explicit CULSTMNonLinBlockOp(LSTMNonLinBlockParam param)
 	{
 		_param = param;
 	}
 	~CULSTMNonLinBlockOp()
-	{
-		if (_initialized)
-		{
-			Storage::Get()->Free(_reserved_space);
-		}
-	}
+	{}
 
 private:
 	void _Init(mshadow::Stream < gpu > * cuda_stream,
@@ -94,13 +99,6 @@ private:
 		_param.batch_size = input.shape_[0];
 		_param.state_size = input.shape_[1] / 4;
 		
-		// allocate the reserved space [B x 4H]
-		_reserved_space = Storage::Get()->Alloc(_param.batch_size * 4 * _param.state_size * sizeof(DType), 
-		                                        Context::GPU()
-#if MXNET_USE_MEMORY_PROFILER
-						      , "feature_maps:ecornn:lstm_nonlin_block"			
-#endif // MXNET_USE_MEMORY_PROFILER
-							);
 		_initialized = true;
 	}
 public:
@@ -112,22 +110,33 @@ public:
 	{
 		using namespace mshadow;
 
-		std::size_t in_expected = 3, out_expected = 2;
+		std::size_t in_expected = 3, out_expected = 6;
 
 		CHECK_EQ( in_data.size(),  in_expected); // input, state_h, state_c
 		CHECK_EQ(out_data.size(), out_expected); // state_h_out, state_c_out
+		                                         // input_fm, forget_fm
+							 // iactv_fm, output_fm
 
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 
-		Tensor < gpu, 2, DType > input       =  in_data[int(EnumOpInputs ::Input)]
+		Tensor < gpu, 2, DType > input   = in_data[int(EnumOpInputs ::Input)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType > state_h     =  in_data[int(EnumOpInputs ::StateH)]
+		Tensor < gpu, 2, DType > state_h = in_data[int(EnumOpInputs ::StateH)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType > state_c     =  in_data[int(EnumOpInputs ::StateC)]
+		Tensor < gpu, 2, DType > state_c = in_data[int(EnumOpInputs ::StateC)]
 			.get < gpu, 2, DType > (cuda_stream);
+
 		Tensor < gpu, 2, DType > state_h_out = out_data[int(EnumOpOutputs::StateHOut)]
 			.get < gpu, 2, DType > (cuda_stream);
 		Tensor < gpu, 2, DType > state_c_out = out_data[int(EnumOpOutputs::StateCOut)]
+			.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 2, DType > input_fm    = out_data[int(EnumOpOutputs::InputFM)]
+			.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 2, DType > forget_fm   = out_data[int(EnumOpOutputs::ForgetFM)]
+			.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 2, DType > iactv_fm    = out_data[int(EnumOpOutputs::IActvFM)]
+			.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 2, DType > output_fm   = out_data[int(EnumOpOutputs::OutputFM)]
 			.get < gpu, 2, DType > (cuda_stream);
 
 		CHECK_EQ(input      .CheckContiguous(), true);
@@ -151,11 +160,13 @@ public:
 				input  .dptr_, 
 				state_h.dptr_,
 				state_c.dptr_,
-				ctx.is_train ? 
-					reinterpret_cast < DType * > (_reserved_space.dptr) : nullptr,
+				input_fm .dptr_,
+				forget_fm.dptr_,
+				iactv_fm .dptr_,
+				output_fm.dptr_,
 				state_h_out.dptr_,
 				state_c_out.dptr_,
-				_param.batch_size, _param.state_size
+				_param.batch_size, _param.state_size, ctx.is_train
 			);
 	}
 
@@ -169,13 +180,15 @@ public:
 	{
 		using namespace mshadow;
 
-		std::size_t in_expected = 3, out_expected = 2;
+		std::size_t in_expected = 3, out_expected = 6, visible_out_expected = 2;
 
 		CHECK_EQ( in_data.size(),  in_expected); // input, state_h, state_c
 		CHECK_EQ( in_grad.size(),  in_expected);
 		CHECK_EQ(     req.size(),  in_expected);
 		CHECK_EQ(out_data.size(), out_expected); // state_h_out, state_c_out
-		CHECK_EQ(out_grad.size(), out_expected);
+		                                         // input_fm, forget_fm
+							 // iactv_fm, output_fm
+		CHECK_EQ(out_grad.size(), visible_out_expected); // state_h_out, state_c_out
 
 		CHECK_NE(req[int(EnumOpInputs::Input )], kAddTo) << "AddTo is not supported for input.";
 		CHECK_NE(req[int(EnumOpInputs::StateH)], kAddTo) << "AddTo is not supported for state_h.";
@@ -183,15 +196,24 @@ public:
 
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 	
-		Tensor < gpu, 2, DType > input_grad       =  in_grad[int(EnumOpInputs ::Input)]
+		Tensor < gpu, 2, DType > input_grad   = in_grad[int(EnumOpInputs ::Input)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType > state_h_grad     =  in_grad[int(EnumOpInputs ::StateH)]
+		Tensor < gpu, 2, DType > state_h_grad = in_grad[int(EnumOpInputs ::StateH)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType > state_c_grad     =  in_grad[int(EnumOpInputs ::StateC)]
+		Tensor < gpu, 2, DType > state_c_grad = in_grad[int(EnumOpInputs ::StateC)]
 			.get < gpu, 2, DType > (cuda_stream);
 		
-		Tensor < gpu, 2, DType > state_c          =  in_data[int(EnumOpInputs ::StateC)]
+		Tensor < gpu, 2, DType > state_c = in_data[int(EnumOpInputs ::StateC)]
 			.get < gpu, 2, DType > (cuda_stream);
+
+		Tensor < gpu, 2, DType > input_fm  = out_data[int(EnumOpOutputs::InputFM)]
+			.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 2, DType > forget_fm = out_data[int(EnumOpOutputs::ForgetFM)]
+			.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 2, DType > iactv_fm  = out_data[int(EnumOpOutputs::IActvFM)]
+			.get < gpu, 2, DType > (cuda_stream);
+		Tensor < gpu, 2, DType > output_fm = out_data[int(EnumOpOutputs::OutputFM)]
+			.get < gpu, 2, DType > (cuda_stream);	
 
 		Tensor < gpu, 2, DType > state_h_out_grad = out_grad[int(EnumOpOutputs::StateHOut)]
 			.get < gpu, 2, DType > (cuda_stream);
@@ -212,11 +234,14 @@ public:
 				(BxH - 1) / 128 + 1, 128, 0, Stream < gpu > ::GetStream(cuda_stream)
 			>>> 
 			(
-				input_grad  .dptr_,
+				input_grad.dptr_,
 				state_h_grad.dptr_,
 				state_c_grad.dptr_,
-				state_c     .dptr_,
-				reinterpret_cast < DType * > (_reserved_space.dptr),
+				state_c.dptr_,
+				input_fm .dptr_,
+				forget_fm.dptr_,
+				iactv_fm .dptr_,
+				output_fm.dptr_,
 				state_h_out_grad.dptr_,
 				state_c_out_grad.dptr_,
 				_param.batch_size, _param.state_size
@@ -235,10 +260,13 @@ __global__ void _cuda_lstm_nonlin_block__forward(
 	const RealType * const __restrict__ input,
 	const RealType * const __restrict__ state_h,
 	const RealType * const __restrict__ state_c,
-	      RealType * const __restrict__ reserved_space,
+	      RealType * const __restrict__ input_fm,
+	      RealType * const __restrict__ forget_fm,
+	      RealType * const __restrict__ iactv_fm,
+	      RealType * const __restrict__ output_fm,
 	      RealType * const __restrict__ state_h_out,
 	      RealType * const __restrict__ state_c_out, 
-	const unsigned batch_size, const unsigned state_size)
+	const unsigned batch_size, const unsigned state_size, const bool is_train)
 {
 	const unsigned g_threadIdx = threadIdx.x + blockIdx.x * blockDim.x,
 		BxH = batch_size * state_size;
@@ -248,11 +276,11 @@ __global__ void _cuda_lstm_nonlin_block__forward(
 	const unsigned batch_idx_x4H_plus_state_idx = (g_threadIdx / state_size) * 4 * state_size + 
 	                                               g_threadIdx % state_size;
 
-	RealType  input_gate = __cu_sigmoid(input  [batch_idx_x4H_plus_state_idx + 0 * state_size] + 
+	RealType input_gate  = __cu_sigmoid(input  [batch_idx_x4H_plus_state_idx + 0 * state_size] + 
 	                                    state_h[batch_idx_x4H_plus_state_idx + 0 * state_size]);
 	RealType forget_gate = __cu_sigmoid(input  [batch_idx_x4H_plus_state_idx + 1 * state_size] + 
 	                                    state_h[batch_idx_x4H_plus_state_idx + 1 * state_size]);
-	RealType  input_actv =         tanh(input  [batch_idx_x4H_plus_state_idx + 2 * state_size] + 
+	RealType input_actv  =         tanh(input  [batch_idx_x4H_plus_state_idx + 2 * state_size] + 
 	                                    state_h[batch_idx_x4H_plus_state_idx + 2 * state_size]);
 	RealType output_gate = __cu_sigmoid(input  [batch_idx_x4H_plus_state_idx + 3 * state_size] + 
 	                                    state_h[batch_idx_x4H_plus_state_idx + 3 * state_size]);
@@ -262,13 +290,11 @@ __global__ void _cuda_lstm_nonlin_block__forward(
 	state_c_out[g_threadIdx] =      state_c_out_reg;
 	state_h_out[g_threadIdx] = tanh(state_c_out_reg) * output_gate;
 
-	if (reserved_space != nullptr)
+	if (is_train)
 	{
 		// preserve the gates to be used in the backward pass
-		reserved_space[batch_idx_x4H_plus_state_idx + 0 * state_size] =  input_gate;
-		reserved_space[batch_idx_x4H_plus_state_idx + 1 * state_size] = forget_gate;
-		reserved_space[batch_idx_x4H_plus_state_idx + 2 * state_size] =  input_actv;
-		reserved_space[batch_idx_x4H_plus_state_idx + 3 * state_size] = output_gate;
+		input_fm[g_threadIdx] = input_gate; forget_fm[g_threadIdx] = forget_gate;
+		iactv_fm[g_threadIdx] = input_actv; output_fm[g_threadIdx] = output_gate;
 	}
 }
 
@@ -278,7 +304,10 @@ __global__ void _cuda_lstm_nonlin_block_backward(
 	      RealType * const __restrict__ state_h_grad,
 	      RealType * const __restrict__ state_c_grad,
 	const RealType * const __restrict__ state_c,
-	const RealType * const __restrict__ reserved_space,
+	const RealType * const __restrict__ input_fm,
+	const RealType * const __restrict__ forget_fm,
+	const RealType * const __restrict__ iactv_fm,
+	const RealType * const __restrict__ output_fm,
 	const RealType * const __restrict__ state_h_out_grad,
 	const RealType * const __restrict__ state_c_out_grad,
 	const unsigned batch_size, const unsigned state_size)
@@ -292,10 +321,8 @@ __global__ void _cuda_lstm_nonlin_block_backward(
 	                                               g_threadIdx % state_size;
 
 	// read the activations stored in the forward pass
-	RealType   input_gate = reserved_space[batch_idx_x4H_plus_state_idx + 0 * state_size];
-	RealType  forget_gate = reserved_space[batch_idx_x4H_plus_state_idx + 1 * state_size];
-	RealType   input_actv = reserved_space[batch_idx_x4H_plus_state_idx + 2 * state_size];
-	RealType  output_gate = reserved_space[batch_idx_x4H_plus_state_idx + 3 * state_size];
+	RealType input_gate = input_fm[g_threadIdx], forget_gate = forget_fm[g_threadIdx],
+	         input_actv = iactv_fm[g_threadIdx], output_gate = output_fm[g_threadIdx];
 
 	RealType state_c_reg = state_c[g_threadIdx];
 

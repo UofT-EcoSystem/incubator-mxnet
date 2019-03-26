@@ -215,9 +215,9 @@ public:
 			.get < gpu, 2, DType > (cuda_stream);
 		Tensor < gpu, 2, DType > state_c_out = out_data[int(EnumOpOutputs::StateCOut)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType >    input_fm = out_data[int(EnumOpOutputs::  InputFM)]
+		Tensor < gpu, 2, DType >    input_fm = out_data[int(EnumOpOutputs::InputFM)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType >   forget_fm = out_data[int(EnumOpOutputs:: ForgetFM)]
+		Tensor < gpu, 2, DType >   forget_fm = out_data[int(EnumOpOutputs::ForgetFM)]
 			.get < gpu, 2, DType > (cuda_stream);
 
 		CHECK_EQ(input      .CheckContiguous(), true);
@@ -292,7 +292,7 @@ public:
 		CHECK_EQ( in_grad.size(),  in_expected);
 		CHECK_EQ(     req.size(),  in_expected);
 		CHECK_EQ(out_data.size(), out_expected); // state_h_out, state_c_out, input_fm, forget_fm
-		CHECK_EQ(out_grad.size(), visible_out_expected);
+		CHECK_EQ(out_grad.size(), visible_out_expected); // state_h_out, state_c_out,
 
 		// The gradients requests of the input variables can be anything, but most likely kAddTo.
 
@@ -313,24 +313,24 @@ public:
 		Tensor < gpu, 1, DType > h2h_bias_grad   = in_grad[int(EnumOpInputs::H2HBias)]
 			.get < gpu, 1, DType > (cuda_stream);
 		
-		Tensor < gpu, 2, DType > input      = in_data[int(EnumOpInputs ::Input)]
+		Tensor < gpu, 2, DType > input      = in_data[int(EnumOpInputs::Input)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType > state_h    = in_data[int(EnumOpInputs ::StateH)]
+		Tensor < gpu, 2, DType > state_h    = in_data[int(EnumOpInputs::StateH)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType > state_c    = in_data[int(EnumOpInputs ::StateC)]
+		Tensor < gpu, 2, DType > state_c    = in_data[int(EnumOpInputs::StateC)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType > i2h_weight = in_data[int(EnumOpInputs ::I2HWeight)]
+		Tensor < gpu, 2, DType > i2h_weight = in_data[int(EnumOpInputs::I2HWeight)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType > h2h_weight = in_data[int(EnumOpInputs ::H2HWeight)]
+		Tensor < gpu, 2, DType > h2h_weight = in_data[int(EnumOpInputs::H2HWeight)]
 			.get < gpu, 2, DType > (cuda_stream);
 
 		Tensor < gpu, 2, DType > state_h_out = out_data[int(EnumOpOutputs::StateHOut)]
 			.get < gpu, 2, DType > (cuda_stream);
 		Tensor < gpu, 2, DType > state_c_out = out_data[int(EnumOpOutputs::StateCOut)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType >    input_fm = out_data[int(EnumOpOutputs::  InputFM)]
+		Tensor < gpu, 2, DType >    input_fm = out_data[int(EnumOpOutputs::InputFM)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 2, DType >   forget_fm = out_data[int(EnumOpOutputs:: ForgetFM)]
+		Tensor < gpu, 2, DType >   forget_fm = out_data[int(EnumOpOutputs::ForgetFM)]
 			.get < gpu, 2, DType > (cuda_stream);
 		
 		Tensor < gpu, 2, DType > state_h_out_grad = out_grad[int(EnumOpOutputs::StateHOut)]

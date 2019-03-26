@@ -13,7 +13,9 @@ namespace mxnet {
 		namespace {
 
 enum class EnumOpInputs { Input, StateH, StateC };
-enum class EnumOpOutputs { StateHOut, StateCOut };
+enum class EnumOpOutputs { StateHOut, StateCOut,
+                           InputFM, ForgetFM,
+			   IActvFM, OutputFM };
 // NO Need for Temporary Workspace
 
 		} // anonymous namespace
@@ -74,12 +76,18 @@ public:
 	}
 	std::vector < std::string > ListOutputs  () const override
 	{
-		return { "state_h_out", "state_c_out" };
+		return { "state_h_out", "state_c_out",
+		         "input_fm", "forget_fm",
+			 "iactv_fm", "output_fm" };
 	}
 	int NumOutputs() const override 
 	{
-		return 2;
+		return 6;
   	}
+	int NumVisibleOutputs() const override 
+	{
+		return 2;
+	}
 
 	void Init(const std::vector < std::pair < std::string, 
 	                                          std::string > > & kwargs) override
@@ -116,6 +124,11 @@ public:
 
 		out_shape->push_back((*in_shape)[int(EnumOpInputs::StateC)]); // state_h_out
 		out_shape->push_back((*in_shape)[int(EnumOpInputs::StateC)]); // state_c_out
+		
+		out_shape->push_back((*in_shape)[int(EnumOpInputs::StateC)]); // input_fm
+		out_shape->push_back((*in_shape)[int(EnumOpInputs::StateC)]); // forget_fm
+		out_shape->push_back((*in_shape)[int(EnumOpInputs::StateC)]); // iactv_fm
+		out_shape->push_back((*in_shape)[int(EnumOpInputs::StateC)]); // output_fm
 
 		return true;
 	}
@@ -147,6 +160,11 @@ public:
 
 		out_type->push_back(itype); // state_h_out
 		out_type->push_back(itype); // state_c_out
+
+		out_type->push_back(itype); // input_fm
+		out_type->push_back(itype); // forget_fm
+		out_type->push_back(itype); // iactv_fm
+		out_type->push_back(itype); // output_fm
 		
 		return true;
 	}
@@ -167,6 +185,10 @@ public:
 		const std::vector < int > & out_data) const override
 	{
 		return { in_data[int(EnumOpInputs ::StateC)],
+			out_data[int(EnumOpOutputs::InputFM )],
+			out_data[int(EnumOpOutputs::ForgetFM)],
+			out_data[int(EnumOpOutputs::IActvFM )],
+			out_data[int(EnumOpOutputs::OutputFM)],
 			out_grad[int(EnumOpOutputs::StateHOut)],
 			out_grad[int(EnumOpOutputs::StateCOut)] };
 	}
