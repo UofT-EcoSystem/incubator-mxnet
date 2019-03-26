@@ -16,13 +16,13 @@ MemoryProfiler::MemoryProfiler() {
   const char * ferr_fname = getenv("MXNET_MEMORY_PROFILER_FERR_FNAME");
 
   if (use_memory_profiler == nullptr) {
-    LOG(INFO) << "set MXNET_USE_MEMORY_PROFILER=1 to enable memory profiler." << std::endl;
+    LOG(INFO) << "set MXNET_USE_MEMORY_PROFILER=1 to enable memory profiler.";
     _use_memory_profiler = false;
   } else if (!strcmp(use_memory_profiler, "1")) {
-    LOG(INFO) << "MXNet has memory profiler enabled." << std::endl;
+    LOG(INFO) << "MXNet has memory profiler enabled.";
     _use_memory_profiler = true;
   } else {
-    LOG(INFO) << "MXNet has memory profiler disabled." << std::endl;
+    LOG(INFO) << "MXNet has memory profiler disabled.";
     _use_memory_profiler = false;
   }
   if (_use_memory_profiler) {
