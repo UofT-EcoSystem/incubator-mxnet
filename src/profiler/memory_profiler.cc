@@ -18,7 +18,7 @@ MemoryProfiler::MemoryProfiler() {
   if (use_memory_profiler == nullptr) {
     LOG(INFO) << "set MXNET_USE_MEMORY_PROFILER=1 to enable memory profiler." << std::endl;
     _use_memory_profiler = false;
-  } else if (strcmp(use_memory_profiler, "1")) {
+  } else if (!strcmp(use_memory_profiler, "1")) {
     LOG(INFO) << "MXNet has memory profiler enabled." << std::endl;
     _use_memory_profiler = true;
   } else {
