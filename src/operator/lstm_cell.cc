@@ -7,7 +7,7 @@ namespace mxnet {
 template <>
 Operator * CreateOp < cpu > (EcoLSTMCellParam param, int dtype)
 {
-	LOG(FATAL) << "LSTM Cell is only available for GPU at the moment.";
+	LOG(FATAL) << "Eco-LSTM Cell is only available for GPU at the moment.";
 
 	Operator * op = nullptr;
 
