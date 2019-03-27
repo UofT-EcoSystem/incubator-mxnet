@@ -199,10 +199,10 @@ public:
 			 in_data[int(EnumOpInputs ::H2HWeight)],
 			out_data[int(EnumOpOutputs::StateHOut)],
 			out_data[int(EnumOpOutputs::StateCOut)],
-			out_data[int(EnumOpOutputs::  InputFM)],
-			out_data[int(EnumOpOutputs:: ForgetFM)],
+			out_data[int(EnumOpOutputs::InputFM)],
+			out_data[int(EnumOpOutputs::ForgetFM)],
 			out_grad[int(EnumOpOutputs::StateHOut)],
-			out_grad[int(EnumOpOutputs::StateCOut)]};
+			out_grad[int(EnumOpOutputs::StateCOut)] };
 	}
 
 	std::vector < ResourceRequest >  ForwardResource(

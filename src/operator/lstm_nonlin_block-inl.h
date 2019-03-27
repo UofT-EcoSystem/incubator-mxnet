@@ -185,9 +185,9 @@ public:
 		const std::vector < int > & out_data) const override
 	{
 		return { in_data[int(EnumOpInputs ::StateC)],
-			out_data[int(EnumOpOutputs::InputFM )],
+			out_data[int(EnumOpOutputs::InputFM)],
 			out_data[int(EnumOpOutputs::ForgetFM)],
-			out_data[int(EnumOpOutputs::IActvFM )],
+			out_data[int(EnumOpOutputs::IActvFM)],
 			out_data[int(EnumOpOutputs::OutputFM)],
 			out_grad[int(EnumOpOutputs::StateHOut)],
 			out_grad[int(EnumOpOutputs::StateCOut)] };
