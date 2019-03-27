@@ -108,7 +108,7 @@ public:
 		// h2h_weight, h2h_bias
 		CHECK_EQ(in_shape->size(), 7); 
 
-		const TShape & ishape = (*in_shape)[int(EnumOpInputs::Input )];
+		const TShape & ishape = (*in_shape)[int(EnumOpInputs::Input)];
 		const TShape & hshape = (*in_shape)[int(EnumOpInputs::StateH)];
 
 		CHECK_EQ(ishape.ndim(), 2U) <<   "Input data should be rank-2 tensor of dim "
