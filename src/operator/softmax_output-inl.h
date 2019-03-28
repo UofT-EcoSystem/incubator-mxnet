@@ -89,20 +89,6 @@ struct SoftmaxOutputParam : public dmlc::Parameter<SoftmaxOutputParam> {
   };
 };
 
-template < typename DType >
-static void pprint(DType * dptr, const std::string & tag) {
-  DType out_arr [10];
-
-  cudaDeviceSynchronize();
-  cudaMemcpy(out_arr, dptr, 10 * sizeof(DType), cudaMemcpyDeviceToHost);
-
-  std::cout << tag << ": [";
-  for (unsigned i = 0; i < 10; ++i) {
-    std::cout << out_arr[i] << ", ";
-  }
-  std::cout << "]" << std::endl;
-}
-
 template<typename xpu, typename DType>
 class SoftmaxOutputOp : public Operator {
  public:
@@ -140,13 +126,7 @@ class SoftmaxOutputOp : public Operator {
             in_data[softmaxout_enum::kData].get_with_shape<xpu, 2, DType>(s2, s);
         Tensor<xpu, 2, DType> out =
             out_data[softmaxout_enum::kOut].get_with_shape<xpu, 2, DType>(s2, s);
-          
-        std::cout << "Logits: " << data.dptr_ << std::endl <<
-                     "Output: " << out .dptr_ << std::endl;
-
         Softmax(out, data);
-
-        pprint(out.dptr_, "Output in Forward");
       }
     }
   }
@@ -241,11 +221,6 @@ class SoftmaxOutputOp : public Operator {
           out_data[softmaxout_enum::kOut].get_with_shape<xpu, 2, DType>(data_shape, s);
       Tensor<xpu, 2, DType> grad =
           in_grad[softmaxout_enum::kData].get_with_shape<xpu, 2, DType>(data_shape, s);
-
-      std::cout << "Logits Grad: " << grad.dptr_ << std::endl <<
-                   "Output: "      << out .dptr_ << std::endl;
-      pprint(out.dptr_, "Output in Backward");
-
       index_t valid_cnt = label.shape_.Size();
       if (param_.use_ignore) {
         if (param_.smooth_alpha == 0.0f) {
