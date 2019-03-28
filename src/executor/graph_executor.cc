@@ -1136,6 +1136,9 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
 #endif // MXNET_USE_MEMORY_PROFILER
   std::vector<Context> data_context(idx.num_node_entries());
   std::vector<NDArrayStorageType> data_storage_type(idx.num_node_entries(), kUndefinedStorage);
+
+  int logits_sid, softmax_sid;
+
   for (uint32_t nid = 0; nid < idx.num_nodes(); ++nid) {
     for (uint32_t i = 0; i < idx[nid].source->num_outputs(); ++i) {
       auto eid = idx.entry_id(nid, i);
@@ -1145,6 +1148,29 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
 #if MXNET_USE_MEMORY_PROFILER
       node_attrs_name[eid] = idx[nid].source->attrs.name;
 #endif // MXNET_USE_MEMORY_PROFILER
+      if (idx[nid].source->attrs.name == "logits") {
+        std::cout << "Logits Storage ID: " << vstorage[eid] << std::endl;
+        logits_sid = vstorage[eid];
+      }
+      if (idx[nid].source->attrs.name == "softmax_backward") {
+        std::cout << "SoftmaxBackward Storage ID: " << vstorage[eid] << std::endl;
+        softmax_sid = vstorage[eid];
+      }
+    }
+  }
+  softmax_sid = softmax_sid - 1;
+
+  std::cout << "Node with Logits SID" << std::endl;
+  for (uint32_t nid = 0; nid < idx.num_nodes(); ++nid) {
+    for (uint32_t i = 0; i < idx[nid].source->num_outputs(); ++i) {
+      auto eid = idx.entry_id(nid, i);
+
+      if (vstorage[eid] == logits_sid) {
+        std::cout << "\t" "Logits: " << idx[nid].source->attrs.name << std::endl;
+      }
+      if (vstorage[eid] == softmax_sid) {
+        std::cout << "\t" "Softmax: " << idx[nid].source->attrs.name << std::endl;
+      }
     }
   }
 
@@ -1280,6 +1306,10 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
       CHECK_GE(storage_id, 0) << "Do not support runtime shape op yet";
       const NDArray& src = data_pool_.at(storage_id);
       data_entry_[i] = src.AsArray(vshape[i], vdtype[i]);
+
+      if (storage_id == logits_sid) {
+        std::cout << "\t" "NDArray sharing the same space: " << node_attrs_name[i] << std::endl;
+      }
     } else {
       data_entry_[i] = NDArray(storage_type, vshape[i], data_context[i]);
 #if MXNET_USE_MEMORY_PROFILER
