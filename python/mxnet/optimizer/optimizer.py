@@ -515,7 +515,8 @@ class SGD(Optimizer):
         momentum = None
         if self.momentum != 0.0:
             stype = weight.stype if self.lazy_update else 'default'
-            momentum = zeros(weight.shape, weight.context, dtype=weight.dtype, stype=stype)
+            momentum = zeros(weight.shape, weight.context, dtype=weight.dtype, stype=stype,
+                             name=weight.name.replace("in_arg", "optimizer_state:momentum"))
         return momentum
 
     def _update_impl(self, index, weight, grad, state, multi_precision=False):
@@ -593,7 +594,8 @@ class Signum(Optimizer):
     def create_state(self, index, weight):
         momentum = None
         if self.momentum != 0.0:
-            momentum = zeros(weight.shape, weight.context, dtype=weight.dtype, stype=weight.stype)
+            momentum = zeros(weight.shape, weight.context, dtype=weight.dtype, stype=weight.stype,
+                             name=weight.name.replace("in_arg", "optimizer_state:momentum"))
         return momentum
 
     def _update_impl(self, index, weight, grad, state):
@@ -656,9 +658,12 @@ class FTML(Optimizer):
         self.epsilon = epsilon
 
     def create_state(self, index, weight):
-        return (zeros(weight.shape, weight.context, dtype=weight.dtype), # d_0
-                zeros(weight.shape, weight.context, dtype=weight.dtype), # v_0
-                zeros(weight.shape, weight.context, dtype=weight.dtype)) # z_0
+        return (zeros(weight.shape, weight.context, dtype=weight.dtype,
+                      name=weight.name.replace("in_arg", "optimizer_state:d_0")), # d_0
+                zeros(weight.shape, weight.context, dtype=weight.dtype,
+                      name=weight.name.replace("in_arg", "optimizer_state:v_0")), # v_0
+                zeros(weight.shape, weight.context, dtype=weight.dtype,
+                      name=weight.name.replace("in_arg", "optimizer_state:z_0"))) # z_0
 
     def update(self, index, weight, grad, state):
         assert(isinstance(weight, NDArray))
@@ -740,7 +745,8 @@ class LBSGD(Optimizer):
             weight_master_copy = array(weight, ctx=weight.context, dtype=numpy.float32)
             if self.momentum != 0.0:
                 momentum = zeros(weight.shape, weight.context, dtype=numpy.float32,
-                                 stype=weight.stype)
+                                 stype=weight.stype,
+                                 name=weight.name.replace("in_arg", "optimizer_state:momentum"))
             return (momentum, weight_master_copy)
         if weight.dtype == numpy.float16 and not self.multi_precision:
             warnings.warn("Accumulating with float16 in optimizer can lead to "
@@ -748,7 +754,8 @@ class LBSGD(Optimizer):
                           "Consider using multi_precision=True option of the "
                           "SGD optimizer")
         if self.momentum != 0.0:
-            momentum = zeros(weight.shape, weight.context, dtype=weight.dtype, stype=weight.stype)
+            momentum = zeros(weight.shape, weight.context, dtype=weight.dtype, stype=weight.stype,
+                             name=weight.name.replace("in_arg", "optimizer_state:momentum"))
         return momentum
 
     def _get_lbmult(self, nup):
@@ -898,7 +905,8 @@ class DCASGD(Optimizer):
             return (None,
                     weight.copy())  # previous weight
         else:
-            return (zeros(weight.shape, weight.context, dtype=weight.dtype), # momentum
+            return (zeros(weight.shape, weight.context, dtype=weight.dtype,
+                          name=weight.name.replace("in_arg", "optimizer_state:momentum")), # momentum
                     weight.copy())  # previous weight
 
     def update(self, index, weight, grad, state):
@@ -952,7 +960,8 @@ class NAG(Optimizer):
     def create_state(self, index, weight):
         momentum = None
         if self.momentum != 0.0:
-            momentum = zeros(weight.shape, weight.context, dtype=weight.dtype)
+            momentum = zeros(weight.shape, weight.context, dtype=weight.dtype,
+                             name=weight.name.replace("in_arg", "optimizer_state:momentum"))
         return momentum
 
     def update(self, index, weight, grad, state):
@@ -1070,9 +1079,11 @@ class Adam(Optimizer):
     def create_state(self, index, weight):
         stype = weight.stype if self.lazy_update else 'default'
         return (zeros(weight.shape, weight.context, dtype=weight.dtype,
-                      stype=stype),  # mean
+                      stype=stype,
+                      name=weight.name.replace("in_arg", "optimizer_state:mean")),  # mean
                 zeros(weight.shape, weight.context, dtype=weight.dtype,
-                      stype=stype))  # variance
+                      stype=stype,
+                      name=weight.name.replace("in_arg", "optimizer_state:variance")))  # variance
 
     def update(self, index, weight, grad, state):
         assert(isinstance(weight, NDArray))
@@ -1128,7 +1139,8 @@ class AdaGrad(Optimizer):
         self.float_stable_eps = eps
 
     def create_state(self, index, weight):
-        return zeros(weight.shape, weight.context, stype=weight.stype)  # history
+        return zeros(weight.shape, weight.context, stype=weight.stype,
+                     name=weight.name.replace("in_arg", "optimizer_state:history"))  # history
 
     def update(self, index, weight, grad, state):
         assert(isinstance(weight, NDArray))
@@ -1201,11 +1213,15 @@ class RMSProp(Optimizer):
     def create_state(self, index, weight):
         if self.centered:
             return (
-                zeros(weight.shape, weight.context, stype=weight.stype),  # n
-                zeros(weight.shape, weight.context, stype=weight.stype),  # g
-                zeros(weight.shape, weight.context, stype=weight.stype))  # delta
+                zeros(weight.shape, weight.context, stype=weight.stype,
+                      name=weight.name.replace("in_arg", "optimizer_state:n")),  # n
+                zeros(weight.shape, weight.context, stype=weight.stype,
+                      name=weight.name.replace("in_arg", "optimizer_state:g")),  # g
+                zeros(weight.shape, weight.context, stype=weight.stype,
+                      name=weight.name.replace("in_arg", "optimizer_state:delta")))  # delta
         else:
-            return (zeros(weight.shape, weight.context, stype=weight.stype),)  # n
+            return (zeros(weight.shape, weight.context, stype=weight.stype,
+                          name=weight.name.replace("in_arg", "optimizer_state:n")),)  # n
 
     def update(self, index, weight, grad, state):
         assert(isinstance(weight, NDArray))
@@ -1263,8 +1279,11 @@ class AdaDelta(Optimizer):
         self.epsilon = epsilon
 
     def create_state(self, index, weight):
-        return (zeros(weight.shape, weight.context),  # accumulated g
-                zeros(weight.shape, weight.context))  # accumulated delta
+        return (zeros(weight.shape, weight.context,
+                      name=weight.name.replace("in_arg", "optimizer_state:accumulated_g")),
+                # accumulated g
+                zeros(weight.shape, weight.context,
+                      name=weight.name.replace("in_arg", "optimizer_state:accumulated_delta")))
 
     def update(self, index, weight, grad, state):
         assert(isinstance(weight, NDArray))
@@ -1346,9 +1365,10 @@ class Ftrl(Optimizer):
         self.lr = learning_rate
 
     def create_state(self, index, weight):
-        return (zeros(weight.shape, weight.context, stype=weight.stype),  # z
-                zeros(weight.shape, weight.context, stype=weight.stype))  # n
-
+        return (zeros(weight.shape, weight.context, stype=weight.stype,
+                      name=weight.name.replace("in_arg", "optimizer_state:z")),  # z
+                zeros(weight.shape, weight.context, stype=weight.stype,
+                      name=weight.name.replace("in_arg", "optimizer_state:n")))  # n
     def update(self, index, weight, grad, state):
         assert(isinstance(weight, NDArray))
         assert(isinstance(grad, NDArray))
@@ -1396,8 +1416,10 @@ class Adamax(Optimizer):
         self.beta2 = beta2
 
     def create_state(self, index, weight):
-        return (zeros(weight.shape, weight.context, dtype=weight.dtype),  # mean
-                zeros(weight.shape, weight.context, dtype=weight.dtype))  # variance
+        return (zeros(weight.shape, weight.context, dtype=weight.dtype,
+                      name=weight.name.replace("in_arg", "optimizer_state:mean")),  # mean
+                zeros(weight.shape, weight.context, dtype=weight.dtype,
+                      name=weight.name.replace("in_arg", "optimizer_state:variance")))  # variance
 
     def update(self, index, weight, grad, state):
         assert(isinstance(weight, NDArray))
@@ -1454,8 +1476,10 @@ class Nadam(Optimizer):
         self.m_schedule = 1.
 
     def create_state(self, index, weight):
-        return (zeros(weight.shape, weight.context, dtype=weight.dtype),  # mean
-                zeros(weight.shape, weight.context, dtype=weight.dtype))  # variance
+        return (zeros(weight.shape, weight.context, dtype=weight.dtype,
+                      name=weight.name.replace("in_arg", "optimizer_state:mean")),  # mean
+                zeros(weight.shape, weight.context, dtype=weight.dtype,
+                      name=weight.name.replace("in_arg", "optimizer_state:variance")))  # variance
 
     def update(self, index, weight, grad, state):
         assert(isinstance(weight, NDArray))
