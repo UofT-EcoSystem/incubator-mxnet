@@ -47,7 +47,7 @@ GpuMemoryProfiler::addEntry(
   if (tag.find("unknown") != std::string::npos) {
     std::string stack_trace =
 #if DMLC_LOG_STACK_TRACE
-        dmlc::StackTrace(2ul);
+        dmlc::StackTrace();
 #else  // !DMLC_LOG_STACK_TRACE
         "";
 #endif  // DMLC_LOG_STACK_TRACE

@@ -981,7 +981,7 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     // initialize based on storage_type
     if (stype != kDefaultStorage) {
       data_entry_[data_eid] = NDArray(stype, vshape[eid], data_context[eid], true, vdtype[eid],
-          {}, {}, TShape(mshadow::Shape1(0), "head_grad:" + data_storage_tag[eid]);
+          {}, {}, TShape(mshadow::Shape1(0)), "head_grad:" + data_storage_tag[eid]);
     } else {
       data_entry_[data_eid] = NDArray(vshape[eid], data_context[eid], false, vdtype[eid],
           "head_grad:" + data_storage_tag[eid]);
@@ -1053,7 +1053,7 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
       TShape shape{static_cast<nnvm::dim_t>(nword)};
       // TODO(junwu): adding delay_alloc=true to create nd
       // is a temporary solution.
-      NDArray nd(shape, ctx, true, mshadown::default_type_flag, tag);
+      NDArray nd(shape, ctx, true, mshadow::default_type_flag, tag);
       data_pool_[i] = nd;
       // put the new allocated arrays to shared pool
       if (shared_pool != nullptr)  {
