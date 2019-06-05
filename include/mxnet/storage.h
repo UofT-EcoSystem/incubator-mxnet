@@ -27,6 +27,7 @@
 
 #include <memory>
 #include "./base.h"
+#include "./storage_tag.h"
 
 namespace mxnet {
 
@@ -56,6 +57,8 @@ class Storage {
      */
     int shared_pid{-1};
     int shared_id{-1};
+
+    std::string tag{"unknown"};
   };
   /*!
    * \brief Allocate a new contiguous memory for a given size.
@@ -63,10 +66,13 @@ class Storage {
    * \param ctx Context information about the device and ID.
    * \return Handle struct.
    */
-  Handle Alloc(size_t size, Context ctx) {
+  Handle Alloc(size_t size, Context ctx,
+      const std::string & tag = 
+        MXNET_DEFAULT_STORAGE_TAG("unknown")) {
     Handle hd;
     hd.size = size;
     hd.ctx = ctx;
+    hd.tag = tag;
     this->Alloc(&hd);
     return hd;
   }

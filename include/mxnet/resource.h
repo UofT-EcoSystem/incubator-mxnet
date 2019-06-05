@@ -25,9 +25,11 @@
 #ifndef MXNET_RESOURCE_H_
 #define MXNET_RESOURCE_H_
 
+#include <string>
 #include <dmlc/logging.h>
 #include "./base.h"
 #include "./engine.h"
+#include "./storage_tag.h"
 #include "./random_generator.h"
 
 namespace mxnet {
@@ -123,8 +125,10 @@ struct Resource {
    */
   template<typename xpu, int ndim>
   inline mshadow::Tensor<xpu, ndim, real_t> get_space(
-      mshadow::Shape<ndim> shape, mshadow::Stream<xpu> *stream) const {
-    return get_space_typed<xpu, ndim, real_t>(shape, stream);
+      mshadow::Shape<ndim> shape, mshadow::Stream<xpu> *stream,
+      const std::string & tag = 
+        MXNET_DEFAULT_STORAGE_TAG("workspace")) const {
+    return get_space_typed<xpu, ndim, real_t>(shape, stream, tag);
   }
   /*!
    * \brief Get cpu space requested as mshadow Tensor.
@@ -151,10 +155,12 @@ struct Resource {
    */
   template<typename xpu, int ndim, typename DType>
   inline mshadow::Tensor<xpu, ndim, DType> get_space_typed(
-      mshadow::Shape<ndim> shape, mshadow::Stream<xpu> *stream) const {
+      mshadow::Shape<ndim> shape, mshadow::Stream<xpu> *stream,
+      const std::string & tag = 
+        MXNET_DEFAULT_STORAGE_TAG("workspace")) const {
     CHECK_EQ(req.type, ResourceRequest::kTempSpace);
     return mshadow::Tensor<xpu, ndim, DType>(
-        reinterpret_cast<DType*>(get_space_internal(shape.Size() * sizeof(DType))),
+        reinterpret_cast<DType*>(get_space_internal(shape.Size() * sizeof(DType), tag)),
         shape, shape[ndim - 1], stream);
   }
   /*!
@@ -178,7 +184,7 @@ struct Resource {
    * \param size The size of the space.
    * \return The allocated space.
    */
-  void* get_space_internal(size_t size) const;
+  void* get_space_internal(size_t size, const std::string & tag) const;
   /*!
    * \brief internal function to get cpu space from resources.
    * \param size The size of space.

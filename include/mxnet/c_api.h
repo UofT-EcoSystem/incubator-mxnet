@@ -505,6 +505,13 @@ MXNET_DLL int MXNDArrayCreate(const mx_uint *shape,
                               int dev_id,
                               int delay_alloc,
                               NDArrayHandle *out);
+MXNET_DLL int MXNDArrayCreateWName(const mx_uint *shape,
+                                   mx_uint ndim,
+                                   int dev_type,
+                                   int dev_id,
+                                   int delay_alloc,
+                                   const char *name,
+                                   NDArrayHandle *out);
 
 /*!
  * \brief create a NDArray with specified shape and data type
@@ -525,7 +532,14 @@ MXNET_DLL int MXNDArrayCreateEx(const mx_uint *shape,
                               int delay_alloc,
                               int dtype,
                               NDArrayHandle *out);
-
+MXNET_DLL int MXNDArrayCreateExWName(const mx_uint *shape,
+                                     mx_uint ndim,
+                                     int dev_type,
+                                     int dev_id,
+                                     int delay_alloc,
+                                     int dtype,
+                                     const char *name,
+                                     NDArrayHandle *out);
 
 /*!
  * \brief create an empty sparse NDArray with specified shape and data type
@@ -985,6 +999,15 @@ MXNET_DLL int MXImperativeInvoke(AtomicSymbolCreator creator,
                                  int num_params,
                                  const char **param_keys,
                                  const char **param_vals);
+MXNET_DLL int MXImperativeInvokeWAttrsName(AtomicSymbolCreator create,
+                                           int num_inputs,
+                                           NDArrayHandle *inputs,
+                                           int *num_outputs,
+                                           NDArrayHandle **outputs,
+                                           int num_params,
+                                           const char **param_keys,
+                                           const char **param_vals,
+                                           const char *attrs_name);
 /*!
  * \brief invoke a nnvm op and imperative function
  * \param creator the op
@@ -1007,6 +1030,16 @@ MXNET_DLL int MXImperativeInvokeEx(AtomicSymbolCreator creator,
                                    const char **param_keys,
                                    const char **param_vals,
                                    const int **out_stypes);
+MXNET_DLL int MXImperativeInvokeExWAttrsName(AtomicSymbolCreator creator,
+                                             int num_inputs,
+                                             NDArrayHandle *inputs,
+                                             int *num_outputs,
+                                             NDArrayHandle **outputs,
+                                             int num_params,
+                                             const char **param_keys,
+                                             const char **param_vals,
+                                             const int **out_stypes,
+                                             const char *attrs_name);
 /*!
  * \brief set whether to record operator for autograd
  * \param is_recording 1 when recording, 0 when not recording.
