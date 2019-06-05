@@ -38,6 +38,7 @@
 #include <new>
 #include "./storage_manager.h"
 #include "../common/cuda_utils.h"
+#include "../profiler/gpu_memory_profiler.h"
 #include "../common/utils.h"
 
 
@@ -145,6 +146,7 @@ void GPUPooledStorageManager::Alloc(Storage::Handle* handle) {
     if (free <= total * reserve_ / 100 || size > free - total * reserve_ / 100)
       ReleaseAll();
 
+    profiler::GpuMemoryProfiler::Get()->addEntry(size, handle->tag);
     void* ret = nullptr;
     cudaError_t e = cudaMalloc(&ret, size);
     if (e != cudaSuccess && e != cudaErrorCudartUnloading) {
@@ -313,6 +315,7 @@ void GPUPooledRoundedStorageManager::Alloc(Storage::Handle* handle) {
     if (free <= total * reserve_ / 100 || size > free - total * reserve_ / 100)
       ReleaseAll();
 
+    profiler::GpuMemoryProfiler::Get()->addEntry(size, handle->tag);
     void* ret = nullptr;
     cudaError_t e = cudaMalloc(&ret, size);
     if (e != cudaSuccess && e != cudaErrorCudartUnloading) {

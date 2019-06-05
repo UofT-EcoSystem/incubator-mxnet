@@ -182,11 +182,13 @@ inline void SetShapeType(const Context& ctx,
     if (outputs[i]->is_none()) {
       if (is_dynamic_shape_existing) {
         // once there is dynamic shape somewhere, we could not pre-determine the shape.
-        *outputs[i] = NDArray(ctx, out_types[i]);
+        *outputs[i] = NDArray(ctx, out_types[i], attrs.name);
       } else if (storage_type == kDefaultStorage) {
-        *outputs[i] = NDArray(out_shapes[i], ctx, true, out_types[i]);
+        *outputs[i] = NDArray(out_shapes[i], ctx, true, out_types[i], attrs.name);
       } else {
-        *outputs[i] = NDArray(storage_type, out_shapes[i], ctx, true, out_types[i]);
+        *outputs[i] = NDArray(storage_type, out_shapes[i], ctx, true, out_types[i],
+            {}, {}, TShape(mshadow::Shape1(0)), 
+            attrs.name + ":oedge" + std::to_string(i));
       }
     } else {
       CHECK_EQ(outputs[i]->shape(), out_shapes[i])
@@ -803,6 +805,16 @@ inline std::multimap<size_t, NDArray> AllocateMemory(
     const std::vector<NDArray*>& arrays,
     std::vector<OpReqType> *array_reqs,
     std::multimap<size_t, NDArray>&& pool = std::multimap<size_t, NDArray>()) {
+
+  std::vector<std::string> data_storage_tag(idx.num_node_entries());
+  for (uint32_t nid = 0; nid < idx.num_nodes(); ++nid) {
+    for (uint32_t i = 0; i < idx[nid].source->num_outputs(); ++i) {
+      auto eid = idx.entry_id(nid, i);
+      data_storage_tag[eid] = "data_entry:" + idx[nid].source->attrs.name +
+          ":oedge" + std::to_string(i);
+    }
+  }
+
   using namespace nnvm;
   const auto& dtypes = g.GetAttr<DTypeVector>("dtype");
   const auto& shapes = g.GetAttr<ShapeVector>("shape");
@@ -815,7 +827,8 @@ inline std::multimap<size_t, NDArray> AllocateMemory(
     CHECK(arrays[i]->is_none());
     if (mem_plan[i].storage_id == exec::kDynamicStorageID) {
       *arrays[i] = NDArray(static_cast<NDArrayStorageType>(stypes[i]),
-                           shapes[i], default_ctx, true, dtypes[i]);
+                           shapes[i], default_ctx, true, dtypes[i],
+                           {}, {}, TShape(mshadow::Shape1(0)), data_storage_tag[i]);
       continue;
     }
     CHECK_EQ(stypes[i], kDefaultStorage);
@@ -828,7 +841,8 @@ inline std::multimap<size_t, NDArray> AllocateMemory(
         pool.erase(iter);
       } else {
         NDArray buff(TShape({static_cast<nnvm::dim_t>(mem_plan[i].size)}),
-                     default_ctx, true, mshadow::kUint8);
+                     default_ctx, true, mshadow::kUint8,
+                     data_storage_tag[i]);
         *arrays[i] = buff.AsArray(shapes[i], dtypes[i]);
         new_pool.insert({mem_plan[i].size, buff});
       }

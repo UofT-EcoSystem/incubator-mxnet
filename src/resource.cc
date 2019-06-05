@@ -64,11 +64,11 @@ struct SpaceAllocator {
     host_handle.size = 0;
   }
 
-  inline void* GetSpace(size_t size) {
+  inline void* GetSpace(size_t size, const std::string & tag) {
     if (handle.size >= size) return handle.dptr;
 
     Storage::Get()->DirectFree(handle);
-    handle = Storage::Get()->Alloc(size, ctx);
+    handle = Storage::Get()->Alloc(size, ctx, tag);
     return handle.dptr;
   }
 
@@ -385,8 +385,8 @@ class ResourceManagerImpl : public ResourceManager {
 };
 }  // namespace resource
 
-void* Resource::get_space_internal(size_t size) const {
-  return static_cast<resource::SpaceAllocator*>(ptr_)->GetSpace(size);
+void* Resource::get_space_internal(size_t size, const std::string & tag) const {
+  return static_cast<resource::SpaceAllocator*>(ptr_)->GetSpace(size, tag);
 }
 
 void* Resource::get_host_space_internal(size_t size) const {

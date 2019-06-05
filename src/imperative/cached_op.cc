@@ -739,13 +739,17 @@ OpStatePtr CachedOp::StaticForward(
 
   for (size_t i = 0; i < outputs.size(); ++i) {
     auto eid = idx.entry_id(idx.outputs()[i]);
+    auto nid = idx.outputs()[i].node_id;
     // An input and an output may share the same array.
     if (!arrays[eid]->is_none())
       *outputs[i] = arrays[eid]->Detach();
     arrays[eid] = outputs[i];
     if (!outputs[i]->is_none()) continue;
     *outputs[i] = NDArray(static_cast<NDArrayStorageType>(stypes[eid]),
-                          shapes[eid], default_ctx, true, dtypes[eid]);
+                          shapes[eid], default_ctx, true, dtypes[eid],
+                          {}, {}, TShape(mshadow::Shape1(0)),
+                          "data_entry:" + idx[nid].source->attrs.name +
+                              ":oedge" + std::to_string(i));
   }
 
   StaticRunOps(default_ctx, g, state_ptr, arrays, 0, idx.num_nodes());

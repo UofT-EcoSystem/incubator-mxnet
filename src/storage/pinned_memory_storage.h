@@ -30,6 +30,7 @@
 #include "mxnet/base.h"
 #include "mxnet/storage.h"
 #include "../common/cuda_utils.h"
+#include "../profiler/gpu_memory_profiler.h"
 
 namespace mxnet {
 namespace storage {
@@ -54,6 +55,7 @@ inline void PinnedMemoryStorage::Alloc(Storage::Handle* handle) {
   const size_t size = handle->size;
   if (size == 0) return;
 
+  profiler::GpuMemoryProfiler::Get()->addEntry(size, handle->tag);
 #if MXNET_USE_NCCL
   std::lock_guard<std::mutex> lock(Storage::Get()->GetMutex(Context::kGPU));
 #endif

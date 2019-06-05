@@ -690,15 +690,18 @@ MSHADOW_XINLINE int ilog2ui(unsigned int a) {
  * \brief Return an NDArray of all zeros.
  */
 inline NDArray InitZeros(const NDArrayStorageType stype, const TShape &shape,
-                         const Context &ctx, const int dtype) {
+                         const Context &ctx, const int dtype, 
+                         const std::string & ndarray_name) {
   // NDArray with default storage
   if (stype == kDefaultStorage) {
-    NDArray ret(shape, ctx, false, dtype);
+    NDArray ret(shape, ctx, false, dtype, ndarray_name);
     ret = 0;
     return ret;
   }
   // NDArray with non-default storage. Storage allocation is always delayed.
-  return NDArray(stype, shape, ctx, true, dtype);
+  return NDArray(stype, shape, ctx, true, dtype, 
+      {}, {}, TShape(mshadow::Shape1(0)), 
+      ndarray_name);
 }
 
 /*!
@@ -706,14 +709,17 @@ inline NDArray InitZeros(const NDArrayStorageType stype, const TShape &shape,
  */
 inline void EmplaceBackZeros(const NDArrayStorageType stype, const TShape &shape,
                              const Context &ctx, const int dtype,
-                             std::vector<NDArray> *vec) {
+                             std::vector<NDArray> *vec, 
+                             const std::string & ndarray_name) {
   // NDArray with default storage
   if (stype == kDefaultStorage) {
-    vec->emplace_back(shape, ctx, false, dtype);
+    vec->emplace_back(shape, ctx, false, dtype, ndarray_name);
     vec->back() = 0;
   } else {
     // NDArray with non-default storage. Storage allocation is always delayed.
-    vec->emplace_back(stype, shape, ctx, true, dtype);
+    vec->emplace_back(stype, shape, ctx, true, dtype,
+        std::vector<int>(), std::vector<TShape>(), 
+        TShape(mshadow::Shape1(0)), ndarray_name);
   }
 }
 
