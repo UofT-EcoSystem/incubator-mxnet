@@ -82,7 +82,7 @@ def _imperative_invoke(handle, ndargs, keys, vals, out,
     # a handle's stype in _ndarray_cls
     out_stypes = ctypes.POINTER(ctypes.c_int)()
 
-    check_call(_LIB.MXImperativeInvokeExWName(
+    check_call(_LIB.MXImperativeInvokeExWAttrsName(
         ctypes.c_void_p(handle),
         ctypes.c_int(len(ndargs)),
         c_handle_array(ndargs),
