@@ -557,7 +557,7 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
           // doesn't have shared_exec, or non-default storage
           EmplaceBackZeros(inferred_stype, inferred_shape, in_arg_ctxes[arg_top],
                            inferred_dtype, in_arg_vec,
-                           "in_arg" + arg_name);
+                           "in_arg:" + arg_name);
         }
         // gradient for model parameter
         if (kNullOp == grad_req_types[arg_top]) {
@@ -574,7 +574,7 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
             // no need to reuse memory from shared_exec for gradient of non-default storage
             EmplaceBackZeros(grad_stype, inferred_shape, arg_grad_ctxes[arg_top],
                              inferred_dtype, arg_grad_vec,
-                             "arg_grad" + arg_name);
+                             "arg_grad:" + arg_name);
           }
           grad_store_.emplace_back(grad_req_types[arg_top], arg_grad_vec->back());
         }
