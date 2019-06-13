@@ -16,9 +16,9 @@ GpuMemoryProfiler::Get() {
 GpuMemoryProfiler::GpuMemoryProfiler() {
   bool use_gpu_memory_profiler = dmlc::GetEnv("MXNET_USE_GPU_MEMORY_PROFILER", false);
   std::string csv_fname = dmlc::GetEnv("MXNET_GPU_MEMORY_PROFILER_CSV_FNAME",
-      std::string("mxnet_gpu_memory_profiler.csv"));
+      std::string("mxnet_gpu_memory_profile.csv"));
   std::string log_fname = dmlc::GetEnv("MXNET_GPU_MEMORY_PROFILER_LOG_FNAME",
-      std::string("mxnet_gpu_memory_profiler.log"));
+      std::string("mxnet_gpu_memory_profile.log"));
 
   if (!use_gpu_memory_profiler) {
     LOG(INFO) << "Set MXNET_USE_GPU_MEMORY_PROFILER=1 "
