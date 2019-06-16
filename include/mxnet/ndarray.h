@@ -1009,7 +1009,9 @@ class NDArray {
         // free storage
         Storage::Get()->Free(shandle);
         // init storage
-        shandle = Storage::Get()->Alloc(dbytes, shandle.ctx, shandle.tag);
+        shandle = Storage::Get()->Alloc(dbytes, shandle.ctx, shandle.tag + 
+            "_resize_" + std::to_string(shandle.size) + 
+              "_to_"   + std::to_string(dbytes));
 #if MXNET_USE_MKLDNN == 1
         mkl_mem_ = nullptr;
 #endif

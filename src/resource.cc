@@ -68,7 +68,9 @@ struct SpaceAllocator {
     if (handle.size >= size) return handle.dptr;
 
     Storage::Get()->DirectFree(handle);
-    handle = Storage::Get()->Alloc(size, ctx, tag);
+    handle = Storage::Get()->Alloc(size, ctx, tag + 
+        "_resize_" + std::to_string(handle.size) + 
+          "_to_"   + std::to_string(size));
     return handle.dptr;
   }
 
