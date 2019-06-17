@@ -72,51 +72,57 @@ __global__ void _cuda_lstm_cell_backward(
 	const RealType * const __restrict__ state_c_out_grad,
 	const unsigned batch_size, const unsigned state_size);
 
-// FullyConnected Layer Y = X W^T Forward Pass
+// FullyConnected Layer $Y = X W^T$ Forward Pass
 // @param1 X [batch_size x input_size]
 // @param2 W [state_size x input_size]
 // @param3 Y [batch_size x state_size]
-// @param4 batch_size: (Parameter)
-// @param5 input_size: (Parameter)
-// @param6 state_size: (Parameter)
+// @param4 batch_size (parameter)
+// @param5 input_size (parameter)
+// @param6 state_size (parameter)
 template < typename RealType >
 static inline void FullyConnectedFW(cublasHandle_t cublas_handle,
 	const RealType * const __restrict__ X,
 	const RealType * const __restrict__ W,
 	      RealType * const __restrict__ Y,
-	const OpReqType req,       const unsigned batch_size, 
-	const unsigned input_size, const unsigned state_size,
+	const OpReqType req,
+	const unsigned batch_size, 
+	const unsigned input_size,
+	const unsigned state_size, 
 	const bool batch_minor);
 
-// FullyConnected Layer Y = XW^T Backward Pass on Weight (dW = dY^T X)
+// FullyConnected Layer $Y = X W^T$ Backward Pass on Weight ($dW = dY^T X$)
 // @param1  X [batch_size x input_size]
 // @param2 dW [state_size x input_size]
 // @param3 dY [batch_size x state_size]
-// @param4 batch_size: (Parameter)
-// @param5 input_size: (Parameter)
-// @param6 state_size: (Parameter)
+// @param4 batch_size (parameter)
+// @param5 input_size (parameter)
+// @param6 state_size (parameter)
 template < typename RealType >
 static inline void FullyConnectedBWWeight(cublasHandle_t cublas_handle,
 	const RealType * const __restrict__  X,
 	      RealType * const __restrict__ dW,
 	const RealType * const __restrict__ dY,
-	const OpReqType grad_req,   const unsigned batch_size, 
-	const unsigned  input_size, const unsigned state_size);
+	const OpReqType grad_req,
+	const unsigned batch_size, 
+	const unsigned input_size,
+	const unsigned state_size);
 
-// FullyConnected Layer Y = XW^T Backward Pass on Data (dX = dY W)
+// FullyConnected Layer $Y = X W^T$ Backward Pass on Data ($dX = dY W$)
 // @param1 dX [batch_size x input_size]
 // @param2  W [state_size x input_size]
 // @param3 dY [batch_size x state_size]
-// @param4 batch_size: (Parameter) 
-// @param5 input_size: (Parameter) 
-// @param6 state_size: (Parameter)
+// @param4 batch_size (parameter) 
+// @param5 input_size (parameter) 
+// @param6 state_size (parameter)
 template < typename RealType >
 static inline void FullyConnectedBWData  (cublasHandle_t cublas_handle,
 	      RealType * const __restrict__ dX,
 	const RealType * const __restrict__  W,
 	const RealType * const __restrict__ dY,
-	const OpReqType grad_req,   const unsigned batch_size, 
-	const unsigned  input_size, const unsigned state_size);
+	const OpReqType grad_req,
+	const unsigned batch_size, 
+	const unsigned input_size,
+	const unsigned state_size);
 
 template < typename DType >
 class CUEcoLSTMCellOp : public Operator
@@ -152,7 +158,7 @@ private:
 		// infer the parameters from the cell input and hidden state
 		_param.batch_size = input  .shape_[0];
 		_param.input_size = input  .shape_[1];
-		_param.state_size = state_h.shape_[2];
+		_param.state_size = state_h.shape_[1];
 
 		// allocate the workspace size
 		_temp_space_size = _param.batch_size * 4 * _param.state_size;
