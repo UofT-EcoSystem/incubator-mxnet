@@ -133,11 +133,88 @@ public:
 
                 out_shape->push_back((*in_shape)[int(EnumOpInputs::StateH)]);  // state_h_out
                 out_shape->push_back((*in_shape)[int(EnumOpInputs::StateH)]);  // feature_map_reset_gate
-                out_shape->push_back((*in_shape)[int])
+                out_shape->push_back((*in_shape)[int(EnumOpInputs::StateH)]);  // feature_map_update_gate
 
                 return true;
         }
-};
+        bool InferType(std::vector < int > *  in_type,
+                       std::vector < int > * out_type,
+                       std::vector < int > * aux_type)
+        {
+                CHECK_GE(in_type, 1U);
+
+                int itype = (*in_type)[0];
+
+                CHECK_NE(itype, -1) << "First input must have specified type.";
+		for (std::size_t i = 1; i < in_type->size(); ++i)
+		{
+			if ((*in_type)[i] == -1) 
+			{
+				(*in_type)[i] = itype;
+			}
+			else
+			{
+				CHECK_EQ((*in_type)[i], itype) << "This layer requires uniform type. " << 
+					"Expected " << itype << " v.s. given " << 
+					(*in_type)[i] << " at " << ListArguments()[i];
+			}
+		}
+
+                out_type->clear();
+
+		out_type->push_back(itype);  // state_h_out
+		out_type->push_back(itype);  // feature_map_reset_gate
+		out_type->push_back(itype);  // feature_map_update_gate
+		
+		return true;
+        }
+
+        OperatorProperty * Copy() const override
+        {
+                return new InvisGRUCellProp(_param);
+        }
+
+        std::string TypeString() const override
+        {
+                return "InvisGRUCell";
+        }
+
+        std::vector < int > DeclareBackwardDependency(
+                const std::vector < int > & out_grad,
+                const std::vector < int > &  in_data,
+                const std::vector < int > & out_data) const override
+        {
+                return {  in_data[int(EnumOpInputs ::Input)],
+                          in_data[int(EnumOpInputs ::StateH)],
+                          in_data[int(EnumOpInputs ::I2HWeight)],
+                          in_data[int(EnumOpInputs ::H2HWeight)],
+                         out_data[int(EnumOpOutputs::StateHOut)],
+                         out_data[int(EnumOpOutputs::FeatureMapResetGate)],
+                         out_data[int(EnumOpOutputs::FeatureMapUpdateGate)],
+                         out_grad[int(EnumOpOutputs::StateHOut)]};
+        }
+
+        std::vector < ResourceRequest >  ForwardResource(
+                const std::vector < TShape > & in_shape) const override
+        {
+                return { ResourceRequest::kTempSpace };
+        }
+        std::vector < ResourceRequest > BackwardResource(
+                const std::vector < TShape > & in_shape) const override
+        {
+                return { ResourceRequest::kTempSpace };
+        }
+
+        Operator * CreateOperator(Context ctx) const override
+        {
+                LOG(FATAL) << "Not Implemented";
+
+                return nullptr;
+        }
+        Operator * CreateOperatorEx(Context ctx,
+                std::vector < TShape > * in_shape,
+                std::vector < int >    * in_type) const override;
+};  // class InvisGRUCellProp
 
 #endif  // DMLC_USE_CXX11
         }  // namespace op
