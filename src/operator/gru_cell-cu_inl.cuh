@@ -238,11 +238,23 @@ __global__ void _cuda_gru_cell_forward(
 
         if (g_threadIdx >= BxH) { return ; }
 
-        RealType reset_gate = __cu_sigmoid(
-                workspace
-                )
-}
+        const unsigned workspace_idx    = (g_threadIdx / state_size) * 4 * state_size + 
+                                          (g_threadIdx % state_size),
+                       workspace_stride = state_size;
 
+        RealType  reset_gate = __cu_sigmoid(
+                workspace_i2h[workspace_idx + 0 * workspace_stride] + 
+                workspace_h2h[workspace_idx + 0 * workspace_stride]);
+        RealType update_gate = __cu_sigmoid(
+                workspace_i2h[workspace_idx + 1 * workspace_stride] + 
+                workspace_h2h[workspace_idx + 1 * workspace_stride]);
+        RealType state_h_out_tmp = tanh(
+                workspace_i2h[workspace_idx + 2 * workspace_stride] + reset_gate * 
+                workspace_h2h[workspace_idx + 2 * workspace_stride]);
+        
+        state_h_out[g_threadIdx] = (1 - update_gate) * state_h_out_tmp + 
+                                        update_gate  * state_h[g_threadIdx];
+}
 
 #endif  // defined(__CUDACC__)
 
