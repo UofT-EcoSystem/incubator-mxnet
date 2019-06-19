@@ -12,7 +12,8 @@ namespace mxnet {
 
 enum class EnumOpInputs  { Input, StateH, I2HWeight, I2HBias, 
                                           H2HWeight, H2HBias };
-enum class EnumOpOutputs { StateHOut, FeatureMapResetGate, 
+enum class EnumOpOutputs { StateHOut, FeatureMapResetGate,
+                                      FeatureMapH2H, 
                                       FeatureMapUpdateGate };
 enum class EnumOpWorkspace { TempSpace };
 
@@ -74,6 +75,7 @@ public:
         std::vector < std::string > ListOutputs()   const override
         {
                 return { "state_h_out", "feature_map_reset_gate",
+                                        "feature_map_h2h",
                                         "feature_map_update_gate" };
         }
 
@@ -133,6 +135,7 @@ public:
 
                 out_shape->push_back((*in_shape)[int(EnumOpInputs::StateH)]);  // state_h_out
                 out_shape->push_back((*in_shape)[int(EnumOpInputs::StateH)]);  // feature_map_reset_gate
+                out_shape->push_back((*in_shape)[int(EnumOpInputs::StateH)]);  // feature_map_h2h
                 out_shape->push_back((*in_shape)[int(EnumOpInputs::StateH)]);  // feature_map_update_gate
 
                 return true;
@@ -164,6 +167,7 @@ public:
 
 		out_type->push_back(itype);  // state_h_out
 		out_type->push_back(itype);  // feature_map_reset_gate
+                out_type->push_back(itype);  // feature_map_h2h
 		out_type->push_back(itype);  // feature_map_update_gate
 		
 		return true;
@@ -190,6 +194,7 @@ public:
                           in_data[int(EnumOpInputs ::H2HWeight)],
                          out_data[int(EnumOpOutputs::StateHOut)],
                          out_data[int(EnumOpOutputs::FeatureMapResetGate)],
+                         out_data[int(EnumOpOutputs::FeatureMapH2H)],
                          out_data[int(EnumOpOutputs::FeatureMapUpdateGate)],
                          out_grad[int(EnumOpOutputs::StateHOut)]};
         }

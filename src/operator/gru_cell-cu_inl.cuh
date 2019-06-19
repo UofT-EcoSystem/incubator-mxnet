@@ -12,22 +12,57 @@ namespace mxnet {
 #if defined(__CUDACC__)
 
 /// @brief Forward Pass of the GRU Nonlinear Block
-/// @param input   [B x 3H]
+/// @param workspace_i2h [B x 3H]
+/// @param workspace_h2h [B x 3H]
+/// @param i2h_bias [3H]
+/// @param h2h_bias [3H] 
 /// @param state_h [B x 3H]
 /// @param feature_map_reset_gate  [B x H]
+/// @param feature_map_h2h         [B x H]
 /// @param feature_map_update_gate [B x H]
 /// @param batch_size (parameter) Batch Size
 /// @param state_size (parameter) State Size
 template < typename RealType >
 static __global__ void _cuda_gru_nonlin_block_forward(
-        const RealType * const __restrict__ input,
+        const RealType * const __restrict__ workspace_i2h,
+        const RealType * const __restrict__ workspace_h2h,
+        const RealType * const __restrict__ i2h_bias,
+        const RealType * const __restrict__ h2h_bias,
         const RealType * const __restrict__ state_h,
               RealType * const __restrict__ feature_map_reset_gate,
+              RealType * const __restrict__ feature_map_h2h,
               RealType * const __restrict__ feature_map_update_gate,
               RealType * const __restrict__ state_h_out,
-        const unsigned batch_size,
-        const unsigned state_size,
-        const bool is_train);
+        const unsigned batch_size, const unsigned state_size, const bool is_train);
+
+/// @brief Backward Pass of the GRU Nonlinear Block
+/// @param state_h_grad  [B x  H]
+/// @param workspace_i2h [B x 3H]
+/// @param workspace_h2h [B x 3H]
+/// @param i2h_bias_grad [3H]
+/// @param h2h_bias_grad [3H]
+/// @param feature_map_reset_gate  [B x H]
+/// @param feature_map_h2h         [B x H]
+/// @param feature_map_update_gate [B x H]
+/// @param state_h          [B x 3H]
+/// @param state_h_out      [B x 3H]
+/// @param state_h_out_grad [B x 3H]
+/// @param batch_size (parameter) Batch Size
+/// @param state_size (parameter) State Size
+template < typename RealType >
+__global__ void _cuda_gru_cell_backward(
+              RealType * const __restrict__ state_h_grad,
+              RealType * const __restrict__ workspace_i2h,
+              RealType * const __restrict__ workspace_h2h,
+              RealType * const __restrict__ i2h_bias_grad,
+              RealType * const __restrict__ h2h_bias_grad,
+        const RealType * const __restrict__ feature_map_reset_gate,
+        const RealType * const __restrict__ feature_map_h2h,
+        const RealType * const __restrict__ feature_map_update_gate,
+        const RealType * const __restrict__ state_h,
+        const RealType * const __restrict__ state_h_out,
+        const RealType * const __restrict__ state_h_out_grad,
+        const unsigned batch_size, const unsigned state_size);
 
 /// @brief FullyConnected Layer $Y = X W^T$ Forward Pass
 /// @param X [batch_size x input_size]
@@ -112,7 +147,8 @@ private:
                 _param.input_size = input  .shape[1];
                 _param.state_size = state_h.shape[1];
 
-                _temp_space_size = _param.batch_size * 3 * _param.state_size;
+                // here we require double the amount of size
+                _temp_space_size = _param.batch_size * 6 * _param.state_size;
                 _initailized = true;
         }
 public:
@@ -124,14 +160,16 @@ public:
         {
                 using namespace mshadow;
 
-                std::size_t in_expected = 7, out_expected = 4;
+                std::size_t in_expected = 6, out_expected = 4;
 
-                CHECK_EQ( in_data.size(),  in_expected);
+                CHECK_EQ( in_data.size(),  in_expected); ///< input, state_h
+                                                         ///< i2h_weight, i2h_bias
+                                                         ///< h2h_weight, h2h_bias
                 CHECK_EQ(out_data.size(), out_expected); ///< state_h_out
                                                          ///< feature_map_reset_gate
+                                                         ///< feature_map_h2h
                                                          ///< feature_map_update_gate
                 Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
-
 
                 Tensor < gpu, 2, DType > input      = in_data[int(EnumOpInputs::Input)]
                         .get < gpu, 2, DType > (cuda_stream);
@@ -150,6 +188,9 @@ public:
                         .get < gpu, 2, DType > (cuda_stream);
                 Tensor < gpu, 2, DType > feature_map_reset_gate = 
                         out_data[int(EnumOpOutputs::FeatureMapResetGate)]
+                                .get < gpu, 2, DType > (cuda_stream);
+                Tensor < gpu, 2, DType > feature_map_h2h = 
+                        out_data[int(EnumOpOutputs::FeatureMapH2H)]
                                 .get < gpu, 2, DType > (cuda_stream);
                 Tensor < gpu, 2, DType > feature_map_update_gate = 
                         out_data[int(EnumOpOutputs::FeatureMapUpdateGate)]
@@ -176,14 +217,17 @@ public:
                 const unsigned BxH = _param.batch_size * _param.state_size;
 
                 FullyConnectedFW(Stream < gpu > ::GetBlasHandle(cuda_stream),
-		                 input  .dptr_, i2h_weight.dptr_, workspace.dptr_,
+		                 input  .dptr_, i2h_weight.dptr_, 
+                                 workspace.dptr_,
 				 OpReqType::kWriteTo,
 				_param.batch_size,
 				_param.input_size,
 				_param.state_size * 3);
 		FullyConnectedFW(Stream < gpu > ::GetBlasHandle(cuda_stream),
-		                 state_h.dptr_, h2h_weight.dptr_, workspace.dptr_,
-				 OpReqType::kAddTo,
+		                 state_h.dptr_, h2h_weight.dptr_, 
+                                 workspace.dptr_ + 3 * _param.batch_size * 
+                                                       _param.state_size,
+				 OpReqType::kWriteTo,
 				_param.batch_size,
 				_param.state_size,
 				_param.state_size * 3);
@@ -191,14 +235,17 @@ public:
                         (BxH - 1) / 128 + 1, 128, 0,
                         Stream < gpu > ::GetStream(cuda_stream) >>> (
                         workspace  .dptr_,
+                        workspace  .dptr_ + 3 * _param.batch_size * 
+                                                _param.state_size,
                         i2h_bias   .dptr_,
 			h2h_bias   .dptr_,
 			feature_map_reset_gate .dptr_,
+                        feature_map_h2h        .dptr_,
 			feature_map_update_gate.dptr_,
                         state_h_out.dptr_,
 		       _param.batch_size,
                        _param.state_size, 
-			ctx.is_train);
+                        ctx.is_train);
         }
 
         virtual void Backward(const OpContext & ctx,
@@ -209,7 +256,78 @@ public:
                               const std::vector < TBlob > &  in_grad,
                               const std::vector < TBlob > & aux_args)
         {
+                using namespace mshadow;
 
+                std::size_t in_expected = 6, out_expected = 4, visible_out_expected = 1;
+
+                /// input, state_h, i2h_weight, i2h_bias
+                ///                 h2h_weight, h2h_bias
+                CHECK_EQ( in_data.size(),  in_expected);
+                CHECK_EQ( in_grad.size(),  in_expected);
+                CHECK_EQ(     req.size(),  in_expected);
+                CHECK_EQ(out_data.size(), out_expected);          ///< state_h_out
+                                                                  ///< feature_map_reset_gate
+                                                                  ///< feature_map_h2h
+                                                                  ///< feature_map_update_gate
+                CHECK_EQ(out_grad.size(), visible_out_expected);  ///< state_h_out
+
+                Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
+
+                Tensor < gpu, 2, DType > input_grad      = in_grad[int(EnumOpInputs::Input)]
+                        .get < gpu, 2, DType > (cuda_stream);
+                Tensor < gpu, 2, DType > state_h_grad    = in_grad[int(EnumOpInputs::StateH)]
+                        .get < gpu, 2, DType > (cuda_stream);
+                Tensor < gpu, 2, DType > i2h_weight_grad = in_grad[int(EnumOpInputs::I2HWeight)]
+                        .get < gpu, 2, DType > (cuda_stream);
+                Tensor < gpu, 1, DType > i2h_bias_grad   = in_grad[int(EnumOpInputs::I2HBias)]
+                        .get < gpu, 1, DType > (cuda_stream);
+                Tensor < gpu, 2, DType > h2h_weight_grad = in_grad[int(EnumOpInputs::H2HWeight)]
+                        .get < gpu, 2, DType > (cuda_stream);
+                Tensor < gpu, 1, DType > h2h_bias_grad   = in_grad[int(EnumOpInputs::H2HBias)]
+                        .get < gpu, 1, DType > (cuda_stream);
+                
+                Tensor < gpu, 2, DType > input      = in_data[int(EnumOpInputs::Input)]
+                        .get < gpu, 2, DType > (cuda_stream);
+                Tensor < gpu, 2, DType > state_h    = in_data[int(EnumOpInputs::StateH)]
+                        .get < gpu, 2, DType > (cuda_stream);
+                Tensor < gpu, 2, DType > i2h_weight = in_data[int(EnumOpInputs::I2HWeight)]
+                        .get < gpu, 2, DType > (cuda_stream);
+                Tensor < gpu, 2, DType > h2h_weight = in_data[int(EnumOpInputs::H2HWeight)]
+                        .get < gpu, 2, DType > (cuda_stream);
+                
+                Tensor < gpu, 2, DType > state_h_out = out_data[int(EnumOpOutputs::StateHOut)]
+                        .get < gpu, 2, DType > (cuda_stream);
+                Tensor < gpu, 2, DType > feature_map_reset_gate = 
+                        out_data[int(EnumOpOutputs::FeatureMapResetGate)]
+                                .get < gpu, 2, DType > (cuda_stream);
+                Tensor < gpu, 2, DType > feature_map_h2h = 
+                        out_data[int(EnumOpOutputs::FeatureMapH2H)]
+                                .get < gpu, 2, DType > (cuda_stream);
+                Tensor < gpu, 2, DType > feature_map_update_gate = 
+                        out_data[int(EnumOpOutputs::FeatureMapUpdateGate)]
+                                .get < gpu, 2, DType > (cuda_stream);
+                
+                Tensor < gpu, 2, DType > state_h_out_grad = 
+                        out_grad[int(EnumOpOutputs::StateHOut)]
+                                .get < gpu, 2, DType > (cuda_stream);
+                
+                CHECK_EQ(input           .CheckContiguous(), true);
+                CHECK_EQ(input_grad      .CheckContiguous(), true);
+                CHECK_EQ(state_h         .CheckContiguous(), true);
+                CHECK_EQ(state_h_grad    .CheckContiguous(), true);
+                CHECK_EQ(i2h_weight      .CheckContiguous(), true);
+                CHECK_EQ(i2h_weight_grad .CheckContiguous(), true);
+                CHECK_EQ(i2h_bias_grad   .CheckContiguous(), true);
+                CHECK_EQ(h2h_weight      .CheckContiguous(), true);
+                CHECK_EQ(h2h_weight_grad .CheckContiguous(), true);
+                CHECK_EQ(h2h_bias_grad   .CheckContiguous(), true);
+                CHECK_EQ(state_h_out     .CheckContiguous(), true);
+                CHECK_EQ(state_h_out_grad.CheckContiguous(), true);
+
+                Tensor < gpu, 1, DType > workspace = ctx.requested[int(EnumOpWorkspace::TempSpace)]
+                        .get_space_typed < gpu, 1, DType > (Shape1(_temp_space_size), cuda_stream);
+                
+                const unsigned BxH = _param.batch_size * _param.state_size;
         }
 };
 
@@ -227,33 +345,84 @@ __global__ void _cuda_gru_cell_forward(
         const RealType * const __restrict__ h2h_bias,
         const RealType * const __restrict__ state_h,
               RealType * const __restrict__ feature_map_reset_gate,
+              RealType * const __restrict__ feature_map_h2h,
               RealType * const __restrict__ feature_map_update_gate,
               RealType * const __restrict__ state_h_out,
-        const unsigned batch_size,
-        const unsigned state_size,
-        const bool is_train)
+        const unsigned batch_size, const unsigned state_size, const bool is_train)
 {
         const unsigned g_threadIdx = threadIdx.x + blockIdx.x * blockDim.x,
                 BxH = batch_size * state_size;
 
         if (g_threadIdx >= BxH) { return ; }
 
-        const unsigned workspace_idx    = (g_threadIdx / state_size) * 4 * state_size + 
+        const unsigned workspace_idx    = (g_threadIdx / state_size) * 3 * state_size + 
                                           (g_threadIdx % state_size),
                        workspace_stride = state_size;
 
-        RealType  reset_gate = __cu_sigmoid(
+        RealType reset_gate = __cu_sigmoid(
                 workspace_i2h[workspace_idx + 0 * workspace_stride] + 
-                workspace_h2h[workspace_idx + 0 * workspace_stride]);
+                workspace_h2h[workspace_idx + 0 * workspace_stride] + 
+                i2h_bias[g_threadIdx % state_size + 0 * state_size] + 
+                h2h_bias[g_threadIdx % state_size + 0 * state_size]);
         RealType update_gate = __cu_sigmoid(
                 workspace_i2h[workspace_idx + 1 * workspace_stride] + 
-                workspace_h2h[workspace_idx + 1 * workspace_stride]);
+                workspace_h2h[workspace_idx + 1 * workspace_stride] + 
+                i2h_bias[g_threadIdx % state_size + 1 * state_size] + 
+                h2h_bias[g_threadIdx % state_size + 1 * state_size]);
+        RealType h2h = workspace_h2h[workspace_idx + 2 * workspace_stride] + 
+                       h2h_bias[g_threadIdx % state_size + 2 * state_size];
         RealType state_h_out_tmp = tanh(
-                workspace_i2h[workspace_idx + 2 * workspace_stride] + reset_gate * 
-                workspace_h2h[workspace_idx + 2 * workspace_stride]);
+                workspace_i2h[workspace_idx + 2 * workspace_stride] + 
+                i2h_bias[g_threadIdx % state_size + 2 * state_size] + reset_gate * h2h);
         
         state_h_out[g_threadIdx] = (1 - update_gate) * state_h_out_tmp + 
                                         update_gate  * state_h[g_threadIdx];
+        if (is_train)
+        {
+                feature_map_reset_gate [g_threadIdx] = reset_gate;
+                feature_map_h2h        [g_threadIdx] = h2h;
+                feature_map_update_gate[g_threadIdx] = update_gate;
+        }
+}
+
+template < typename RealType >
+__global__ void _cuda_gru_cell_backward(
+              RealType * const __restrict__ state_h_grad,
+              RealType * const __restrict__ workspace_i2h,
+              RealType * const __restrict__ workspace_h2h,
+              RealType * const __restrict__ i2h_bias_grad,
+              RealType * const __restrict__ h2h_bias_grad,
+        const RealType * const __restrict__ feature_map_reset_gate,
+        const RealType * const __restrict__ feature_map_update_gate,
+        const RealType * const __restrict__ state_h,
+        const RealType * const __restrict__ state_h_out,
+        const RealType * const __restrict__ state_h_out_grad,
+        const unsigned batch_size, const unsigned state_size)
+{
+        const unsigned g_threadIdx = threadIdx.x + blockIdx.x * blockDim.x,
+                BxH = batch_size * state_size;
+        
+        if (g_threadIdx >= BxH) { return ; }
+
+        RealType reset_gate  = feature_map_reset_gate [g_threadIdx];
+        RealType h2h         = feature_map_h2h        [g_threadIdx];
+        RealType update_gate = feature_map_update_gate[g_threadIdx];
+        
+        RealType state_h_out_tmp = (update_gate == 1) ? 0 : (
+                state_h_out[g_threadIdx] - 
+                state_h    [g_threadIdx] * update_gate) / (1 - update_gate);
+        
+        // `update_gate` gradient
+        RealType update_gate_grad = 
+                state_h_out_grad[g_threadIdx] * state_h        [g_threadIdx] - 
+                state_h_out_grad[g_threadIdx] * state_h_out_tmp[g_threadIdx];
+        update_gate_grad *= update_gate * (1 - update_gate);
+        
+        // `reset_gate` gradient
+        RealType reset_gate_grad = 
+                (1 - update_gate) * state_h_out_grad[g_threadIdx] * 
+                (1 - state_h_out_tmp * state_h_out_tmp) * h2h;
+        reset_gate_grad *= reset_gate * (1 - reset_gate);
 }
 
 #endif  // defined(__CUDACC__)
