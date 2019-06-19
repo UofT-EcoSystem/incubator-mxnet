@@ -225,8 +225,7 @@ public:
 				_param.state_size * 3);
 		FullyConnectedFW(Stream < gpu > ::GetBlasHandle(cuda_stream),
 		                 state_h.dptr_, h2h_weight.dptr_, 
-                                 workspace.dptr_ + 3 * _param.batch_size * 
-                                                       _param.state_size,
+                                 workspace.dptr_ + 3 * BxH,
 				 OpReqType::kWriteTo,
 				_param.batch_size,
 				_param.state_size,
@@ -234,17 +233,16 @@ public:
                 _cuda_gru_cell_forward < DType > <<<
                         (BxH - 1) / 128 + 1, 128, 0,
                         Stream < gpu > ::GetStream(cuda_stream) >>> (
-                        workspace  .dptr_,
-                        workspace  .dptr_ + 3 * _param.batch_size * 
-                                                _param.state_size,
-                        i2h_bias   .dptr_,
-			h2h_bias   .dptr_,
+                        workspace.dptr_,
+                        workspace.dptr_ + 3 * BxH,
+                        i2h_bias.dptr_,
+			h2h_bias.dptr_,
 			feature_map_reset_gate .dptr_,
                         feature_map_h2h        .dptr_,
 			feature_map_update_gate.dptr_,
                         state_h_out.dptr_,
-		       _param.batch_size,
-                       _param.state_size, 
+		        _param.batch_size,
+                        _param.state_size, 
                         ctx.is_train);
         }
 
@@ -328,6 +326,51 @@ public:
                         .get_space_typed < gpu, 1, DType > (Shape1(_temp_space_size), cuda_stream);
                 
                 const unsigned BxH = _param.batch_size * _param.state_size;
+
+                _cuda_gru_cell_backward < DType > <<<
+                        (BxH - 1) / 128 + 1, 128, 0, Stream < gpu > ::GetStream(cuda_stream) >>> (
+                        state_h_grad.dptr_,
+                        workspace.dptr_,
+                        workspace.dptr_ + 3 * BxH, 
+                        i2h_bias_grad.dptr_,
+                        h2h_bias_grad,dptr_,
+                        feature_map_reset_gate .dptr_,
+                        feature_map_i2h        .dptr_,
+                        feature_map_update_gate.dptr_,
+                        state_h         .dptr_,
+                        state_h_out     .dptr_,
+                        state_h_out_grad.dptr_,
+                        _param.batch_size, 
+                        _param.state_size);
+                
+
+                FullyConnectedBWWeight(Stream < gpu > ::GetBlasHandle(cuda_stream),
+				       input  .dptr_, i2h_weight_grad.dptr_,
+                                       workspace.dptr_,
+				       req[int(EnumOpInputs::I2HWeight)],
+				       _param.batch_size,
+				       _param.input_size,
+				       3 * _param.state_size);
+		FullyConnectedBWWeight(Stream < gpu > ::GetBlasHandle(cuda_stream),
+				       state_h.dptr_, h2h_weight_grad.dptr_, 
+                                       workspace.dptr_ + 3 * BxH,
+				       req[int(EnumOpInputs::H2HWeight)],
+				       _param.batch_size,
+				       _param.state_size,
+				       3 * _param.state_size);
+		FullyConnectedBWData  (Stream < gpu > ::GetBlasHandle(cuda_stream),
+				       input_grad  .dptr_, i2h_weight.dptr_, workspace.dptr_,
+				       req[int(EnumOpInputs::Input)],
+				       _param.batch_size,
+				       _param.input_size,
+				       3 * _param.state_size);
+		FullyConnectedBWData  (Stream < gpu > ::GetBlasHandle(cuda_stream),
+				       state_h_grad.dptr_, h2h_weight.dptr_,
+                                       workspace.dptr_ + 3 * BxH,
+				       req[int(EnumOpInputs::StateH)],
+				       _param.batch_size,
+				       _param.state_size,
+				       3 * _param.state_size);
         }
 };
 
@@ -429,7 +472,7 @@ __global__ void _cuda_gru_cell_backward(
         RealType reset_gate_grad = state_h_out_tmp_grad * h2h * 
                  reset_gate * (1 - reset_gate);
         // `state_h` (previous time step)
-        state_h[g_threadIdx] += state_h_out_grad * update_gate;
+        state_h_grad[g_threadIdx] += state_h_out_grad * update_gate;
 
         workspace_i2h[workspace_idx + 0 * workspace_stride] = reset_gate_grad;
         workspace_h2h[workspace_idx + 0 * workspace_stride] = reset_gate_grad;
@@ -444,6 +487,63 @@ __global__ void _cuda_gru_cell_backward(
         atomicAdd(&h2h_bias_grad[g_threadIdx % state_size + 1 * state_size], update_gate_grad);
         atomicAdd(&i2h_bias_grad[g_threadIdx % state_size + 2 * state_size], state_h_out_tmp_grad);
         atomicAdd(&h2h_bias_grad[g_threadIdx % state_size + 2 * state_size], state_h_out_tmp_grad * reset_gate);
+}
+
+template <>
+inline void FullyConnectedFW < float > (cublasHandle_t cublas_handle,
+	const float * const __restrict__ X,
+	const float * const __restrict__ W,
+	      float * const __restrict__ Y,
+	const OpReqType req,       const unsigned batch_size, 
+	const unsigned input_size, const unsigned state_size,
+	const bool batch_minor)
+{
+	float alpha = 1.0, beta = float(req == kAddTo);
+        CUBLAS_CALL(cublasSgemm(cublas_handle, // cuBLAS Handle
+                                CUBLAS_OP_T, // W.T
+                                CUBLAS_OP_N, // X
+                                state_size,  // Y.shape[1]
+                                batch_size,  // Y.shape[0]
+                                input_size,  // W.shape[1]
+                                &alpha, W, input_size, X, input_size,
+                                &beta,  Y, state_size));
+}
+
+template <>
+inline void FullyConnectedBWWeight < float > (cublasHandle_t cublas_handle,
+	const float * const __restrict__  X,
+	      float * const __restrict__ dW,
+	const float * const __restrict__ dY,
+	const OpReqType grad_req,   const unsigned batch_size,
+	const unsigned  input_size, const unsigned state_size)
+{
+	float alpha = 1.0, beta = float(grad_req == kAddTo);
+	CUBLAS_CALL(cublasSgemm(cublas_handle, // cuBLAS Handle
+	                        CUBLAS_OP_N, //  X
+				CUBLAS_OP_T, // dY^T
+				input_size,  // dW.shape[1]
+				state_size,  // dW.shape[0]
+				batch_size,  //  X.shape[0]
+	                        &alpha,  X, input_size, dY, state_size,
+				&beta,  dW, input_size));
+}
+template <>
+inline void FullyConnectedBWData < float > (cublasHandle_t cublas_handle,
+	      float * const __restrict__ dX,
+	const float * const __restrict__  W,
+	const float * const __restrict__ dY, 
+	const OpReqType grad_req,   const unsigned batch_size,
+	const unsigned  input_size, const unsigned state_size)
+{
+	float alpha = 1.0, beta = float(grad_req == kAddTo);
+	CUBLAS_CALL(cublasSgemm(cublas_handle, //cuBLAS Handle
+	                        CUBLAS_OP_N, //  W
+				CUBLAS_OP_N, // dY
+				input_size,  // dX.shape[1]
+				batch_size,  // dX.shape[0]
+				state_size,  //  W.shape[0]
+				&alpha,  W, input_size, dY, state_size,
+				&beta,  dX, input_size));
 }
 
 #endif  // defined(__CUDACC__)
