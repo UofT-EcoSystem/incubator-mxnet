@@ -404,25 +404,46 @@ __global__ void _cuda_gru_cell_backward(
         
         if (g_threadIdx >= BxH) { return ; }
 
+        const unsigned workspace_idx    = (g_threadIdx / state_size) * 3 * state_size + 
+                                          (g_threadIdx % state_size),
+                       workspace_stride = state_size;
+
         RealType reset_gate  = feature_map_reset_gate [g_threadIdx];
         RealType h2h         = feature_map_h2h        [g_threadIdx];
         RealType update_gate = feature_map_update_gate[g_threadIdx];
-        
+
         RealType state_h_out_tmp = (update_gate == 1) ? 0 : (
-                state_h_out[g_threadIdx] - 
-                state_h    [g_threadIdx] * update_gate) / (1 - update_gate);
+                 state_h_out[g_threadIdx] - 
+                 state_h    [g_threadIdx] * update_gate) / (1 - update_gate);
         
-        // `update_gate` gradient
+        // `update_gate`
         RealType update_gate_grad = 
                 state_h_out_grad[g_threadIdx] * state_h        [g_threadIdx] - 
                 state_h_out_grad[g_threadIdx] * state_h_out_tmp[g_threadIdx];
         update_gate_grad *= update_gate * (1 - update_gate);
-        
-        // `reset_gate` gradient
-        RealType reset_gate_grad = 
-                (1 - update_gate) * state_h_out_grad[g_threadIdx] * 
-                (1 - state_h_out_tmp * state_h_out_tmp) * h2h;
-        reset_gate_grad *= reset_gate * (1 - reset_gate);
+        // `state_h_out_tmp`
+        RealType state_h_out_tmp_grad = (1 - update_gate) * 
+                 state_h_out_grad[g_threadIdx] * 
+                (1 - state_h_out_tmp * state_h_out_tmp);
+        // `reset_gate`
+        RealType reset_gate_grad = state_h_out_tmp_grad * h2h * 
+                 reset_gate * (1 - reset_gate);
+        // `state_h` (previous time step)
+        state_h[g_threadIdx] += state_h_out_grad * update_gate;
+
+        workspace_i2h[workspace_idx + 0 * workspace_stride] = reset_gate_grad;
+        workspace_h2h[workspace_idx + 0 * workspace_stride] = reset_gate_grad;
+        workspace_i2h[workspace_idx + 1 * workspace_stride] = update_gate_grad;
+        workspace_h2h[workspace_idx + 1 * workspace_stride] = update_gate_grad;
+        worksapce_i2h[workspace_idx + 2 * workspace_stride] = state_h_out_tmp_grad;
+        workspace_h2h[workspace_idx + 2 * workspace_stride] = state_h_out_tmp_grad * reset_gate;
+
+        atomicAdd(&i2h_bias_grad[g_threadIdx % state_size + 0 * state_size],  reset_gate_grad);
+        atomicAdd(&h2h_bias_grad[g_threadIdx % state_size + 0 * state_size],  reset_gate_grad);
+        atomicAdd(&i2h_bias_grad[g_threadIdx % state_size + 1 * state_size], update_gate_grad);
+        atomicAdd(&h2h_bias_grad[g_threadIdx % state_size + 1 * state_size], update_gate_grad);
+        atomicAdd(&i2h_bias_grad[g_threadIdx % state_size + 2 * state_size], state_h_out_tmp_grad);
+        atomicAdd(&h2h_bias_grad[g_threadIdx % state_size + 2 * state_size], state_h_out_tmp_grad * reset_gate);
 }
 
 #endif  // defined(__CUDACC__)
