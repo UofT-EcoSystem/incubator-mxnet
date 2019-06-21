@@ -29,7 +29,7 @@ struct InvisGRUCellParam : public dmlc::Parameter < InvisGRUCellParam >
 template < typename xpu, typename DType >
 class InvisGRUCellOp : public Operator
 {
-private:
+public:
         InvisGRUCellOp(InvisGRUCellParam param)
         {
                 // param
@@ -93,7 +93,7 @@ public:
         {
                 _param.Init(kwargs);
         }
-        std::map < std::string > GetParams() const override
+        std::map < std::string, std::string > GetParams() const override
         {
                 return _param.__DICT__();
         }
@@ -142,7 +142,7 @@ public:
         }
         bool InferType(std::vector < int > *  in_type,
                        std::vector < int > * out_type,
-                       std::vector < int > * aux_type)
+                       std::vector < int > * aux_type) const override
         {
                 CHECK_GE(in_type->size(), 1U);
 

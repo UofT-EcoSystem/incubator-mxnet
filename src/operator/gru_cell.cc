@@ -32,7 +32,7 @@ MXNET_REGISTER_OP_PROPERTY(InvisGRUCell, InvisGRUCellProp)
         .add_argument ("i2h_bias",   "NDArray-or-Symbol", "Input-to-Hidden Bias")
         .add_argument ("h2h_weight", "NDArray-or-Symbol", "Hidden-to-Hidden Weight")
         .add_argument ("h2h_bias",   "NDArray-or-Symbol", "Hidden-to-Hidden Bias")
-        .add_arguments(InvisGRUCellParam::__FILEDS__());
+        .add_arguments(InvisGRUCellParam::__FIELDS__());
 
         }  // namespace op 
 }  // namespace mxnet
