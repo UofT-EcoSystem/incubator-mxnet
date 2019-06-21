@@ -52,7 +52,7 @@ private:
         {
                 // empty
         }
-}
+};  // class InvisGRUCellOp
 
 template < typename xpu >
 Operator * CreateOp(InvisGRUCellParam param, int dtype);
@@ -144,7 +144,7 @@ public:
                        std::vector < int > * out_type,
                        std::vector < int > * aux_type)
         {
-                CHECK_GE(in_type, 1U);
+                CHECK_GE(in_type->size(), 1U);
 
                 int itype = (*in_type)[0];
 
