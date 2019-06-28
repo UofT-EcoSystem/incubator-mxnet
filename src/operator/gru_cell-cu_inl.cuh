@@ -404,7 +404,6 @@ __global__ void _cuda_gru_cell_forward(
         const unsigned workspace_idx    = (g_threadIdx / state_size) * 3 * state_size + 
                                           (g_threadIdx % state_size),
                        workspace_stride = state_size;
-        /*
         RealType reset_gate = __cu_sigmoid(
                 workspace_i2h[workspace_idx + 0 * workspace_stride] + 
                 workspace_h2h[workspace_idx + 0 * workspace_stride] + 
@@ -423,18 +422,12 @@ __global__ void _cuda_gru_cell_forward(
         
         state_h_out[g_threadIdx] = (1 - update_gate) * state_h_out_tmp + 
                                         update_gate  * state_h[g_threadIdx];
-         */
-        state_h_out[g_threadIdx] = 
-                workspace_i2h[workspace_idx + 2 * workspace_stride] + 
-                i2h_bias[g_threadIdx % state_size + 2 * state_size] + 
-                workspace_h2h[workspace_idx + 2 * workspace_stride] + 
-                h2h_bias[g_threadIdx % state_size + 2 * state_size];
 
         if (is_train)
         {
-                // feature_map_reset_gate [g_threadIdx] = reset_gate;
-                // feature_map_h2h        [g_threadIdx] = h2h;
-                // feature_map_update_gate[g_threadIdx] = update_gate;
+                feature_map_reset_gate [g_threadIdx] = reset_gate;
+                feature_map_h2h        [g_threadIdx] = h2h;
+                feature_map_update_gate[g_threadIdx] = update_gate;
         }
 }
 
