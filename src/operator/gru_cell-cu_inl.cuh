@@ -149,8 +149,6 @@ private:
 
                 // here we require double the amount of size
                 _temp_space_size = _param.batch_size * 6 * _param.state_size;
-                std::cout << "Temp Space Size: " << _temp_space_size 
-                          << std::endl;
                 _initialized = true;
         }
 public:
@@ -427,12 +425,10 @@ __global__ void _cuda_gru_cell_forward(
                                         update_gate  * state_h[g_threadIdx];
          */
         state_h_out[g_threadIdx] = 
-                // workspace_i2h[workspace_idx + 2 * workspace_stride] + 
-                // i2h_bias[g_threadIdx % state_size + 2 * state_size] + 
-                // workspace_h2h[workspace_idx + 2 * workspace_stride] + 
-                // h2h_bias[g_threadIdx % state_size + 2 * state_size];
                 workspace_i2h[workspace_idx + 2 * workspace_stride] + 
-                workspace_h2h[workspace_idx + 2 * workspace_stride];
+                i2h_bias[g_threadIdx % state_size + 2 * state_size] + 
+                workspace_h2h[workspace_idx + 2 * workspace_stride] + 
+                h2h_bias[g_threadIdx % state_size + 2 * state_size];
 
         if (is_train)
         {
