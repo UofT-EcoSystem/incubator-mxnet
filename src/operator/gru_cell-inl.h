@@ -81,7 +81,7 @@ public:
 
         int NumOutputs() const override 
         {
-                return 3;
+                return 4;
         }
         int NumVisibleOutputs() const override
         {
@@ -106,7 +106,7 @@ public:
 
                 // input, state_h, i2h_weight, i2h_bias
                 //                 h2h_weight, h2h_bias
-                CHECK_EQ(in_shape->size(), 7);
+                CHECK_EQ(in_shape->size(), 6);
 
                 const TShape & ishape = (*in_shape)[int(EnumOpInputs::Input)];
                 const TShape & hshape = (*in_shape)[int(EnumOpInputs::StateH)];
