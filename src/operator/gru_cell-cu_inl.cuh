@@ -370,7 +370,7 @@ public:
 		FullyConnectedBWData  (Stream < gpu > ::GetBlasHandle(cuda_stream),
 				       state_h_grad.dptr_, h2h_weight.dptr_,
                                        workspace.dptr_ + 3 * BxH,
-				       req[int(EnumOpInputs::StateH)],
+				       kAddTo,
 				       _param.batch_size,
 				       _param.state_size,
 				       3 * _param.state_size);
