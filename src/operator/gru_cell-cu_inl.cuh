@@ -329,6 +329,26 @@ public:
                 
                 const unsigned BxH = _param.batch_size * _param.state_size;
 
+                if (req[int(EnumOpInputs::I2HBias)] == OpReqType::kWriteTo)
+		{
+			CUDA_CALL(cudaMemsetAsync(i2h_bias_grad.dptr_, 0, 
+				3 * _param.state_size * sizeof(DType), 
+				Stream < gpu > ::GetStream(cuda_stream)));
+		}
+                if (req[int(EnumOpInputs::H2HBias)] == OpReqType::kWriteTo)
+                {
+                        CUDA_CALL(cudaMemsetAsync(h2h_bias_grad.dptr_, 0, 
+				3 * _param.state_size * sizeof(DType), 
+				Stream < gpu > ::GetStream(cuda_stream)));
+                }
+                if (req[int(EnumOpInputs::StateH)] == OpReqType::kWriteTo)
+                {
+                        CUDA_CALL(cudaMemsetAsync(state_h_grad.dptr_, 0, 
+				_param.batch_size * 
+                                _param.state_size * sizeof(DType), 
+				Stream < gpu > ::GetStream(cuda_stream)));
+                }
+
                 _cuda_gru_cell_backward < DType > <<<
                         (BxH - 1) / 128 + 1, 128, 0, 
                         Stream < gpu > ::GetStream(cuda_stream) >>> (
