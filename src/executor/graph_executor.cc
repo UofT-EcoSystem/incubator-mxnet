@@ -31,8 +31,14 @@
 #include "./graph_executor.h"
 #include "../engine/profiler.h"
 #include "../common/utils.h"
+#include "../operator/fully_connected-inl.h"
 
 namespace mxnet {
+
+namespace op {
+extern const OperatorProperty* OpPropGetOpProperty(const NodeAttrs& attrs);
+}  // namespace op
+
 namespace exec {
 
 GraphExecutor::GraphExecutor() {
@@ -337,8 +343,19 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     
     if (type == "Convolution")        return false;
     if (type == "batch_dot")          return false;
-    if (type == "FullyConnected")     return false;
-    
+    if (type == "FullyConnected") {
+      const op::FullyConnectedProp* fc_prop = dynamic_cast<
+          const op::FullyConnectedProp*>(
+          op::OpPropGetOpProperty(node.attrs));
+      std::map<std::string, std::string> fc_param = fc_prop->GetParams();
+      if (fc_param["num_hidden"] == "1") {
+        return true;
+      } else {
+        return false;
+      }
+      return false;
+    }
+
     if (type == "expand_dims")        return false;
     if (type == "Concat")             return false;
     if (type == "Reshape")            return false;
