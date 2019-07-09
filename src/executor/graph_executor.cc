@@ -326,17 +326,33 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
   auto need_mirror = [do_mirror](const nnvm::Node& node) -> int {
     if (node.is_variable()) return 0;
     const std::string& type = node.attrs.op->name;
-    if (type == "Dropout") return false;
     if (get_node_attr(node, "__force_mirroring__", false)) return true;
     if (do_mirror == 0) return false;
-    if (type == "Embedding") return false;
-    if (type == "Convolution") return false;
-    if (type == "FullyConnected") return false;
-    if (type == "Concat") return false;
-    if (type == "SoftmaxOutput") return false;
-    if (type == "BatchNorm") return false;
-    if (type == "CuDNNBatchNorm") return false;
+    if (type == "Dropout")            return false;
+    if (type == "_zeros")             return false;
+    if (type == "Embedding")          return false;
+    
+    if (type == "SequenceReverse")    return false;
+    if (type == "SequenceMask")       return false;
+    
+    if (type == "Convolution")        return false;
+    if (type == "batch_dot")          return false;
+    if (type == "FullyConnected")     return false;
+    
+    if (type == "expand_dims")        return false;
+    if (type == "Concat")             return false;
+    if (type == "Reshape")            return false;
+    if (type == "SwapAxis")           return false;
+    if (type == "tile")               return false;
+    if (type == "SliceChannel")       return false;
+
+    if (type == "softmax")            return false;
+    if (type == "SoftmaxOutput")      return false;
+    
+    if (type == "BatchNorm")          return false;
+    if (type == "CuDNNBatchNorm")     return false;
     return true;
+
   };
 
   std::vector<const nnvm::Op*> zero_ops;
