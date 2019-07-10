@@ -24,6 +24,7 @@
 #include <mxnet/base.h>
 #include <nnvm/graph.h>
 #include <nnvm/pass_functions.h>
+#include <regex>
 #include <vector>
 #include <algorithm>
 
@@ -329,8 +330,11 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
   }
 
   int do_mirror = dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR", 0);
-  auto need_mirror = [do_mirror](const nnvm::Node& node) -> int {
-    if (node.is_variable()) return 0;
+  
+  std::function<bool(const nnvm::Node&, const unsigned)> need_mirror = [do_mirror](
+      const nnvm::Node& node,
+      const unsigned mirror_depth) -> bool {
+    if (node.is_variable()) return false;
     const std::string& type = node.attrs.op->name;
     if (get_node_attr(node, "__force_mirroring__", false)) return true;
     if (do_mirror == 0) return false;
@@ -368,6 +372,20 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     
     if (type == "BatchNorm")          return false;
     if (type == "CuDNNBatchNorm")     return false;
+
+    // We need the mirroring to stop when the a cell state of an LSTM cell is encountered.
+    // The reason is because unlike input and hidden states that are blocked
+    //   by the input-to-hidden and hidden-to-hidden connections,
+    //   the cell states do not need to go through a fully-connected layer 
+    //   and can be "infinitely" mirrored backward until the start of the sequence.
+    // This will cause huge performance overhead, especially when the sequence length is long.
+    if (std::regex_match(node.attrs.name, std::regex("(.*)(state)"))) {
+      // LOG(INFO) << "Speculating that a cell state is reached @Node "
+      //           << node.attrs.name << std::endl
+      //           << "\t""Mirroring is forced to stop at depth " << mirror_depth << std::endl;
+      return false;
+    }
+
     return true;
 
   };
