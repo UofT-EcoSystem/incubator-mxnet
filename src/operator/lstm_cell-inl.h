@@ -10,9 +10,9 @@ namespace mxnet {
 	namespace op {
 		namespace {
 
-enum class EnumOpInputs { Input, StateH, StateC, 
-                          I2HWeight, I2HBias,
-			  H2HWeight, H2HBias };
+enum class EnumOpInputs  { Input, StateH, StateC, 
+                           I2HWeight, I2HBias,
+			   H2HWeight, H2HBias };
 enum class EnumOpOutputs { StateHOut, StateCOut, InputFM, ForgetFM };
 enum class EnumOpWorkspace { TempSpace };
 
