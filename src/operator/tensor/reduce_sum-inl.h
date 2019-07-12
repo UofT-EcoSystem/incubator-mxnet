@@ -97,7 +97,6 @@ public:
                 const int reduce_axis = (_param.axis + ishape.ndim()) % 
                                                        ishape.ndim();
                 out_shape->clear();
-
                 TShape oshape = _param.keepdims ?
                         TShape(ishape.ndim()) : 
                         TShape(ishape.ndim() - 1);
@@ -143,14 +142,40 @@ public:
 					(*in_type)[i] << " at " << ListArguments()[i];
 			}
 		}
-
 		out_type->clear();
-
 		out_type->push_back(itype); // output
 		
 		return true;
         }
-};
+
+        OperatorProperty * Copy() const override
+        {
+                return new EcoReduceSumProp(_param);
+        }
+
+        std::string TypeString() const override
+        {
+                return "EcoReduceSum";
+        }
+
+        std::vector < int > DeclareBackwardDependency(
+                const std::vector < int > & out_grad,
+                const std::vector < int > &  in_data,
+                const std::vector < int > & out_data) const override
+        {
+                return std::vector < int > ();
+        }
+
+        Operator * CreateOperator  (Context ctx) const override
+        {
+                LOG(FATAL) << "Not Implemented";
+
+                return nullptr;
+        }
+        Operator * CreateOperatorEx(Context ctx,
+                                    std::vector < TShape > * in_shape,
+                                    std::vector < int >    * in_type) const override;
+};  // class EcoReduceSumProp
 
 #endif  // DMLC_USE_CXX11
 
