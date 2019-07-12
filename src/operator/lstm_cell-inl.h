@@ -66,7 +66,8 @@ private:
 	EcoLSTMCellParam _param;
 public:
 	EcoLSTMCellProp() {}
-	explicit EcoLSTMCellProp(EcoLSTMCellParam param) : _param(param) {}
+	explicit
+	EcoLSTMCellProp(EcoLSTMCellParam param) : _param(param) {}
 
 	std::vector < std::string > ListArguments() const override
 	{
