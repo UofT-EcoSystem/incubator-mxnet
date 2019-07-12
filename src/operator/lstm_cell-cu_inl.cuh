@@ -1,7 +1,5 @@
 #pragma once
 
-#include <mxnet/storage.h>
-
 #include "lstm_cell-inl.h"
 
 namespace mxnet {
