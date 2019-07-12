@@ -36,8 +36,8 @@ public:
 		// empty
 	}
 	virtual void  Forward(const OpContext & ctx,
-	                      const std::vector < TBlob > & in_data,
-			      const std::vector < OpReqType > & req,
+	                      const std::vector < TBlob > &  in_data,
+			      const std::vector < OpReqType > &  req,
 			      const std::vector < TBlob > & out_data,
 			      const std::vector < TBlob > & aux_data)
 	{
