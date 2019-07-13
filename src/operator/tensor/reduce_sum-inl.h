@@ -157,7 +157,14 @@ public:
 
         std::string TypeString() const override
         {
-                return "EcoReduceSum";
+                if (TNorm)
+                {
+                        return "EcoMean";
+                }
+                else 
+                {
+                        return "EcoReduceSum";
+                }
         }
 
         std::vector < int > DeclareBackwardDependency(
