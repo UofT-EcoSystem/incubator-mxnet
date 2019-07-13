@@ -54,10 +54,12 @@ public:
 };
 
 template < typename xpu >
-Operator * CreateOp(EcoReduceSumParam param, int dtype);
+Operator * CreateOp(EcoReduceSumParam param, int dtype, 
+        bool do_normalization);
 
 #if DMLC_USE_CXX11
 
+template < bool TNorm >
 class EcoReduceSumProp : public OperatorProperty
 {
 private:
