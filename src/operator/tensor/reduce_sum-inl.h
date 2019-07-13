@@ -4,7 +4,7 @@
 #include <dmlc/parameter.h>
 #include <mxnet/operator.h>
 
-#include "operator_common.h"
+#include "../operator_common.h"
 
 namespace mxnet {
         namespace op {
@@ -29,7 +29,7 @@ class EcoReduceSumOp : public Operator
 private:
         EcoReduceSumParam _param;
 public:
-        explicit EcoReduceSumParam(EcoReduceSumParam param)
+        explicit EcoReduceSumOp(EcoReduceSumParam param)
         {
                 // empty
         }
@@ -94,20 +94,20 @@ public:
 
                 CHECK_EQ(in_shape->size(), 1);
                 const TShape & ishape = (*in_shape)[int(EnumOpInputs::Data)];
-                const int reduce_axis = (_param.axis + ishape.ndim()) % 
-                                                       ishape.ndim();
+                const std::size_t reduce_axis = (_param.axis + ishape.ndim()) % 
+                                                               ishape.ndim();
                 out_shape->clear();
                 TShape oshape = _param.keepdims ?
                         TShape(ishape.ndim()) : 
                         TShape(ishape.ndim() - 1);
-                for (uint32_t idim_idx = 0, 
-                              odim_idx = 0;
-                              idim_idx < ishape.ndim();
-                            ++idim_idx)
+                for (std::size_t idim_idx = 0, 
+                                 odim_idx = 0;
+                                 idim_idx < ishape.ndim();
+                               ++idim_idx)
                 {
                         if (idim_idx == reduce_axis)
                         {
-                                if (keep_dim)
+                                if (_param.keepdims)
                                 {
                                         oshape[odim_idx++] = 1;
                                 }

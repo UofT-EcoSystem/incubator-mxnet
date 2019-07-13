@@ -25,7 +25,7 @@ Operator * EcoReduceSumProp::CreateOperatorEx(Context ctx,
 
 DMLC_REGISTER_PARAMETER(EcoReduceSumParam);
 
-MXNET_REGISTER_OP_PROPERTY(EcoReduceSum, EcoLSTMCellProp)
+MXNET_REGISTER_OP_PROPERTY(EcoReduceSum, EcoReduceSumProp)
         .describe("Applied the Eco-ReduceSum operator for faster compute")
         .add_argument ("data", "NDArray-or-Symbol", "Input Data")
         .add_arguments(EcoReduceSumParam::__FIELDS__());        
