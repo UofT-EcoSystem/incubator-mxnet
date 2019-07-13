@@ -20,7 +20,14 @@ struct EcoReduceSumParam : public dmlc::Parameter < EcoReduceSumParam >
 {
         int axis; bool keepdims;
 
-        DMLC_DECLARE_PARAMETER(EcoReduceSumParam) {}
+        DMLC_DECLARE_PARAMETER(EcoReduceSumParam)
+        {
+                DMLC_DECLARE_FIELD(axis)
+			.describe("Axis on which to perform the reduction");
+                DMLC_DECLARE_FIELD(keepdims).set_default(false)
+			.describe("Whether to keep the dimension "
+                                  "after the reduction.");
+        }
 };
 
 template < typename xpu, typename DType >
