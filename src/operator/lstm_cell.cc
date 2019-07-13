@@ -1,4 +1,3 @@
-
 #include "lstm_cell-inl.h"
 
 namespace mxnet {
