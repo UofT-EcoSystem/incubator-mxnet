@@ -14,9 +14,17 @@ namespace mxnet {
  */
 template < typename RealType, bool TNorm >
 static __global__ void _cuda_reduce_sum(
-        const RealType * const __restrict__ data,
+        const RealType * const __restrict__   data,
               RealType * const __restrict__ output,
         const std::size_t size, 
+        const std::size_t reduce_dim,
+        const std::size_t stride);
+
+template < typename RealType, bool TNorm >
+static __global__ void _cuda_reduce_sum_backward(
+              RealType * const __restrict__   data_grad,
+        const RealType * const __restrict__ output_grad,
+        const std::size_t size,
         const std::size_t reduce_dim,
         const std::size_t stride);
 
@@ -93,13 +101,14 @@ public:
                                 dim3(data.shape_.Size() / reduce_dim,
                                      (reduce_dim - 1) / 128 + 1
                                      ),
-                                128, 
-                                0,
+                                128, 0,
                                 Stream < gpu > ::GetStream(cuda_stream)
                         >>>
                         (
-                                data.dptr_, output.dptr_,
-                                data.shape_.Size(), _reduce_dim, _stride
+                                data  .dptr_,
+                                output.dptr_,
+                                data  .shape_.Size(), 
+                               _reduce_dim, _stride
                         );
         }
 
@@ -126,13 +135,27 @@ public:
                 TBlob   data_grad =  in_grad[int(EnumOpInputs ::Data)];
                 TBlob output_grad = out_grad[int(EnumOpOutputs::Output)];
 
+                CHECK_EQ(  data_grad.CheckContiguous(), true);
+                CHECK_EQ(output_grad.CheckContiguous(), true);
 
+                _cuda_reduce_sum_backward < DType, TNorm >
+                        <<<
+                                (data_grad.shape_.Size() - 1) / 128 + 1,
+                                 128, 0,
+                                Stream < gpu > ::GetStream(cuda_stream)
+                        >>>
+                        (
+                                data_grad  .dptr_, 
+                                output_grad.dptr_,
+                                data_grad  .shape_.Size(),
+                               _reduce_sum, _stride
+                        );
         }
 };  // class CUEcoReduceSumOp
 
 template < typename RealType, bool TNorm >
 __global__ void _cuda_reduce_sum(
-        const RealType * const __restrict__ data,
+        const RealType * const __restrict__   data,
               RealType * const __restrict__ output,
         const std::size_t size, 
         const std::size_t reduce_dim, 
@@ -157,6 +180,27 @@ __global__ void _cuda_reduce_sum(
                 atomicAdd(&output[blockIdx.x % stride + blockIdx.x * reduce_dim],
                           aggregate / (TNorm ? size : 1));
         }
+}
+
+template < typename RealType, bool TNorm >
+__global__ void _cuda_reduce_sum_backward(
+              RealType * const __restrict__   data_grad,
+        const RealType * const __restrict__ output_grad,
+        const OpReqType req, 
+        const std::size_t size,
+        const std::size_t reduce_dim, 
+        const std::size_t stride)
+{
+        RealType output_grad_reg = output_grad[blockIdx.x % stride + 
+                                               blockIdx.x * reduce_dim]
+
+        if (threadIdx.x + blockIdx.y * 128 < reduce_dim) {
+
+        data_grad[(threadIdx.x + blockIdx.y * 128) * stride + 
+                    blockIdx.x % stride + 
+                    blockIdx.x * reduce_dim] = output_grad_reg / (TNorm ? size : 1);
+
+        }  // if (threadIdx.x + blockIdx.y * 128 < reduce_sum)
 }
 
 // #endif  // defined(__CUDACC__)
