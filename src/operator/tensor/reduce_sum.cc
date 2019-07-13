@@ -34,7 +34,8 @@ MXNET_REGISTER_OP_PROPERTY(EcoReduceSum, EcoReduceSumProp < false >)
         .add_arguments(EcoReduceSumParam::__FIELDS__());
 
 MXNET_REGISTER_OP_PROPERTY(EcoMean, EcoReduceSumProp < true >)
-        .describe("Applies the Eco-Mean operator for faster compute")
+        .describe("Applies the Eco-Mean operator "
+                  "for faster compute")
         .add_argument ("data", "NDArray-or-Symbol", "Input Data")
         .add_arguments(EcoReduceSumParam::__FIELDS__());
 
