@@ -179,7 +179,7 @@ public:
                 const std::vector < int > &  in_data,
                 const std::vector < int > & out_data) const override
         {
-                return std::vector < int > (out_grad[int(EnumOpOutputs::Output)]);
+                return { out_grad[int(EnumOpOutputs::Output)] };
         }
 
         Operator * CreateOperator  (Context ctx) const override

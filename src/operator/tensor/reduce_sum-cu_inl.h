@@ -140,7 +140,10 @@ public:
 
                 _cuda_reduce_sum_backward < DType, TNorm >
                         <<<
-                                (data_grad.shape_.Size() - 1) / 128 + 1,
+                                dim3(data_grad.shape_.Size() 
+                                       / _reduce_dim,
+                                     (_reduce_dim - 1) / 128 + 1
+                                     ),
                                  128, 0,
                                 Stream < gpu > ::GetStream(cuda_stream)
                         >>>
@@ -193,7 +196,15 @@ __global__ void _cuda_reduce_sum_backward(
 {
         RealType output_grad_reg = output_grad[blockIdx.x];
 
-        if (threadIdx.x + blockIdx.y * 128 < reduce_dim) {
+        if ((threadIdx.x + blockIdx.y * 128) < reduce_dim) {
+
+        // printf("threadIdx_x: %d, blockIdx_x: %d, blockIdx_y: %d, Idx: %ld, "
+        //        "Stride: %ld, Reduce_Dim: %ld, Size: %ld\n",
+        //        threadIdx.x,     blockIdx.x,     blockIdx.y,
+        //        (threadIdx.x + blockIdx.y * 128) * stride + 
+        //          blockIdx.x % stride + 
+        //          blockIdx.x * reduce_dim, 
+        //        stride, reduce_dim, size);
 
         if (req == kWriteTo)
         {
