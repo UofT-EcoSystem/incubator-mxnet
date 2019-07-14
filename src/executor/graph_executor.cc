@@ -344,7 +344,8 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     
     if (type == "SequenceReverse")    return false;
     if (type == "SequenceMask")       return false;
-    
+    IF (type == "ParSequenceReverse") return false;
+
     if (type == "Convolution")        return false;
     if (type == "batch_dot")          return false;
     if (type == "FullyConnected") {
