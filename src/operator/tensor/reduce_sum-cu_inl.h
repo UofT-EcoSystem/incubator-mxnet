@@ -53,7 +53,7 @@ private:
                 _reduce_dim = in_data[int(EnumOpInputs::Data)].shape_[reduce_axis];
                 _stride = 1;
                 for (int dim_idx = in_data[int(EnumOpInputs::Data)].shape_.ndim() - 1;
-                         dim_idx > reduce_axis;
+                         dim_idx > static_cast < int > (reduce_axis);
                        --dim_idx)
                 {
                         _stride *= in_data[int(EnumOpInputs::Data)].shape_[dim_idx];
@@ -162,11 +162,15 @@ __global__ void _cuda_reduce_sum(
         const unsigned this_thread_idx = 
                 (threadIdx.x + blockIdx.y * 128) * stride + 
                   blockIdx.x % stride + 
-                  blockIdx.x * reduce_dim;
+                 (blockIdx.x / stride) * stride * reduce_dim;
 
         RealType this_thread_data = 
                 (threadIdx.x + blockIdx.y * 128) < reduce_dim ? 
                         data[this_thread_idx] : 0;
+
+        // printf("[%d][%d][%d]\n", int( blockIdx.x / stride), 
+        //                          int(threadIdx.x + blockIdx.y * 128),
+        //                          int( blockIdx.x % stride));
 
         RealType aggregate = BlockReduce(workspace).Sum(this_thread_data);
 
@@ -199,13 +203,15 @@ __global__ void _cuda_reduce_sum_backward(
         {
                 data_grad[(threadIdx.x + blockIdx.y * 128) * stride + 
                             blockIdx.x % stride + 
-                            blockIdx.x * reduce_dim]  = output_grad_reg / (TNorm ? reduce_dim : 1);
+                           (blockIdx.x / stride) * stride * reduce_dim]  = 
+                        output_grad_reg / (TNorm ? reduce_dim : 1);
         }
         if (req == kAddTo)
         {
                 data_grad[(threadIdx.x + blockIdx.y * 128) * stride + 
                             blockIdx.x % stride + 
-                            blockIdx.x * reduce_dim] += output_grad_reg / (TNorm ? reduce_dim : 1);
+                           (blockIdx.x / stride) * stride * reduce_dim] += 
+                        output_grad_reg / (TNorm ? reduce_dim : 1);
         }
 
         }  // if (threadIdx.x + blockIdx.y * 128 < reduce_sum)
