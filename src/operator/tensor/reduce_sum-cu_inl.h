@@ -177,7 +177,7 @@ __global__ void _cuda_reduce_sum(
 
         if (threadIdx.x == 0)
         {
-                atomicAdd(&output[blockIdx.x % stride + blockIdx.x * reduce_dim],
+                atomicAdd(&output[blockIdx.x],
                           aggregate / (TNorm ? size : 1));
         }
 }
@@ -191,8 +191,7 @@ __global__ void _cuda_reduce_sum_backward(
         const std::size_t reduce_dim, 
         const std::size_t stride)
 {
-        RealType output_grad_reg = output_grad[blockIdx.x % stride + 
-                                               blockIdx.x * reduce_dim];
+        RealType output_grad_reg = output_grad[blockIdx.x];
 
         if (threadIdx.x + blockIdx.y * 128 < reduce_dim) {
 
