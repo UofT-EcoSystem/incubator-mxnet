@@ -53,7 +53,7 @@ private:
                 _reduce_dim = in_data[int(EnumOpInputs::Data)].shape_[reduce_axis];
                 _stride = 1;
                 for (int dim_idx = in_data[int(EnumOpInputs::Data)].shape_.ndim() - 1;
-                         dim_idx > _param.axis;
+                         dim_idx > reduce_axis;
                        --dim_idx)
                 {
                         _stride *= in_data[int(EnumOpInputs::Data)].shape_[dim_idx];
