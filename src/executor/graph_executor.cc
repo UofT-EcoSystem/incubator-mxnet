@@ -339,10 +339,15 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     if (get_node_attr(node, "__force_mirroring__", false)) return true;
     if (do_mirror == 0) return false;
     if (type == "Dropout")            return false;
-    if (type == "_zeros")             return false;
     if (type == "Embedding")          return false;
+
+    if (type == "_zeros")             return false;
+    if (type == "zeros_like")         return false;
+
+    if (type == "broadcast_not_equal") return false;
     
     if (type == "SequenceReverse")    return false;
+    if (type == "SequenceLast")       return false;
     if (type == "SequenceMask")       return false;
     if (type == "ParSequenceReverse") return false;
 
