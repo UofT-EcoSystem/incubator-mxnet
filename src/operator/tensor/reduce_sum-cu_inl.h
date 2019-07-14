@@ -16,18 +16,13 @@ template < typename RealType, bool TNorm >
 static __global__ void _cuda_reduce_sum(
         const RealType * const __restrict__   data,
               RealType * const __restrict__ output,
-        const std::size_t size, 
-        const std::size_t reduce_dim,
-        const std::size_t stride);
+        const std::size_t reduce_dim, const std::size_t stride);
 
 template < typename RealType, bool TNorm >
 static __global__ void _cuda_reduce_sum_backward(
               RealType * const __restrict__   data_grad,
         const RealType * const __restrict__ output_grad,
-        const OpReqType req,
-        const std::size_t size,
-        const std::size_t reduce_dim,
-        const std::size_t stride);
+        const OpReqType req, const std::size_t reduce_dim, const std::size_t stride);
 
 template < typename DType, bool TNorm = false >
 class CUEcoReduceSumOp : public Operator
@@ -108,7 +103,7 @@ public:
                         (
                                 reinterpret_cast < DType * > (data  .dptr_),
                                 reinterpret_cast < DType * > (output.dptr_),
-                                data.shape_.Size(), _reduce_dim, _stride
+                                _reduce_dim, _stride
                         );
         }
 
@@ -150,8 +145,7 @@ public:
                         (
                                 reinterpret_cast < DType * > (data_grad  .dptr_), 
                                 reinterpret_cast < DType * > (output_grad.dptr_),
-                                req[int(EnumOpInputs::Data)],
-                                data_grad.shape_.Size(), _reduce_dim, _stride
+                                req[int(EnumOpInputs::Data)], _reduce_dim, _stride
                         );
         }
 };  // class CUEcoReduceSumOp
@@ -160,9 +154,7 @@ template < typename RealType, bool TNorm >
 __global__ void _cuda_reduce_sum(
         const RealType * const __restrict__   data,
               RealType * const __restrict__ output,
-        const std::size_t size, 
-        const std::size_t reduce_dim, 
-        const std::size_t stride)
+        const std::size_t reduce_dim, const std::size_t stride)
 {
         typedef cub::BlockReduce < RealType, 128 > BlockReduce;
         __shared__ typename BlockReduce::TempStorage workspace;
@@ -181,7 +173,7 @@ __global__ void _cuda_reduce_sum(
         if (threadIdx.x == 0)
         {
                 atomicAdd(&output[blockIdx.x],
-                          aggregate / (TNorm ? size : 1));
+                          aggregate / (TNorm ? reduce_dim : 1));
         }
 }
 
@@ -189,10 +181,7 @@ template < typename RealType, bool TNorm >
 __global__ void _cuda_reduce_sum_backward(
               RealType * const __restrict__   data_grad,
         const RealType * const __restrict__ output_grad,
-        const OpReqType req, 
-        const std::size_t size, 
-        const std::size_t reduce_dim, 
-        const std::size_t stride)
+        const OpReqType req, const std::size_t reduce_dim, const std::size_t stride)
 {
         RealType output_grad_reg = output_grad[blockIdx.x];
 
@@ -210,13 +199,13 @@ __global__ void _cuda_reduce_sum_backward(
         {
                 data_grad[(threadIdx.x + blockIdx.y * 128) * stride + 
                             blockIdx.x % stride + 
-                            blockIdx.x * reduce_dim]  = output_grad_reg / (TNorm ? size : 1);
+                            blockIdx.x * reduce_dim]  = output_grad_reg / (TNorm ? reduce_dim : 1);
         }
         if (req == kAddTo)
         {
                 data_grad[(threadIdx.x + blockIdx.y * 128) * stride + 
                             blockIdx.x % stride + 
-                            blockIdx.x * reduce_dim] += output_grad_reg / (TNorm ? size : 1);
+                            blockIdx.x * reduce_dim] += output_grad_reg / (TNorm ? reduce_dim : 1);
         }
 
         }  // if (threadIdx.x + blockIdx.y * 128 < reduce_sum)
