@@ -12,7 +12,7 @@ namespace mxnet {
 	namespace op {
 		namespace {
 
-enum class EnumOpInputs { Input, StateH, StateC };
+enum class EnumOpInputs  { Input, StateH, StateC };
 enum class EnumOpOutputs { StateHOut, StateCOut,
                            InputFM, ForgetFM,
 			   IActvFM, OutputFM };
