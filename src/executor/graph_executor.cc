@@ -338,6 +338,50 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     const std::string& type = node.attrs.op->name;
     if (get_node_attr(node, "__force_mirroring__", false)) return true;
     if (do_mirror == 0) return false;
+    if (type == "Dropout")            return false;
+    if (type == "Embedding")          return false;
+
+    if (type == "_zeros")             return false;
+    if (type == "zeros_like")         return false;
+
+    if (type == "broadcast_not_equal") return false;
+    
+    if (type == "SequenceReverse")    return false;
+    if (type == "SequenceLast")       return false;
+    if (type == "SequenceMask")       return false;
+    if (type == "ParSequenceReverse") return false;
+
+    if (type == "EcoReduceSum")       return false;
+    if (type == "sum")                return false;
+    if (type == "EcoMean")            return false;
+    if (type == "mean")               return false;
+
+    if (type == "Convolution")        return false;
+    if (type == "batch_dot")          return false;
+    if (type == "FullyConnected") {
+      const op::FullyConnectedProp* fc_prop = dynamic_cast<
+          const op::FullyConnectedProp*>(
+          op::OpPropGetOpProperty(node.attrs));
+      std::map<std::string, std::string> fc_param = fc_prop->GetParams();
+      if (fc_param["num_hidden"] == "1") {
+        return true;
+      }
+      return false;
+    }
+
+    if (type == "expand_dims")        return false;
+    if (type == "Concat")             return false;
+    if (type == "Reshape")            return false;
+    if (type == "SwapAxis")           return false;
+    if (type == "tile")               return false;
+    if (type == "SliceChannel")       return false;
+
+    if (type == "softmax")            return false;
+    if (type == "SoftmaxOutput")      return false;
+    
+    if (type == "BatchNorm")          return false;
+    if (type == "CuDNNBatchNorm")     return false;
+
     // We need the mirroring to stop when the a cell state of an LSTM cell is encountered.
     // The reason is because unlike input and hidden states that are blocked
     //   by the input-to-hidden and hidden-to-hidden connections,
@@ -351,27 +395,8 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
       return false;
     }
 
-    if (type == "FullyConnected") {
-      const op::FullyConnectedProp* fc_prop = dynamic_cast<
-          const op::FullyConnectedProp*>(
-          op::OpPropGetOpProperty(node.attrs));
-      std::map<std::string, std::string> fc_param = fc_prop->GetParams();
-      if (fc_param["num_hidden"] == "1") {
-        return true;
-      }
-      return false;
-    }
-    if (type == "elemwise_mul")    return true;
-    if (type == "elemwise_add")    return true;
-    if (type == "_plus_scalar")    return true;
-    if (type == "square")          return true;
-    if (type == "rsqrt")           return true;
-    if (type == "Activation")      return true;
-    if (type == "broadcast_add")   return true;
-    if (type == "broadcast_sub")   return true;
-    if (type == "broadcast_mul")   return true;
+    return true;
 
-    return false;  // By default, mirroring is disabled.
   };
 
   std::vector<const nnvm::Op*> zero_ops;
