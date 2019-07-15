@@ -12,7 +12,7 @@ namespace mxnet {
 	namespace op {
 		namespace {
 
-enum class EnumOpInputs  { Input, StateH, StateC };
+enum class EnumOpInputs  { InputPlusStateH, StateC };
 enum class EnumOpOutputs { StateHOut, StateCOut,
                            InputFM, ForgetFM,
 			   IActvFM, OutputFM };
@@ -68,11 +68,12 @@ private:
 	LSTMNonLinBlockParam _param;
 public:
 	LSTMNonLinBlockProp() {}
-	explicit LSTMNonLinBlockProp(LSTMNonLinBlockParam param) : _param(param) {}
+	explicit
+	LSTMNonLinBlockProp(LSTMNonLinBlockParam param) : _param(param) {}
 
 	std::vector < std::string > ListArguments() const override
 	{
-		return { "input", "state_h", "state_c" };
+		return { "input_plus_state_h", "state_c" };
 	}
 	std::vector < std::string > ListOutputs  () const override
 	{
@@ -105,9 +106,9 @@ public:
 	{
 		using namespace mshadow;
 
-		CHECK_EQ(in_shape->size(), 3U); // input, state_h, state_c
+		CHECK_EQ(in_shape->size(), 2U); // input_plus_state_h, state_c
 
-		const TShape & ishape = (*in_shape)[int(EnumOpInputs::Input)];
+		const TShape & ishape = (*in_shape)[int(EnumOpInputs::InputPlusStateH)];
 
 		CHECK_EQ(ishape.ndim(), 2U) << "Input data should be rank-2 tensor of dim "
 			"[batch size, 4 * state size].";
@@ -115,10 +116,8 @@ public:
 		unsigned batch_size = ishape[0];
 		unsigned state_size = ishape[1] / 4;
 
-		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::StateH), 
-			Shape2(batch_size, 4 * state_size));
 		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::StateC),
-			Shape2(batch_size,     state_size));
+			Shape2(batch_size, state_size));
 
 		out_shape->clear();
 

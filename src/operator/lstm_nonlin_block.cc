@@ -26,9 +26,11 @@ DMLC_REGISTER_PARAMETER(LSTMNonLinBlockParam);
 
 MXNET_REGISTER_OP_PROPERTY(LSTMNonLinBlock, LSTMNonLinBlockProp)
 	.describe("Applies the LSTM non-linear block to the input and hidden state.")
-	.add_argument ("input"  , "NDArray-or-Symbol", "Input to the LSTM Cell")
-	.add_argument ("state_h", "NDArray-or-Symbol", "Hidden " "State of the Previous Time Step")
-	.add_argument ("state_c", "NDArray-or-Symbol", "Cell "   "State of the Previous Time Step")
+	.add_argument ("input_plus_state_h", 
+		"NDArray-or-Symbol", 
+		"Input to the LSTM Cell")
+	.add_argument ("state_c", "NDArray-or-Symbol", 
+		"Cell State of the Previous Time Step")
 	.add_arguments(LSTMNonLinBlockParam::__FIELDS__());
 
 	} // namespace op
