@@ -50,15 +50,27 @@ private:
                         (_param.axis + in_data[int(EnumOpInputs::Data)].shape_.ndim()) % 
                                        in_data[int(EnumOpInputs::Data)].shape_.ndim();
 
-                _reduce_dim = in_data[int(EnumOpInputs::Data)].shape_[reduce_axis];
+                const TBlob & data = in_data[int(EnumOpInputs::Data)];
+
+                _reduce_dim = data.shape_[reduce_axis];
                 _stride = 1;
-                for (int dim_idx = in_data[int(EnumOpInputs::Data)].shape_.ndim() - 1;
-                         dim_idx > static_cast < int > (reduce_axis);
+                for (int dim_idx = data.shape_.ndim() - 1;
+                         dim_idx > static_cast < int > (
+                                 reduce_axis);
                        --dim_idx)
                 {
-                        _stride *= in_data[int(EnumOpInputs::Data)].shape_[dim_idx];
+                        _stride *= data.shape_[dim_idx];
                 }
                 _initialized = true;
+
+                // std::cout << "Reduce Sum Operator Instantiation: " << std::endl;
+                // std::cout << "\t""Data Shape: (";
+                // for (int dim_idx = 0; dim_idx < data.shape_.ndim(); ++dim_idx)
+                // {
+                //         std::cout << data.shape_[dim_idx] << ", ";
+                // }
+                // std::cout << ")" << std::endl;
+                // std::cout << "\t""Reduction Axis: " << reduce_axis << std::endl;
         }
 public:
         virtual void  Forward(const OpContext & ctx,

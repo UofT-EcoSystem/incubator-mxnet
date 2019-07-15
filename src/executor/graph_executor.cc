@@ -351,6 +351,11 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     if (type == "SequenceMask")       return false;
     if (type == "ParSequenceReverse") return false;
 
+    if (type == "EcoReduceSum")       return false;
+    if (type == "sum")                return false;
+    if (type == "EcoMean")            return false;
+    if (type == "mean")               return false;
+
     if (type == "Convolution")        return false;
     if (type == "batch_dot")          return false;
     if (type == "FullyConnected") {
@@ -360,8 +365,6 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
       std::map<std::string, std::string> fc_param = fc_prop->GetParams();
       if (fc_param["num_hidden"] == "1") {
         return true;
-      } else {
-        return false;
       }
       return false;
     }
