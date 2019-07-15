@@ -166,7 +166,8 @@ public:
 				output_fm.dptr_,
 				state_h_out.dptr_,
 				state_c_out.dptr_,
-				_param.batch_size, _param.state_size, ctx.is_train
+				_param.batch_size, 
+				_param.state_size, ctx.is_train
 			);
 	}
 

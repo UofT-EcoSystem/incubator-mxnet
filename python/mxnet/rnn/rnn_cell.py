@@ -462,8 +462,10 @@ class LSTMCell(BaseRNNCell):
 
         if int(os.environ['USE_LSTM_NONLIN_BLOCK']):
 
-            next_h, next_c = symbol.LSTMNonLinBlock(input=i2h, state_h=h2h, state_c=states[1])
-
+            next_h, next_c = symbol.LSTMNonLinBlock(
+                    input=i2h, state_h=h2h, 
+                    state_c=states[1],
+                    name='%s_nonlin_block'%name)
             return next_h, [next_h, next_c]
         
         gates = i2h + h2h
