@@ -394,6 +394,10 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
       //           << "\t""Mirroring is forced to stop at depth " << mirror_depth << std::endl;
       return false;
     }
+    // Ditto
+    if (type == "LSTMNonLinBlock" && mirror_depth > 0){
+      return false;
+    }
 
     return true;
 
