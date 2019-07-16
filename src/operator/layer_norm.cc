@@ -27,8 +27,8 @@ DMLC_REGISTER_PARAMETER(LayerNormParam);
 MXNET_REGISTER_OP_PROPERTY(LayerNorm, LayerNormProp)
         .describe("Apply layer normalization to the hidden state.")
         .add_argument ("data",  "Input Data")
-        .add_argument ("gamma", "Layer Normalization Coefficient")
-        .add_argument ("beta",  "Layer Normalization Coefficient")
+        .add_argument ("gamma", "Layer Normalization Coefficient (Scale)")
+        .add_argument ("beta",  "Layer Normalization Coefficient (Center)")
         .add_arguments(LayerNormParam::__FIELDS__());
 
         }  // namespace op
