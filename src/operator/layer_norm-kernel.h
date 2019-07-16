@@ -2,6 +2,7 @@
 
 namespace mxnet {
 namespace op {
+namespace {
 
 template <typename DType>
 __device__ __forceinline__ DType warp_shfl(DType value, int src_lane,
@@ -241,5 +242,6 @@ __global__ void LayerNormFusedForwardKernelContig(const int nbatch,
   }
 }
 
+}  // namespace anonymous
 }  // namesapce op
 }  // namespace mxnet
