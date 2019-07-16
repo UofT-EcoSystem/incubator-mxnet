@@ -18,7 +18,7 @@ enum class EnumOpWorkspace { TempSpace };
 
 struct EcoReduceSumParam : public dmlc::Parameter < EcoReduceSumParam >
 {
-        int axis; bool keepdims;
+        int axis; bool keepdims; std::size_t reduce_dim, stride;
 
         DMLC_DECLARE_PARAMETER(EcoReduceSumParam)
         {

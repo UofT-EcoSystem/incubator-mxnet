@@ -7,8 +7,6 @@
 namespace mxnet {
         namespace op {
 
-#if defined(__CUDACC__)
-
 /**
  * Forward Pass of Reduce Sum
  */
@@ -29,16 +27,12 @@ class CUEcoReduceSumOp : public Operator
 {
 private:
         EcoReduceSumParam _param;
-        std::size_t _reduce_dim,
-                    _stride;
-
         bool _initialized = false;
 public:
         explicit CUEcoReduceSumOp(EcoReduceSumParam param)
         {
                 _param = param;
         }
-        ~CUEcoReduceSumOp() {}
 private:
         void _Init(mshadow::Stream < gpu > * cuda_stream,
                 const std::vector < TBlob > &  in_data,
@@ -52,14 +46,14 @@ private:
 
                 const TBlob & data = in_data[int(EnumOpInputs::Data)];
 
-                _reduce_dim = data.shape_[reduce_axis];
-                _stride = 1;
+                _param.reduce_dim = data.shape_[reduce_axis];
+                _param.stride = 1;
                 for (int dim_idx = data.shape_.ndim() - 1;
                          dim_idx > static_cast < int > (
                                  reduce_axis);
                        --dim_idx)
                 {
-                        _stride *= data.shape_[dim_idx];
+                        _param.stride *= data.shape_[dim_idx];
                 }
                 _initialized = true;
 
@@ -106,8 +100,8 @@ public:
                                           ));
                 _cuda_reduce_sum < DType, TNorm > 
                         <<<
-                                dim3(data.shape_.Size() / _reduce_dim,
-                                     (_reduce_dim - 1) / 128 + 1
+                                dim3(data.shape_.Size() / _param.reduce_dim,
+                                     (_param.reduce_dim - 1) / 128 + 1
                                      ),
                                 128, 0,
                                 Stream < gpu > ::GetStream(cuda_stream)
@@ -115,7 +109,7 @@ public:
                         (
                                 reinterpret_cast < DType * > (data  .dptr_),
                                 reinterpret_cast < DType * > (output.dptr_),
-                                _reduce_dim, _stride
+                                _param.reduce_dim, _param.stride
                         );
         }
 
@@ -148,16 +142,17 @@ public:
                 _cuda_reduce_sum_backward < DType, TNorm >
                         <<<
                                 dim3(data_grad.shape_.Size() 
-                                       / _reduce_dim,
-                                     (_reduce_dim - 1) / 128 + 1
+                                       / _param.reduce_dim,
+                                     (_param.reduce_dim - 1) / 128 + 1
                                      ),
-                                 128, 0,
+                                128, 0,
                                 Stream < gpu > ::GetStream(cuda_stream)
                         >>>
                         (
                                 reinterpret_cast < DType * > (data_grad  .dptr_), 
                                 reinterpret_cast < DType * > (output_grad.dptr_),
-                                req[int(EnumOpInputs::Data)], _reduce_dim, _stride
+                                req[int(EnumOpInputs::Data)], 
+                                _param.reduce_dim, _param.stride
                         );
         }
 };  // class CUEcoReduceSumOp
@@ -228,8 +223,6 @@ __global__ void _cuda_reduce_sum_backward(
 
         }  // if (threadIdx.x + blockIdx.y * 128 < reduce_sum)
 }
-
-#endif  // defined(__CUDACC__)
 
         }  // namespace op 
 }  // namespace mxnet
