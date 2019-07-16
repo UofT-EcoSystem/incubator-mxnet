@@ -1,6 +1,7 @@
 #pragma once
 
-
+namespace mxnet {
+namespace op {
 
 template <typename DType>
 __device__ __forceinline__ DType warp_shfl(DType value, int src_lane,
@@ -239,3 +240,6 @@ __global__ void LayerNormFusedForwardKernelContig(const int nbatch,
     }
   }
 }
+
+}  // namesapce op
+}  // namespace mxnet
