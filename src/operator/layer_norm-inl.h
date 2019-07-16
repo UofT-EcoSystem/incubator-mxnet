@@ -17,6 +17,8 @@ enum class EnumOpWorkspace { TempSpacew };
 
 struct LayerNormParam : public : dmlc::Parameter < LayerNormParam >
 {
+        std::size_t state_size;
+
         DMLC_DECLARE_PARAMETER(LayerNormParam)
         {
                 DMLC_DECLARE_FIELD(eps).set_default(1e-5f)
