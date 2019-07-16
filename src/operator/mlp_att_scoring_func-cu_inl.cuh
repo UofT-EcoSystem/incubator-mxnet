@@ -10,8 +10,6 @@
 namespace mxnet {
 	namespace op {
 
-#if defined(__CUDACC__)
-
 /**
  * Forward Pass of the MLP Attention Layer Scoring Function
  * This kernel shall be launched using the parameter <<< (B, T), H, H * sizeof(RealType), cuda_stream >>>
@@ -106,16 +104,13 @@ class CUMLPAttScoringFuncOp : public Operator
 {
 private:
 	MLPAttScoringFuncParam _param;
-
 	bool _initialized = false;
-
 	unsigned _temp_space_size;
 public:
 	explicit CUMLPAttScoringFuncOp(MLPAttScoringFuncParam param)
 	{
 		_param = param;
 	}
-	~CUMLPAttScoringFuncOp() {}
 private:
 	void _Init(mshadow::Stream < gpu > * cuda_stream,
 	           const std::vector < TBlob > &  in_data,
@@ -575,8 +570,6 @@ inline void FullyConnectedBWData < float > (cublasHandle_t cublas_handle,
 				&alpha,  W, input_size, dY, state_size,
 				& beta, dX, input_size));
 }
-
-#endif // __CUDACC__
 
 	} // namespace op
 } // namespace mxnet
