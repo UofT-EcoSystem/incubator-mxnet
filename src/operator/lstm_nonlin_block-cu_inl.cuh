@@ -9,8 +9,6 @@
 namespace mxnet {
 	namespace op {
 
-// #if defined(__CUDACC__)
-
 /**
  * Forward Pass of the LSTM Nonlinear Block
  * @param1  input     [B x 4H]
@@ -71,14 +69,12 @@ class CULSTMNonLinBlockOp : public Operator
 {
 private:
 	LSTMNonLinBlockParam _param; 
-	
 	bool _initialized = false;
 public:
 	explicit CULSTMNonLinBlockOp(LSTMNonLinBlockParam param)
 	{
 		_param = param;
 	}
-	~CULSTMNonLinBlockOp() {}
 private:
 	void _Init(mshadow::Stream < gpu > * cuda_stream,
 	           const std::vector < TBlob > &  in_data,
@@ -352,8 +348,6 @@ __global__ void _cuda_lstm_nonlin_block_backward(
 	input_plus_state_h_grad[batch_idx_x4H_plus_state_idx + 3 * state_size] = 
 		output_gate_grad * output_gate * (1 - output_gate);
 }
-
-// #endif // __CUDACC__
 
 	} // namespace op
 } // namespace mxnet

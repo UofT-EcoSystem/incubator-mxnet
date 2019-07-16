@@ -5,8 +5,6 @@
 namespace mxnet {
 	namespace op {
 
-#if defined(__CUDACC__)
-
 /**
  * Forward Pass of the LSTM Cell
  * This kernel shall be launched using the parameter <<< ceil(BxH / 128), 128, 0, cuda_stream >>>.
@@ -124,7 +122,6 @@ class CUEcoLSTMCellOp : public Operator
 {
 private:
 	EcoLSTMCellParam _param;
-
 	bool _initialized = false;
 	bool _batch_minor = false;
 	unsigned _temp_space_size;
@@ -133,9 +130,6 @@ public:
 	{
 		_param = param;
 	}
-	~CUEcoLSTMCellOp()
-	{}
-
 private:
 	void _Init(mshadow::Stream < gpu > * cuda_stream,
 	           const std::vector < TBlob > &  in_data,
@@ -631,8 +625,6 @@ inline void FullyConnectedBWData < float > (cublasHandle_t cublas_handle,
 				&alpha,  W, input_size, dY, state_size,
 				&beta,  dX, input_size));
 }
-
-#endif // __CUDACC__
 
 	} // namespace op
 } // namespace mxnet
