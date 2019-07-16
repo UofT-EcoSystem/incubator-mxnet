@@ -71,7 +71,8 @@ private:
 	MLPAttScoringFuncParam _param;
 public:
 	MLPAttScoringFuncProp() {}
-	explicit MLPAttScoringFuncProp(MLPAttScoringFuncParam param) : _param(param) {}
+	explicit
+	MLPAttScoringFuncProp(MLPAttScoringFuncParam param) : _param(param) {}
 
 	std::vector < std::string > ListArguments() const override
 	{
@@ -80,10 +81,6 @@ public:
 	std::vector < std::string > ListOutputs  () const override 
 	{
 		return { "att_scores" };
-	}
-	int NumOutputs() const override 
-	{
-		return 1;
 	}
 
 	void Init(const std::vector < std::pair < std::string,
