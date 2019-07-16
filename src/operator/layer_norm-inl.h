@@ -12,7 +12,7 @@ namespace mxnet {
 
 enum class EnumOpInputs  { Data, Gamma, Beta };
 enum class EnumOpOutputs { Output, Mean, STD };
-
+enum class EnumOpWorkspace { TempSpacew };
                 }  // namespace op
 
 struct LayerNormParam : public : dmlc::Parameter < LayerNormParam >
@@ -173,7 +173,26 @@ public:
                         out_data[EnumOpOutputs::STD] }
         }
 
+        std::vector < ResourceRequest >  ForwardResource(
+                const std::vector < TShape > & in_shape) const override
+        {
+                return { ResourceRequest::kTempSpace };
+        }
+        std::vector < ResourceRequest > BackwardResource(
+                const std::vector < TShape > & in_shape) const override
+        {
+                return { ResourceRequest::kTempSpace };
+        }
 
+        Operator * CreateOperator  (Context ctx) const override
+        {
+                LOG(FATAL) << "Not Implemented";
+
+                return nullptr;
+        }
+        Operator * CreateOperatorEx(Context ctx,
+                                    std::vector < TShape > * in_shape,
+                                    std::vector < int >    * in_type) const override;
 };
 
 #endif  // DMLC_USE_CXX11
