@@ -183,8 +183,8 @@ public:
 		out_type->push_back(src_hidden_type); // att_scores
 		if (_param.layer_norm)
 		{
-			out_shape->push_back(Shape1(state_size)); // att_hidden_mean
-			out_shape->push_back(Shape1(state_size)); // att_hidden_std
+			out_shape->push_back(src_hidden_type); // att_hidden_mean
+			out_shape->push_back(src_hidden_type); // att_hidden_std
 		}
 		
 		return true;
@@ -211,8 +211,10 @@ public:
 				  in_data[int(EnumOpInputs ::SrcHidden)],
 				  in_data[int(EnumOpInputs ::H2SWeight)],
 				  in_data[int(EnumOpInputs ::Gamma)],
-				 out_data[int(EnumOpOutputs::AttHiddenMean)],
-				 out_data[int(EnumOpOutputs::AttHiddenSTD)] };
+				  in_data[int(EnumOpInputs ::Beta)]
+				//  out_data[int(EnumOpOutputs::AttHiddenMean)],
+				//  out_data[int(EnumOpOutputs::AttHiddenSTD)]
+				};
 		else
 			return { out_grad[int(EnumOpOutputs::AttScores)],
 				  in_data[int(EnumOpInputs ::QryHidden)],
