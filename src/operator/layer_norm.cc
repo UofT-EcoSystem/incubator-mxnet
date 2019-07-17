@@ -15,9 +15,9 @@ Operator * CreateOp < cpu > (LayerNormParam param, int dtype)
 	return op;
 }
 
-Operator * LayerNormOp::CreateOperatorEx(Context ctx,
-                                         std::vector < TShape > * in_shape,
-                                         std::vector < int >    * in_type) const
+Operator * LayerNormProp::CreateOperatorEx(Context ctx,
+                                           std::vector < TShape > * in_shape,
+                                           std::vector < int >    * in_type) const
 {
         DO_BIND_DISPATCH(CreateOp, _param, (*in_type)[0]);
 }
@@ -26,9 +26,9 @@ DMLC_REGISTER_PARAMETER(LayerNormParam);
 
 MXNET_REGISTER_OP_PROPERTY(LayerNorm, LayerNormProp)
         .describe("Apply layer normalization to the hidden state.")
-        .add_argument ("data",  "Input Data")
-        .add_argument ("gamma", "Layer Normalization Coefficient (Scale)")
-        .add_argument ("beta",  "Layer Normalization Coefficient (Center)")
+        .add_argument ("data",  "NDArray-or-Symbol", "Input Data")
+        .add_argument ("gamma", "NDArray-or-Symbol", "Layer Normalization Coefficient (Scale)")
+        .add_argument ("beta",  "NDArray-or-Symbol", "Layer Normalization Coefficient (Center)")
         .add_arguments(LayerNormParam::__FIELDS__());
 
         }  // namespace op

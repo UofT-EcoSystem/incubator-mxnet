@@ -15,15 +15,15 @@ enum class EnumOpOutputs { Output, Mean, STD };
 enum class EnumOpWorkspace { TempSpacew };
                 }  // namespace op
 
-struct LayerNormParam : public : dmlc::Parameter < LayerNormParam >
+struct LayerNormParam : public dmlc::Parameter < LayerNormParam >
 {
-        std::size_t state_size;
+        std::size_t total_size, state_size; float eps;
 
         DMLC_DECLARE_PARAMETER(LayerNormParam)
         {
                 DMLC_DECLARE_FIELD(eps).set_default(1e-5f)
                         .describe("An `epsilon` parameter to prevent "
-                                  "division by zero")
+                                  "division by zero");
         }
 };
 
@@ -110,11 +110,11 @@ public:
 
                 out_shape->clear();
 
-                TShape mean_std_shape = (*in_shape)[EnumOpInputs::Data];
+                TShape mean_std_shape = (*in_shape)[int(EnumOpInputs::Data)];
 
-                mean_std_shape[in_shape->ndim() - 1] = 1;
+                mean_std_shape[(*in_shape)[int(EnumOpInputs::Data)].ndim() - 1] = 1;
 
-                out_shape->push_back((*in_shape)[EnumOpInputs::Data]);  // output
+                out_shape->push_back((*in_shape)[int(EnumOpInputs::Data)]);  // output
                 out_shape->push_back(mean_std_shape); // mean
                 out_shape->push_back(mean_std_shape); // std
 
@@ -140,8 +140,8 @@ public:
 			else
 			{
 				CHECK_EQ((*in_type)[i], itype) << "This layer requires uniform type. " << 
-					"Expected " << itype << " v.s. given " << 
-					(*in_type)[i] << " at " << ListArguments()[i];
+					 "Expected " << itype << " v.s. given " << 
+					 (*in_type)[i] << " at " << ListArguments()[i];
 			}
 		}
 
@@ -166,14 +166,14 @@ public:
 
         std::vector < int > DeclareBackwardDependency(
                 const std::vector < int > & out_grad,
-                const std::vector < int > &  in_datr,
+                const std::vector < int > &  in_data,
                 const std::vector < int > & out_data) const override
         {
                 return { out_grad[int(EnumOpOutputs::Output)],
                           in_data[int(EnumOpInputs ::Data)],
                           in_data[int(EnumOpInputs ::Gamma)],
                          out_data[int(EnumOpOutputs::Mean)],
-                         out_data[int(EnumOpOutputs::STD)] }
+                         out_data[int(EnumOpOutputs::STD)] };
         }
 
         // std::vector < ResourceRequest >  ForwardResource(
