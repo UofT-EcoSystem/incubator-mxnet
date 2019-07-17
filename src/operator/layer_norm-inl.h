@@ -176,11 +176,11 @@ public:
                          out_data[int(EnumOpOutputs::STD)] }
         }
 
-        std::vector < ResourceRequest >  ForwardResource(
-                const std::vector < TShape > & in_shape) const override
-        {
-                return { ResourceRequest::kTempSpace };
-        }
+        // std::vector < ResourceRequest >  ForwardResource(
+        //         const std::vector < TShape > & in_shape) const override
+        // {
+        //         return { ResourceRequest::kTempSpace };
+        // }
         std::vector < ResourceRequest > BackwardResource(
                 const std::vector < TShape > & in_shape) const override
         {
