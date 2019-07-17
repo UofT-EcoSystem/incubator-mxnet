@@ -79,10 +79,6 @@ public:
 	{
 		return { "state_h_out", "state_c_out", "input_fm", "forget_fm" };
 	}
-	int NumOutputs() const override
-	{
-		return 4;
-	}
 	int NumVisibleOutputs() const override 
 	{
 		return 2;
