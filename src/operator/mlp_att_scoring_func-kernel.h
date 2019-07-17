@@ -116,7 +116,7 @@ __global__ void MLPAttScoringFuncForwardKernelContig(const int nbatch,
       mean_data[bid] = static_cast<DType>(mean);
       std_data[bid] = static_cast<DType>(std_eps);
     }
-    } else {  // if (!layer_norm) {
+    } else {  // if (!layer_norm)
     for (int i = tid; i < nchannel; i += nthread) {
       out_data[bid * nchannel + i] = tanh(in_data[bid * nchannel + i]);
     }
