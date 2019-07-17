@@ -29,6 +29,8 @@ MXNET_REGISTER_OP_PROPERTY(MLPAttScoringFunc, MLPAttScoringFuncProp)
 	.add_argument("qry_hidden", "NDArray-or-Symbol",  "Query Hidden State")
 	.add_argument("src_hidden", "NDArray-or-Symbol", "Source Hidden State")
 	.add_argument("h2s_weight", "NDArray-or-Symbol", "Hidden-to-Score Weight")
+	.add_argument("gamma", "NDArray-or-Symbol", "Layer Normalization Coefficient (Gamma)")
+	.add_argument("beta",  "NDArray-or-Symbol", "Layer Normalization Coefficient (Beta)")
 	.add_arguments(MLPAttScoringFuncParam::__FIELDS__());
 
 	} // namespace op
