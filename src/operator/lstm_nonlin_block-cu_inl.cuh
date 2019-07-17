@@ -150,15 +150,15 @@ public:
 			>>> 
 			(
 				input_plus_state_h.dptr_, 
-				  state_c.dptr_,
-				 input_fm.dptr_,
+				state_c.dptr_,
+				input_fm.dptr_,
 				forget_fm.dptr_,
-				 iactv_fm.dptr_,
+				iactv_fm.dptr_,
 				output_fm.dptr_,
 				state_h_out.dptr_,
 				state_c_out.dptr_,
-			       _param.batch_size, 
-			       _param.state_size, ctx.is_train
+			        _param.batch_size, 
+			        _param.state_size, ctx.is_train
 			);
 	}
 
@@ -229,13 +229,13 @@ public:
 				input_plus_state_h_grad.dptr_,
 				state_c_grad.dptr_,
 				state_c.dptr_,
-				 input_fm.dptr_,
+				input_fm.dptr_,
 				forget_fm.dptr_,
-				 iactv_fm.dptr_,
+				iactv_fm.dptr_,
 				output_fm.dptr_,
 				state_h_out_grad.dptr_,
 				state_c_out_grad.dptr_,
-			       _param.batch_size, _param.state_size
+			        _param.batch_size, _param.state_size
 			);
 	}
 }; // class CULSTMNonLinBlockOp
