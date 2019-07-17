@@ -419,9 +419,9 @@ __global__ void _cuda_fused_mlp_att_scoring_func_forward(
             if self._ln is not None:
                 attention_hidden = self._ln.normalize(attention_hidden)
 	 */
+	/**
 	extern __shared__ volatile RealType svmem_forward[];
 
-	/**
 	if (layer_norm)
 	{
 		RealType exp_X = __cu_reduce_sum(svmem_forward,
@@ -483,9 +483,9 @@ __global__ void _cuda_fused_mlp_att_scoring_func_backward(
             if self._ln is not None:
                 attention_hidden = self._ln.normalize(attention_hidden)
 	 */
+	/**
 	extern __shared__ volatile RealType svmem_backward[];
 
-	/**
 	if (layer_norm)
 	{
 		// read the value that was stored during the forward pass

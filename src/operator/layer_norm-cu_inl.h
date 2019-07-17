@@ -26,9 +26,9 @@ private:
 
                 CHECK_EQ(_initialized, false);
 
-                _param.total_size = in_data[int(EnumOpInputs::Data)].shape_.Size();
                 _param.state_size = in_data[int(EnumOpInputs::Data)].shape_
-                        [in_data[int(EnumOpInputs::Data)].shape_.ndim() - 1];
+                                           [in_data[int(EnumOpInputs::Data)].shape_.ndim() - 1];
+                _param.batch_size = in_data[int(EnumOpInputs::Data)].shape_.Size() / state_size;
 
                 _initialized = true;
         }
@@ -83,14 +83,14 @@ public:
                 }
 
                 LayerNormFusedForwardKernelContig < double, DType, int > <<<
-                        _param.total_size / _param.state_size,
+                        _param.batch_size,
                         dim3(32, blockDim_y),
                         blockDim_y > 1 ?  blockDim_y      * 32 * sizeof(double) + 
                                          (blockDim_y / 2) * 32 * sizeof(int) 
                                        :  0,
                         Stream < gpu > ::GetStream(cuda_stream)
                         >>> (
-                        _param.total_size / _param.state_size,
+                        _param.batch_size,
                         _param.state_size,
                         _param.eps,
                         data  .dptr < DType > (),
@@ -151,7 +151,7 @@ public:
                      gb_block_dim, gb_grid_dim;
                 int npart;
 
-                GetGammaBetaGradKernelParams(_param.total_size / _param.state_size,
+                GetGammaBetaGradKernelParams(_param.batch_size,
                                              _param.state_size,
                                              &part_grad_block_dim,
                                              &part_grad_grid_dim,
@@ -173,7 +173,7 @@ public:
                         nshared_K1,
                         Stream < gpu > ::GetStream(cuda_stream)
                         >>> (
-                        _param.total_size / _param.state_size,
+                        _param.batch_size,
                         _param.state_size,
                         data       .dptr < DType > (),
                         output_grad.dptr < DType > (),
@@ -189,7 +189,7 @@ public:
                                 nshared_K2, 
                                 Stream < gpu > ::GetStream(cuda_stream) 
                                 >>> (
-                                _param.total_size / _param.state_size,
+                                _param.batch_size,
                                 _param.state_size,
                                 npart,
                                 part_gamma_grad_ptr,
@@ -205,7 +205,7 @@ public:
                                 nshared_K2, 
                                 Stream < gpu > ::GetStream(cuda_stream) 
                                 >>> (
-                                _param.total_size / _param.state_size,
+                                _param.batch_size,
                                 _param.state_size,
                                 npart,
                                 part_gamma_grad_ptr,
@@ -221,7 +221,7 @@ public:
                                 nshared_K2, 
                                 Stream < gpu > ::GetStream(cuda_stream) 
                                 >>> (
-                                _param.total_size / _param.state_size,
+                                _param.batch_size,
                                 _param.state_size,
                                 npart,
                                 part_gamma_grad_ptr,
@@ -237,7 +237,7 @@ public:
                                 nshared_K2, 
                                 Stream < gpu > ::GetStream(cuda_stream) 
                                 >>> (
-                                _param.total_size / _param.state_size,
+                                _param.batch_size,
                                 _param.state_size,
                                 npart,
                                 part_gamma_grad_ptr,
@@ -268,11 +268,11 @@ public:
                 if (data_grad_req == kAddTo)
                 {
                         LayerNormFusedBackwardKernel_Data < 4, true, double > <<< 
-                                _param.total_size / _param.state_size,
+                                _param.batch_size,
                                 dim3(32, blockDim_y),
                                 blockDim_y > 1 ? blockDim_y * 32 * sizeof(double) : 0,
                                 Stream < gpu > ::GetStream(cuda_stream) >>> (
-                                _param.total_size / _param.state_size,
+                                _param.batch_size,
                                 _param.state_size,
                                 data.dptr < DType > (),
                                 output_grad.dptr < DType > (),
@@ -284,11 +284,11 @@ public:
                 else
                 {
                         LayerNormFusedBackwardKernel_Data < 4, false, double > <<< 
-                                _param.total_size / _param.state_size,
+                                _param.batch_size,
                                 dim3(32, blockDim_y),
                                 blockDim_y > 1 ? blockDim_y * 32 * sizeof(double) : 0,
                                 Stream < gpu > ::GetStream(cuda_stream) >>> (
-                                _param.total_size / _param.state_size,
+                                _param.batch_size,
                                 _param.state_size,
                                 data.dptr < DType > (),
                                 output_grad.dptr < DType > (),
