@@ -9,6 +9,7 @@ namespace {
 template<typename AType, typename DType, typename IType>
 __global__ void MLPAttScoringFuncForwardKernelContig(const int nbatch,
                                                      const int nchannel,
+                                                     const bool  layer_norm
                                                      const AType eps,
                                                      const DType* __restrict__ src_hidden,
                                                      const DType* __restrict__ qry_hidden,
@@ -26,6 +27,11 @@ __global__ void MLPAttScoringFuncForwardKernelContig(const int nbatch,
   AType sigma2 = 0;
 
   if (bid < nbatch) {
+    for (int i = tid; i < nchannel; i += nthread) {
+      in_data[bid * nchannel + i] = qry_hidden[blockIdx.y * nchannel + i] +
+                                    src_hidden[bid        * nchannel + i];
+    }
+    if (layer_norm) {
     extern __shared__ char buf[];  // Shared memory
     const DType* col_vals = in_data + bid * nchannel;
     BlockWelfordOnlineSum(col_vals, nchannel, mean, sigma2, count);
@@ -99,12 +105,23 @@ __global__ void MLPAttScoringFuncForwardKernelContig(const int nbatch,
         out_col_val[i] = static_cast<DType>(invstd_eps * (static_cast<AType>(col_vals[i]) - mean));
       }
     }
+    for (int i = tid; i < nchannel; i += nthread) {
+      out_col_val[i] = tanh(out_col_val[i]);
+    }
     // Write the out_data and var_data
-    if (threadIdx.x == 0 && threadIdx.y == 0) {
+    if (threadIdx.x == 0 && 
+        threadIdx.y == 0 &&
+        mean_data != nullptr &&
+        std_data  != nullptr) {
       mean_data[bid] = static_cast<DType>(mean);
       std_data[bid] = static_cast<DType>(std_eps);
     }
-  }
+    } else {  // if (!layer_norm) {
+    for (int i = tid; i < nchannel; i += nthread) {
+      out_data[bid * nchannel + i] = tanh(in_data[bid * nchannel + i]);
+    }
+    }  // if (layer_norm)
+  }  // if (bid < nbatch)
 }
 
 }  // namespace anonymous
