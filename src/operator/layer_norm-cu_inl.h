@@ -1,24 +1,10 @@
 #pragma once
 
-#include <cub/cub.cuh>
-
 #include "layer_norm-inl.h"
+#include "layer_norm-kernel.h"
 
 namespace mxnet {
         namespace op {
-
-/**
- * Forward Pass of Layer Normalization
- */
-template < typename RealType >
-static __global__ void _cuda_layer_norm(
-        const RealType * const __restrict__ data,
-        const RealType * const __restrict__ gamma,
-        const RealType * const __restrict__ beta,
-              RealType * const __restrict__ output,
-              RealType * const __restrict__ mean,
-              RealType * const __restrict__ std,
-        const RealType eps);
 
 template < typename DType >
 class CULayerNormOp : public Operator
@@ -80,7 +66,37 @@ public:
                         _Init(cuda_stream, in_data, out_data);
                 }
 
-                _cuda_layer_norm <<<  >>>
+                unsigned blockDim_y;
+
+                if (_param.state_size <= 128)
+                {
+                        blockDim_y = 1;
+                }
+                else if (_param.state_size <= 512)
+                {
+                        blockDim_y = 2;
+                }
+                else 
+                {
+                        blockDim_y = 4;
+                }
+
+                LayerNormFusedForwardKernelContig < double, RealType, int > <<<
+                        _param.total_size / _param.state_size,
+                        dim3(32, blockDim_y),
+                        blockDim_y > 1 ? blockDim_y * 32 * sizeof(double) + 
+                                (blockDim_y / 2) * 32 * sizeof(int) : 0,
+                        cuda_stream
+                        >>> (
+                        _param.total_size / _param.state_size,
+                        _param.state_size,
+                        _param.eps,
+                        data  .dptr < RealType > (),
+                        gamma .dptr < RealType > (),
+                        beta  .dptr < RealType > (),
+                        output.dptr < RealType > (),
+                        mean  .dptr < RealType > (),
+                        std   .dptr < RealType > ());
         }
 };
 
