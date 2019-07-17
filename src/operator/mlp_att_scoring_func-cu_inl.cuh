@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mlp_att_scoring_func-inl.h"
+#include "layer_norm-kernel.h"
 #include <cooperative_groups.h>
 
 namespace mxnet {
@@ -336,6 +337,7 @@ public:
  * @param2 local_value: Local Value that is stored in Register
  * @return the Result of Reduction across *this* Thread Block
  */
+/**
 template < typename RealType >
 static __forceinline__ __device__ RealType __cu_reduce_sum(
 	volatile RealType * const __restrict__ svmem_reduced_sum,
@@ -390,6 +392,7 @@ static __forceinline__ __device__ RealType __cu_reduce_sum(
 
 	return svmem_reduced_sum[0];
 }
+ */
 
 template < typename RealType >
 __global__ void _cuda_fused_mlp_att_scoring_func_forward(
@@ -418,6 +421,7 @@ __global__ void _cuda_fused_mlp_att_scoring_func_forward(
 	 */
 	extern __shared__ volatile RealType svmem_forward[];
 
+	/**
 	if (layer_norm)
 	{
 		RealType exp_X = __cu_reduce_sum(svmem_forward,
@@ -439,6 +443,7 @@ __global__ void _cuda_fused_mlp_att_scoring_func_forward(
 			att_hidden_var[g_threadIdx] = rsqrt_var_plus_epsilon;
 		}
 	}
+	 */
 
 	/*
             # (batch_size, seq_len, attention_num_hidden)
@@ -480,6 +485,7 @@ __global__ void _cuda_fused_mlp_att_scoring_func_backward(
 	 */
 	extern __shared__ volatile RealType svmem_backward[];
 
+	/**
 	if (layer_norm)
 	{
 		// read the value that was stored during the forward pass
@@ -499,7 +505,7 @@ __global__ void _cuda_fused_mlp_att_scoring_func_backward(
 		                      att_hidden_var_grad * 2.0 * att_hidden_minus_mean / blockDim.x + 
 				      att_hidden_exp_grad / blockDim.x;
 	}
-
+	 */
 	/*
 	RealType att_hidden_reg = src_hidden[g_threadIdx] + 
 	                          qry_hidden[blockIdx.y * blockDim.x + threadIdx.x];
