@@ -127,9 +127,9 @@ template<typename AType, typename DType>
 __global__ void MLPAttScoringFuncBackwardKernel_PartGammaBeta(const int nbatch,
                                                               const int seqlen,
                                                               const int nchannel,
-                                                              const DType* __restrict__ src_hidden,
-                                                              const DType* __restrict__ qry_hidden,
+                                                              const DType* __restrict__ in_data,
                                                               const DType* __restrict__ out_grad,
+                                                              const DType* __restrict__ out_data,
                                                               const DType* __restrict__ mean_data,
                                                               const DType* __restrict__ std_data,
                                                               AType* __restrict__ part_gamma_grad,
@@ -156,9 +156,10 @@ __global__ void MLPAttScoringFuncBackwardKernel_PartGammaBeta(const int nbatch,
         AType local_mean = static_cast<AType>(mean_data[r]);
         AType local_std = static_cast<AType>(std_data[r]);
         int read_idx = r * nchannel + c;
-        AType local_in_data = static_cast<AType>(src_hidden[read_idx] +
-                                                 qry_hidden[r / seqlen * nchannel + c]);
-        AType local_out_grad = static_cast<AType>(out_grad[read_idx]);
+        AType local_in_data = static_cast<AType>(in_data[read_idx]);
+        AType local_out_grad = static_cast<AType>(out_grad[read_idx] *
+                                                  (1 - out_data[read_idx] *
+                                                       out_data[read_idx]));
         local_gamma_grad += (local_in_data - local_mean) / local_std * local_out_grad;
         local_beta_grad += local_out_grad;
       }
@@ -187,9 +188,9 @@ __global__ void MLPAttScoringFuncBackwardKernel_PartGammaBeta(const int nbatch,
 template<int LOAD_UNROLL, bool data_addto, typename AType, typename DType>
 __global__ void MLPAttScoringFuncBackwardKernel_Data(const int nbatch,
                                                      const int nchannel,
-                                                     const DType* __restrict__ src_hidden,
-                                                     const DType* __restrict__ qry_hidden,
+                                                     const DType* __restrict__ in_data,
                                                      const DType* __restrict__ out_grad,
+                                                     const DType* __restrict__ out_data,
                                                      const DType* __restrict__ mean_data,
                                                      const DType* __restrict__ std_data,
                                                      const DType* __restrict__ gamma,
@@ -210,18 +211,20 @@ __global__ void MLPAttScoringFuncBackwardKernel_Data(const int nbatch,
     for (; l + LOAD_UNROLL - 1 < nchannel; l += nthread * LOAD_UNROLL) {
 #pragma unroll
       for (int i = 0; i < LOAD_UNROLL; ++i) {
-        AType ele_og = static_cast<AType>(out_grad[bid * nchannel + l + i]);
-        AType ele_x = static_cast<AType>(src_hidden[bid        * nchannel + l + i] +
-                                         qry_hidden[blockIdx.y * nchannel + l + i]);
+        AType ele_og = static_cast<AType>(out_grad[bid * nchannel + l + i] *
+                                          (1 - out_data[bid * nchannel + l + i] *
+                                               out_data[bid * nchannel + l + i]));
+        AType ele_x = static_cast<AType>(in_data[bid * nchannel + l + i]);
         AType ele_gamma = static_cast<AType>(gamma[l + i]);
         sum_val0 += ele_og * ele_gamma * invstd_eps;
         sum_val1 += ele_og * ele_gamma * (ele_x - mean) * invstd_eps * invstd_eps;
       }
     }
     for (; l < nchannel; ++l) {
-      AType ele_og = static_cast<AType>(out_grad[bid * nchannel + l]);
-      AType ele_x = static_cast<AType>(src_hidden[bid        * nchannel + l] +
-                                       qry_hidden[blockIdx.y * nchannel + l]);
+      AType ele_og = static_cast<AType>(out_grad[bid * nchannel + l] *
+                                        (1 - out_data[bid * nchannel + l] *
+                                             out_data[bid * nchannel + l]));
+      AType ele_x = static_cast<AType>(in_data[bid * nchannel + l]);
       AType ele_gamma = static_cast<AType>(gamma[l]);
       sum_val0 += ele_og * ele_gamma * invstd_eps;
       sum_val1 += ele_og * ele_gamma * (ele_x - mean) * invstd_eps * invstd_eps;
@@ -263,9 +266,10 @@ __global__ void MLPAttScoringFuncBackwardKernel_Data(const int nbatch,
     // 2. Calculate the gradient as
     //      out_grad * gamma / std - sum_val0 - (x - mean) / std * sum_val1
     for (int l = tid; l < nchannel; l += nthread) {
-      AType ele_out_grad = static_cast<AType>(out_grad[bid * nchannel + l]);
-      AType ele_x = static_cast<AType>(src_hidden[bid        * nchannel + l] +
-                                       qry_hidden[blockIdx.y * nchannel + l]);
+      AType ele_out_grad = static_cast<AType>(out_grad[bid * nchannel + l] * 
+                                              (1 - out_data[bid * nchannel + l] *
+                                                   out_data[bid * nchannel + l]));
+      AType ele_x = static_cast<AType>(in_data[bid * nchannel + l]);
       AType ele_gamma = static_cast<AType>(gamma[l]);
       if (data_addto) {
         data_grad[bid * nchannel + l] +=
