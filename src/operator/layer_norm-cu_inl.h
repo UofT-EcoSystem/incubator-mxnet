@@ -28,7 +28,7 @@ private:
 
                 _param.state_size = in_data[int(EnumOpInputs::Data)].shape_
                                            [in_data[int(EnumOpInputs::Data)].shape_.ndim() - 1];
-                _param.batch_size = in_data[int(EnumOpInputs::Data)].shape_.Size() / state_size;
+                _param.batch_size = in_data[int(EnumOpInputs::Data)].shape_.Size() / _param.state_size;
 
                 _initialized = true;
         }
@@ -100,7 +100,7 @@ public:
                         mean  .dptr < DType > (),
                         std   .dptr < DType > ());
         }
-        virtual void Backward(const OpContext ctx,
+        virtual void Backward(const OpContext & ctx,
                               const std::vector < TBlob > & out_grad,
                               const std::vector < TBlob > &  in_data,
                               const std::vector < TBlob > & out_data,
