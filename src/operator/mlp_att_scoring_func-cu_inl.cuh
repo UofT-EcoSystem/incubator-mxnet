@@ -128,9 +128,16 @@ private:
 		_param.seq_length = src_hidden.shape_[1];
 		_param.state_size = src_hidden.shape_[2];
 
-		_temp_space_size = _param.layer_norm ? 
-			4 * _param.batch_size * _param.seq_length * _param.state_size : 
-			2 * _param.batch_size * _param.seq_length * _param.state_size;
+		if (_param.layer_norm)
+		{
+			_temp_space_size = 2 * src_hidden.shape_.Size() + 
+			 	           2 * _param.batch_size * 
+					       _param.seq_length;
+		}
+		else 
+		{
+			_temp_space_size = 2 * src_hidden.shape_.Size();
+		}
 
 		_initialized = true;
 	}
@@ -144,9 +151,11 @@ public:
 	{
 		using namespace mshadow;
 
-		std::size_t in_expected = 3, out_expected = 1;
+		std::size_t in_expected = _param.layer_norm ? 5 : 3, 
+		           out_expected = 1;
 
 		CHECK_EQ( in_data.size(),  in_expected); // QryHidden, SrcHidden, H2SWeight
+		                                         // Gamma, Beta
 		CHECK_EQ(out_data.size(), out_expected); // AttScores
 
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
@@ -173,23 +182,63 @@ public:
 		Tensor < gpu, 1, DType > workspace = ctx.requested[int(EnumOpWorkspace::TempSpace)]
 			.get_space_typed < gpu, 1, DType > (Shape1(_temp_space_size), cuda_stream);
 		
-		DType * ptr_att_hidden = workspace.dptr_;
+		DType * ptr_att_hidden_ws = workspace.dptr_;
+		DType * ptr_att_hidden    = workspace.dptr_ + src_hidden.shape_.Size();
 
-		_cuda_fused_mlp_att_scoring_func_forward < DType >
-			<<<
-				dim3(_param.seq_length, 
-				     _param.batch_size),
-				_param.state_size,
-				_param.state_size * sizeof(DType),
-				Stream < gpu > ::GetStream(cuda_stream)
-			>>>
-			(
-				qry_hidden.dptr_,
-				src_hidden.dptr_,
-				ptr_att_hidden,
-				nullptr, nullptr,
-				_param.layer_norm
-			);
+		DType * ptr_gamma, * ptr_beta, 
+		      * ptr_att_hidden_mean,
+		      * ptr_att_hidden_std;
+
+		if (_param.layer_norm)
+		{
+			TBlob gamma = in_data[EnumOpInputs::Gamma];
+			TBlob beta  = in_data[EnumOpInputs::Beta];
+			CHECK_EQ(gamma.CheckContiguous());
+			CHECK_EQ(beta .CheckContiguous());
+			ptr_gamma = gamma.dptr_;
+			ptr_beta  = beta .dptr_;
+			ptr_att_hidden_mean = workspace.dptr_ + 2 * src_hidden.shape_.Size();
+			ptr_att_hidden_std  = workspace.dptr_ + 2 * src_hidden.shape_.Size()
+			                                      + _param.batch_size *
+							        _param.seq_length;
+		}
+
+		unsigned blockDim_y;
+
+		if (_param.state_size <= 128)
+		{
+			blockDim_y = 1;
+		}
+		else if (_param.state_size <= 512)
+		{
+			blockDim_y = 2;
+		}
+		else 
+		{
+			blockDim_y = 4;
+		}
+
+		MLPAttScoringFuncForwardKernelContig < double, DType, int > <<<
+			dim3(_param.batch_size,
+			     _param.seq_length),
+			dim3(32, blockDim_y),
+			blockDim_y > 1 ?  blockDim_y      * 32 * sizeof(double) + 
+			                 (blockDim_y / 2) * 32 * sizeof(int) 
+				       :  0,
+			Stream < gpu > ::GetStream(cuda_stream)
+			>>> (
+			_param.batch_size * _param.seq_length,
+			_param.state_size,
+			_param.layer_norm,
+			_param.eps,
+			src_hidden.dptr_,
+			qry_hidden.dptr_,
+			ptr_att_hidden_ws,
+			ptr_gamma,
+			ptr_beta,
+			ptr_att_hidden,
+			ptr_att_hidden_mean,
+			ptr_att_hidden_std);
 		
 		CHECK_EQ(cuda_stream->blas_handle_ownership_, Stream < gpu > ::OwnHandle) << 
 			"Must initialize the cuBLAS handle in CUDA stream.";
