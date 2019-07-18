@@ -194,7 +194,8 @@ __global__ void MLPAttScoringFuncBackwardKernel_Data(const int nbatch,
                                                      const DType* __restrict__ mean_data,
                                                      const DType* __restrict__ std_data,
                                                      const DType* __restrict__ gamma,
-                                                     DType* data_grad) {
+                                                     DType* src_hidden_grad,
+                                                     DType* qry_hidden_grad) {
   int bid = blockIdx.x + blockIdx.y * gridDim.x;
   const int nthread = blockDim.x * blockDim.y;
   if (bid < nbatch) {
@@ -271,15 +272,14 @@ __global__ void MLPAttScoringFuncBackwardKernel_Data(const int nbatch,
                                                    out_data[bid * nchannel + l]));
       AType ele_x = static_cast<AType>(in_data[bid * nchannel + l]);
       AType ele_gamma = static_cast<AType>(gamma[l]);
-      if (data_addto) {
-        data_grad[bid * nchannel + l] +=
-          static_cast<DType>(ele_out_grad * ele_gamma * invstd_eps
-                               - sum_val0 - (ele_x - mean) * invstd_eps * sum_val1);
-      } else {
-        data_grad[bid * nchannel + l] =
-          static_cast<DType>(ele_out_grad * ele_gamma * invstd_eps - sum_val0
-                                               - (ele_x - mean) * invstd_eps * sum_val1);
-      }
+
+
+      src_hidden_grad[bid * nchannel + l] +=
+        static_cast<DType>(ele_out_grad * ele_gamma * invstd_eps
+                             - sum_val0 - (ele_x - mean) * invstd_eps * sum_val1);
+      atomicAdd(&qry_hidden_grad[blockIdx.y * nchannel  + l],
+        static_cast<DType>(ele_out_grad * ele_gamma * invstd_eps
+                             - sum_val0 - (ele_x - mean) * invstd_eps * sum_val1));
     }
   }
 }
