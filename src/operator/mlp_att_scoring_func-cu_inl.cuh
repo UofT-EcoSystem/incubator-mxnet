@@ -1,7 +1,7 @@
 #pragma once
 
 #include "mlp_att_scoring_func-inl.h"
-#include "mlp_att_scoring_func-kernel.h"
+#include <cooperative_groups.h>
 
 namespace mxnet {
 	namespace op {
@@ -17,7 +17,6 @@ namespace mxnet {
  * The workspace reserved for EXP and VAR will ONLY be used during backward propagation.
  * @param6 layer_norm: (Parameter) Whether to perform Layer Normalization
  */
-/**
 template < typename RealType >
 static __global__ void _cuda_fused_mlp_att_scoring_func_forward(
 	const RealType * const __restrict__ qry_hidden,
@@ -26,7 +25,6 @@ static __global__ void _cuda_fused_mlp_att_scoring_func_forward(
 	      RealType * const __restrict__ att_hidden_exp,
 	      RealType * const __restrict__ att_hidden_var, 
 	const bool layer_norm);
- */
 
 /**
  * Backward Pass of the MLP Attention Layer Scoring Function
@@ -41,7 +39,6 @@ static __global__ void _cuda_fused_mlp_att_scoring_func_forward(
  * @param8 att_hidden_var  [B x T]: (Input) VAR_H[Attention Hidden State]
  * @param9 layer_norm: (Parameter) Whether Layer Normalization is performed in the Forward Pass
  */
-/**
 template < typename RealType >
 static __global__ void _cuda_fused_mlp_att_scoring_func_backward(
 	const RealType * const __restrict__ qry_hidden,
@@ -53,15 +50,6 @@ static __global__ void _cuda_fused_mlp_att_scoring_func_backward(
 	const RealType * const __restrict__ att_hidden_exp,
 	const RealType * const __restrict__ att_hidden_var,
 	const bool layer_norm);
- */
-template < typename RealType >
-static __global__ void _cuda_fused_mlp_att_scoring_func_backward(
-	const RealType * const __restrict__ qry_hidden,
-	      RealType * const __restrict__ qry_hidden_grad,
-	const RealType * const __restrict__ src_hidden,
-	      RealType * const __restrict__ src_hidden_grad,
-	const RealType * const __restrict__ att_hidden,
-	const RealType * const __restrict__ att_hidden_grad);
 
 // FullyConnected Layer Y = X W^T Forward Pass
 // @param1 X [batch_size x input_size]:  (Input) Input  Variable  `X`
@@ -136,16 +124,9 @@ private:
 		_param.seq_length = src_hidden.shape_[1];
 		_param.state_size = src_hidden.shape_[2];
 
-		if (_param.layer_norm)
-		{
-			_temp_space_size = 3 * src_hidden.shape_.Size() + 
-			 	           2 * _param.batch_size * 
-					       _param.seq_length;
-		}
-		else 
-		{
-			_temp_space_size = 3 * src_hidden.shape_.Size();
-		}
+		_temp_space_size = _param.layer_norm ? 
+			4 * _param.batch_size * _param.seq_length * _param.state_size : 
+			2 * _param.batch_size * _param.seq_length * _param.state_size;
 
 		_initialized = true;
 	}
@@ -159,11 +140,9 @@ public:
 	{
 		using namespace mshadow;
 
-		std::size_t in_expected = _param.layer_norm ? 5 : 3, 
-		           out_expected = 1;
+		std::size_t in_expected = 3, out_expected = 1;
 
 		CHECK_EQ( in_data.size(),  in_expected); // QryHidden, SrcHidden, H2SWeight
-		                                         // Gamma, Beta
 		CHECK_EQ(out_data.size(), out_expected); // AttScores
 
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
@@ -190,64 +169,23 @@ public:
 		Tensor < gpu, 1, DType > workspace = ctx.requested[int(EnumOpWorkspace::TempSpace)]
 			.get_space_typed < gpu, 1, DType > (Shape1(_temp_space_size), cuda_stream);
 		
-		DType * ptr_att_hidden_ws = workspace.dptr_;
-		DType * ptr_att_hidden    = workspace.dptr_ + src_hidden.shape_.Size();
+		DType * ptr_att_hidden = workspace.dptr_;
 
-		DType * ptr_gamma = nullptr, 
-		      * ptr_beta  = nullptr, 
-		      * ptr_att_hidden_mean = nullptr,
-		      * ptr_att_hidden_std  = nullptr;
-
-		if (_param.layer_norm)
-		{
-			TBlob gamma = in_data[EnumOpInputs::Gamma];
-			TBlob beta  = in_data[EnumOpInputs::Beta];
-			CHECK_EQ(gamma.CheckContiguous());
-			CHECK_EQ(beta .CheckContiguous());
-			ptr_gamma = gamma.dptr_;
-			ptr_beta  = beta .dptr_;
-			ptr_att_hidden_mean = workspace.dptr_ + 2 * src_hidden.shape_.Size();
-			ptr_att_hidden_std  = workspace.dptr_ + 2 * src_hidden.shape_.Size()
-			                                      + _param.batch_size *
-							        _param.seq_length;
-		}
-
-		unsigned blockDim_y;
-
-		if (_param.state_size <= 128)
-		{
-			blockDim_y = 1;
-		}
-		else if (_param.state_size <= 512)
-		{
-			blockDim_y = 2;
-		}
-		else 
-		{
-			blockDim_y = 4;
-		}
-
-		MLPAttScoringFuncForwardKernelContig < double, DType, int > <<<
-			dim3(_param.seq_length,
-			     _param.batch_size),
-			dim3(32, blockDim_y),
-			blockDim_y > 1 ?  blockDim_y      * 32 * sizeof(double) + 
-			                 (blockDim_y / 2) * 32 * sizeof(int) 
-				       :  0,
-			Stream < gpu > ::GetStream(cuda_stream)
-			>>> (
-			_param.batch_size * _param.seq_length,
-			_param.state_size,
-			_param.layer_norm,
-			_param.eps,
-			src_hidden.dptr_,
-			qry_hidden.dptr_,
-			ptr_att_hidden_ws,
-			ptr_gamma,
-			ptr_beta,
-			ptr_att_hidden,
-			ptr_att_hidden_mean,
-			ptr_att_hidden_std);
+		_cuda_fused_mlp_att_scoring_func_forward < DType >
+			<<<
+				dim3(_param.seq_length, 
+				     _param.batch_size),
+				_param.state_size,
+				_param.state_size * sizeof(DType),
+				Stream < gpu > ::GetStream(cuda_stream)
+			>>>
+			(
+				qry_hidden.dptr_,
+				src_hidden.dptr_,
+				ptr_att_hidden,
+				nullptr, nullptr,
+				_param.layer_norm
+			);
 		
 		CHECK_EQ(cuda_stream->blas_handle_ownership_, Stream < gpu > ::OwnHandle) << 
 			"Must initialize the cuBLAS handle in CUDA stream.";
@@ -270,8 +208,7 @@ public:
 	{
 		using namespace mshadow;
 
-		std::size_t in_expected = _param.layer_norm ? 5 : 3, 
-		           out_expected = 1;
+		std::size_t in_expected = 3, out_expected = 1;
 
 		CHECK_EQ( in_data.size(),  in_expected);
 		CHECK_EQ( in_grad.size(),  in_expected);
@@ -285,11 +222,11 @@ public:
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 
 		// get the input data in the forward pass
-		Tensor < gpu, 2, DType > qry_hidden = in_data[int(EnumOpInputs::QryHidden)]
+		Tensor < gpu, 2, DType > qry_hidden      =  in_data[int(EnumOpInputs ::QryHidden)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 3, DType > src_hidden = in_data[int(EnumOpInputs::SrcHidden)]
+		Tensor < gpu, 3, DType > src_hidden      =  in_data[int(EnumOpInputs ::SrcHidden)]
 			.get < gpu, 3, DType > (cuda_stream);
-		Tensor < gpu, 2, DType > h2s_weight = in_data[int(EnumOpInputs::H2SWeight)]
+		Tensor < gpu, 2, DType > h2s_weight      =  in_data[int(EnumOpInputs ::H2SWeight)]
 			.get < gpu, 2, DType > (cuda_stream);
 
 		Tensor < gpu, 2, DType > qry_hidden_grad =  in_grad[int(EnumOpInputs ::QryHidden)]
@@ -327,66 +264,31 @@ public:
 		Tensor < gpu, 1, DType > workspace = ctx.requested[int(EnumOpWorkspace::TempSpace)]
 			.get_space_typed < gpu, 1, DType > (Shape1(_temp_space_size), cuda_stream);
 		
-		DType * ptr_att_hidden_ws   = workspace.dptr_,
-		      * ptr_att_hidden      = worksapce.dptr_ +     src_hidden.shape_.Size(),
-		      * ptr_att_hidden_grad = workspace.dptr_ + 2 * src_hidden.shape_.Size();
-		
-		DType * ptr_gamma = nullptr,
-		      * ptr_beta  = nullptr,
-		      * ptr_att_hidden_mean = nullptr,
-		      * ptr_att_hidden_std  = nullptr;
-
-		if (_param.layer_norm)
-		{
-			TBlob gamma = in_data[int(EnumOpInputs::Gamma)];
-			TBlob beta  = in_data[int(EnumOpInputs::Beta)];
-			CHECK_EQ(gamma.CheckContiguous());
-			CHECK_EQ(beta .CheckContiguous());
-			ptr_gamma = gamma.dptr_;
-			ptr_beta  = beta .dptr_;
-			ptr_att_hidden_mean = workspace.dptr_ + 3 * src_hidden.shape_.Size();
-			ptr_att_hidden_std  = workspace.dptr_ + 3 * src_hidden.shape_.Size()
-			                                      + _param.batch_size *
-							        _param.seq_length;
-		}
-
-		unsigned blockDim_y;
-
-		if (_param.state_size <= 128)
-		{
-			blockDim_y = 1;
-		}
-		else if (_param.state_size <= 512)
-		{
-			blockDim_y = 2;
-		}
-		else
-		{
-			blockDim_y = 4;
-		}
+		DType * ptr_att_hidden = workspace.dptr_;
+		DType * ptr_att_hidden_grad = 
+			workspace.dptr_ + 1 * _param.batch_size * _param.seq_length * _param.state_size;
+		DType * ptr_att_hidden_exp  = _param.layer_norm ? 
+			workspace.dptr_ + 2 * _param.batch_size * _param.seq_length * _param.state_size : nullptr;
+		DType * ptr_att_hidden_var  = _param.layer_norm ? 
+			workspace.dptr_ + 3 * _param.batch_size * _param.seq_length * _param.state_size : nullptr;
 
 		// !Important: Replay the forward pass computation.
-		MLPAttScoringFuncForwardKernelContig < double, DType, int > <<<
-			dim3(_param.seq_length,
-			     _param.batch_size),
-			dim3(32, blockDim_y),
-			blockDim_y > 1 ?  blockDim_y      * 32 * sizeof(double) + 
-			                 (blockDim_y / 2) * 32 * sizeof(int)
-				       :  0,
-			Stream < gpu > ::GetStream(cuda_stream)
-			>>> (
-			_param.batch_size * _param.state_size,
-			_param.state_size,
-			_param.layer_norm,
-			_param.eps,
-			src_hidden.dptr_,
-			qry_hidden.dptr_,
-			ptr_att_hidden_ws,
-			ptr_gamma,
-			ptr_beta,
-			ptr_att_hidden,
-			ptr_att_hidden_mean,
-			ptr_att_hidden_std);
+		_cuda_fused_mlp_att_scoring_func_forward < DType >
+			<<<
+				dim3(_param.seq_length,
+				     _param.batch_size),
+				_param.state_size,
+				_param.state_size * sizeof(DType),
+				Stream < gpu > ::GetStream(cuda_stream)
+			>>>
+			(
+				qry_hidden.dptr_,
+				src_hidden.dptr_,
+				ptr_att_hidden,
+				ptr_att_hidden_exp,
+				ptr_att_hidden_var,
+				_param.layer_norm
+			);
 
 		CHECK_EQ(cuda_stream->blas_handle_ownership_, Stream < gpu > ::OwnHandle) << 
 			"Must initialize the cuBLAS handle in CUDA stream.";
@@ -405,28 +307,26 @@ public:
 				       OpReqType::kWriteTo,
 				       _param.batch_size * _param.seq_length,
 				       _param.state_size, 1);
-
-		if (_param.layer_norm)
-		{
-			
-		}
-		else
-		{
-			_cuda_fused_mlp_att_scoring_func_backward <<<
-				dim3(_param.seq_length, 
+		
+		_cuda_fused_mlp_att_scoring_func_backward
+			<<<
+				dim3(_param.seq_length,
 				     _param.batch_size),
-				dim3(_param.state_size),
-				0,
+				_param.state_size, 
+				_param.state_size * sizeof(DType), 
 				Stream < gpu > ::GetStream(cuda_stream)
-				>>> (
+			>>>
+			(
 				qry_hidden.dptr_,
 				qry_hidden_grad.dptr_,
 				src_hidden.dptr_,
 				src_hidden_grad.dptr_,
 				ptr_att_hidden,
-				ptr_att_hidden_grad);
-		}
-		
+				ptr_att_hidden_grad,
+				ptr_att_hidden_exp,
+				ptr_att_hidden_var,
+				_param.layer_norm
+			);
 	}
 }; // class CUMLPAttScoringFuncOp
 
@@ -436,7 +336,6 @@ public:
  * @param2 local_value: Local Value that is stored in Register
  * @return the Result of Reduction across *this* Thread Block
  */
-/**
 template < typename RealType >
 static __forceinline__ __device__ RealType __cu_reduce_sum(
 	volatile RealType * const __restrict__ svmem_reduced_sum,
@@ -492,7 +391,6 @@ static __forceinline__ __device__ RealType __cu_reduce_sum(
 	return svmem_reduced_sum[0];
 }
 
-
 template < typename RealType >
 __global__ void _cuda_fused_mlp_att_scoring_func_forward(
 	const RealType * const __restrict__ qry_hidden,
@@ -502,18 +400,22 @@ __global__ void _cuda_fused_mlp_att_scoring_func_forward(
 	      RealType * const __restrict__ att_hidden_var,
 	const bool layer_norm)
 {
+	/*
+            # (batch_size, seq_len, attention_num_hidden)
+            attention_hidden = mx.sym.broadcast_add(lhs=attention_hidden_lhs, rhs=query_hidden,
+                                                    name="%squery_plus_input" % self.prefix)
+	 */
 	const unsigned g_threadIdx = blockIdx.y *  gridDim.x *  blockDim.x + 
 	                                          blockIdx.x *  blockDim.x + 
 						               threadIdx.x;
-	// # (batch_size, seq_len, attention_num_hidden)
-        // attention_hidden = mx.sym.broadcast_add(lhs=attention_hidden_lhs, rhs=query_hidden,
-        //                                         name="%squery_plus_input" % self.prefix)
+
 	RealType att_hidden_reg = qry_hidden[blockIdx.y * blockDim.x + threadIdx.x] + 
 	                          src_hidden[g_threadIdx];
 	
-	
-        // if self._ln is not None:
-        //     attention_hidden = self._ln.normalize(attention_hidden)
+	/*
+            if self._ln is not None:
+                attention_hidden = self._ln.normalize(attention_hidden)
+	 */
 	extern __shared__ volatile RealType svmem_forward[];
 
 	if (layer_norm)
@@ -538,9 +440,11 @@ __global__ void _cuda_fused_mlp_att_scoring_func_forward(
 		}
 	}
 
-	// # (batch_size, seq_len, attention_num_hidden)
-        // attention_hidden = mx.sym.Activation(attention_hidden, act_type="tanh",
-        //                                      name="%shidden" % self.prefix)
+	/*
+            # (batch_size, seq_len, attention_num_hidden)
+            attention_hidden = mx.sym.Activation(attention_hidden, act_type="tanh",
+                                                 name="%shidden" % self.prefix)
+	 */
 	att_hidden[g_threadIdx] = tanh(att_hidden_reg); 
 }
 
@@ -560,16 +464,20 @@ __global__ void _cuda_fused_mlp_att_scoring_func_backward(
 	                                          blockIdx.x *  blockDim.x + 
 						               threadIdx.x;
 	
-	// # (batch_size, seq_len, attention_num_hidden)
-        // attention_hidden = mx.sym.Activation(attention_hidden, act_type="tanh",
-        //                                      name="%shidden" % self.prefix)
+	/*
+            # (batch_size, seq_len, attention_num_hidden)
+            attention_hidden = mx.sym.Activation(attention_hidden, act_type="tanh",
+                                                 name="%shidden" % self.prefix)
+	 */
 	RealType att_hidden_reg      = att_hidden     [g_threadIdx];
 	RealType att_hidden_grad_reg = att_hidden_grad[g_threadIdx] * 
 		(1 - att_hidden_reg * 
 		     att_hidden_reg);
 
-	// if self._ln is not None:
-        //     attention_hidden = self._ln.normalize(attention_hidden)
+	/*
+            if self._ln is not None:
+                attention_hidden = self._ln.normalize(attention_hidden)
+	 */
 	extern __shared__ volatile RealType svmem_backward[];
 
 	if (layer_norm)
@@ -592,39 +500,10 @@ __global__ void _cuda_fused_mlp_att_scoring_func_backward(
 				      att_hidden_exp_grad / blockDim.x;
 	}
 
-	// RealType att_hidden_reg = src_hidden[g_threadIdx] + 
-	//                           qry_hidden[blockIdx.y * blockDim.x + threadIdx.x];
-	src_hidden_grad[g_threadIdx] += att_hidden_grad_reg;
-	atomicAdd(&qry_hidden_grad[blockIdx.y * blockDim.x + threadIdx.x], att_hidden_grad_reg);
-}
- */
-
-template < typename RealType >
-__global__ void _cuda_fused_mlp_att_scoring_func_backward(
-	const RealType * const __restrict__ qry_hidden,
-	      RealType * const __restrict__ qry_hidden_grad,
-	const RealType * const __restrict__ src_hidden,
-	      RealType * const __restrict__ src_hidden_grad,
-	const RealType * const __restrict__ att_hidden,
-	const RealType * const __restrict__ att_hidden_grad,
-	const RealType * const __restrict__ att_hidden_exp,
-	const RealType * const __restrict__ att_hidden_var,
-	const bool layer_norm)
-{
-	const unsigned g_threadIdx = blockIdx.y *  gridDim.x *  blockDim.x + 
-	                                          blockIdx.x *  blockDim.x + 
-						               threadIdx.x;
-	
-	// # (batch_size, seq_len, attention_num_hidden)
-        // attention_hidden = mx.sym.Activation(attention_hidden, act_type="tanh",
-        //                                      name="%shidden" % self.prefix)
-	RealType att_hidden_reg      = att_hidden     [g_threadIdx];
-	RealType att_hidden_grad_reg = att_hidden_grad[g_threadIdx] * 
-		(1 - att_hidden_reg * 
-		     att_hidden_reg);
-
-	// RealType att_hidden_reg = src_hidden[g_threadIdx] + 
-	//                           qry_hidden[blockIdx.y * blockDim.x + threadIdx.x];
+	/*
+	RealType att_hidden_reg = src_hidden[g_threadIdx] + 
+	                          qry_hidden[blockIdx.y * blockDim.x + threadIdx.x];
+	 */
 	src_hidden_grad[g_threadIdx] += att_hidden_grad_reg;
 	atomicAdd(&qry_hidden_grad[blockIdx.y * blockDim.x + threadIdx.x], att_hidden_grad_reg);
 }

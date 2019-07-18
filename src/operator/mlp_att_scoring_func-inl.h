@@ -10,9 +10,7 @@ namespace mxnet {
 	namespace op {
 		namespace {
 
-enum class EnumOpInputs    { QryHidden, SrcHidden, 
-                             H2SWeight, 
-			     Gamma, Beta };
+enum class EnumOpInputs    { QryHidden, SrcHidden, H2SWeight };
 enum class EnumOpOutputs   { AttScores };
 enum class EnumOpWorkspace { TempSpace };
 
@@ -21,15 +19,14 @@ enum class EnumOpWorkspace { TempSpace };
 struct MLPAttScoringFuncParam : public dmlc::Parameter < MLPAttScoringFuncParam >
 {
 	unsigned batch_size, seq_length, state_size;
-	bool layer_norm; float eps;
+
+	bool layer_norm;
 
 	DMLC_DECLARE_PARAMETER(MLPAttScoringFuncParam)
 	{
 		DMLC_DECLARE_FIELD(layer_norm).set_default(false)
 			.describe("Whether to perform Layer Normalization after "
 			          "broadcast adding Query to Source hidden state.");
-		DMLC_DECLARE_FIELD(eps).set_default(1e-5f)
-			.describe("An `epsilon` parameter to prevent division by zero");
 	}
 };
 
@@ -79,27 +76,11 @@ public:
 
 	std::vector < std::string > ListArguments() const override
 	{
-		if (_param.layer_norm)
-			return { "qry_hidden", "src_hidden",
-			         "h2s_weight",
-				 "gamma", "beta" };
-		else
-			return { "qry_hidden", "src_hidden", 
-		        	 "h2s_weight" };
+		return { "qry_hidden", "src_hidden", "h2s_weight" };
 	}
 	std::vector < std::string > ListOutputs  () const override 
 	{
-		// if (_param.layer_norm)
-		// 	return { "att_scores", "att_hidden_mean",
-		// 	               	       "att_hidden_std" };
-		// else
-		// 	return { "att_scores" };
 		return { "att_scores" };
-
-	}
-	int NumVisibleOutputs() const override 
-	{
-		return 1;
 	}
 
 	void Init(const std::vector < std::pair < std::string,
@@ -118,15 +99,12 @@ public:
 	{
 		using namespace mshadow;
 
-		if (_param.layer_norm)
-			CHECK_EQ(in_shape->size(), 3U); // qry_hidden, src_hidden, h2s_weight
-		else
-			CHECK_EQ(in_shape->size(), 5U); // gamma, beta
+		CHECK_EQ(in_shape->size(), 3U); // qry_hidden, src_hidden, h2s_weight
 
 		// query the input shape and perform shape inference
 		const TShape & src_hidden_shape = (*in_shape)[int(EnumOpInputs::SrcHidden)];
 
-		CHECK_EQ(src_hidden_shape.ndim(), 3U) << "Source Hidden should be rank-3 tensor of dim "
+		CHECK_EQ(src_hidden_shape.ndim(), 3U) << "Source Hidden should be rank-3 tensor of dim"
 			"[batch size, seq length, state size].";
 
 		unsigned batch_size = src_hidden_shape[0];
@@ -135,23 +113,14 @@ public:
 		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::QryHidden),
 			Shape2(batch_size, state_size));
 		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::H2SWeight), Shape2(1, state_size));
-		if (_param.layer_norm)
-		{
-			SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::Gamma), Shape1(state_size));
-			SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::Beta),  Shape1(state_size));
-		}
+		
 		out_shape->clear();
 
 		TShape att_scores_shape = src_hidden_shape;
 
 		att_scores_shape[2] = 1; // [batch_size x seq_length x 1]
-		
+
 		out_shape->push_back(att_scores_shape); // att_scores
-		// if (_param.layer_norm)
-		// {
-		// 	out_shape->push_back(Shape1(state_size)); // att_hidden_mean
-		// 	out_shape->push_back(Shape1(state_size)); // att_hidden_std
-		// }
 
 		return true;
 	}
@@ -182,11 +151,6 @@ public:
 		out_type->clear();
 
 		out_type->push_back(src_hidden_type); // att_scores
-		// if (_param.layer_norm)
-		// {
-		// 	out_shape->push_back(src_hidden_type); // att_hidden_mean
-		// 	out_shape->push_back(src_hidden_type); // att_hidden_std
-		// }
 		
 		return true;
 	}
@@ -206,21 +170,10 @@ public:
 		const std::vector < int > &  in_data,
 		const std::vector < int > & out_data) const override
 	{
-		if (_param.layer_norm)
-			return { out_grad[int(EnumOpOutputs::AttScores)],
-			          in_data[int(EnumOpInputs ::QryHidden)],
-				  in_data[int(EnumOpInputs ::SrcHidden)],
-				  in_data[int(EnumOpInputs ::H2SWeight)],
-				  in_data[int(EnumOpInputs ::Gamma)],
-				  in_data[int(EnumOpInputs ::Beta)]
-				//  out_data[int(EnumOpOutputs::AttHiddenMean)],
-				//  out_data[int(EnumOpOutputs::AttHiddenSTD)]
-				};
-		else
-			return { out_grad[int(EnumOpOutputs::AttScores)],
-				  in_data[int(EnumOpInputs ::QryHidden)],
-				  in_data[int(EnumOpInputs ::SrcHidden)],
-				  in_data[int(EnumOpInputs ::H2SWeight)] };
+		return {  in_data[int(EnumOpInputs ::QryHidden)],
+			  in_data[int(EnumOpInputs ::SrcHidden)],
+			  in_data[int(EnumOpInputs ::H2SWeight)],
+			 out_grad[int(EnumOpOutputs::AttScores)] };
 	}
 
 	std::vector < ResourceRequest >  ForwardResource(
