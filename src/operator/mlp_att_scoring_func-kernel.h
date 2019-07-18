@@ -125,7 +125,6 @@ __global__ void MLPAttScoringFuncForwardKernelContig(const int nbatch, const int
 
 template<typename AType, typename DType>
 __global__ void MLPAttScoringFuncBackwardKernel_PartGammaBeta(const int nbatch,
-                                                              const int seqlen,
                                                               const int nchannel,
                                                               const DType* __restrict__ in_data,
                                                               const DType* __restrict__ out_grad,

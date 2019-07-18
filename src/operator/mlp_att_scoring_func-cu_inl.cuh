@@ -54,6 +54,14 @@ static __global__ void _cuda_fused_mlp_att_scoring_func_backward(
 	const RealType * const __restrict__ att_hidden_var,
 	const bool layer_norm);
  */
+template < typename RealType >
+static __global__ void _cuda_fused_mlp_att_scoring_func_backward(
+	const RealType * const __restrict__ qry_hidden,
+	      RealType * const __restrict__ qry_hidden_grad,
+	const RealType * const __restrict__ src_hidden,
+	      RealType * const __restrict__ src_hidden_grad,
+	const RealType * const __restrict__ att_hidden,
+	const RealType * const __restrict__ att_hidden_grad);
 
 // FullyConnected Layer Y = X W^T Forward Pass
 // @param1 X [batch_size x input_size]:  (Input) Input  Variable  `X`
@@ -397,26 +405,28 @@ public:
 				       OpReqType::kWriteTo,
 				       _param.batch_size * _param.seq_length,
 				       _param.state_size, 1);
-		
-		_cuda_fused_mlp_att_scoring_func_backward
-			<<<
-				dim3(_param.seq_length,
+
+		if (_param.layer_norm)
+		{
+			
+		}
+		else
+		{
+			_cuda_fused_mlp_att_scoring_func_backward <<<
+				dim3(_param.seq_length, 
 				     _param.batch_size),
-				_param.state_size, 
-				_param.state_size * sizeof(DType), 
+				dim3(_param.state_size),
+				0,
 				Stream < gpu > ::GetStream(cuda_stream)
-			>>>
-			(
+				>>> (
 				qry_hidden.dptr_,
 				qry_hidden_grad.dptr_,
 				src_hidden.dptr_,
 				src_hidden_grad.dptr_,
 				ptr_att_hidden,
-				ptr_att_hidden_grad,
-				ptr_att_hidden_exp,
-				ptr_att_hidden_var,
-				_param.layer_norm
-			);
+				ptr_att_hidden_grad);
+		}
+		
 	}
 }; // class CUMLPAttScoringFuncOp
 
@@ -588,6 +598,36 @@ __global__ void _cuda_fused_mlp_att_scoring_func_backward(
 	atomicAdd(&qry_hidden_grad[blockIdx.y * blockDim.x + threadIdx.x], att_hidden_grad_reg);
 }
  */
+
+template < typename RealType >
+__global__ void _cuda_fused_mlp_att_scoring_func_backward(
+	const RealType * const __restrict__ qry_hidden,
+	      RealType * const __restrict__ qry_hidden_grad,
+	const RealType * const __restrict__ src_hidden,
+	      RealType * const __restrict__ src_hidden_grad,
+	const RealType * const __restrict__ att_hidden,
+	const RealType * const __restrict__ att_hidden_grad,
+	const RealType * const __restrict__ att_hidden_exp,
+	const RealType * const __restrict__ att_hidden_var,
+	const bool layer_norm)
+{
+	const unsigned g_threadIdx = blockIdx.y *  gridDim.x *  blockDim.x + 
+	                                          blockIdx.x *  blockDim.x + 
+						               threadIdx.x;
+	
+	// # (batch_size, seq_len, attention_num_hidden)
+        // attention_hidden = mx.sym.Activation(attention_hidden, act_type="tanh",
+        //                                      name="%shidden" % self.prefix)
+	RealType att_hidden_reg      = att_hidden     [g_threadIdx];
+	RealType att_hidden_grad_reg = att_hidden_grad[g_threadIdx] * 
+		(1 - att_hidden_reg * 
+		     att_hidden_reg);
+
+	// RealType att_hidden_reg = src_hidden[g_threadIdx] + 
+	//                           qry_hidden[blockIdx.y * blockDim.x + threadIdx.x];
+	src_hidden_grad[g_threadIdx] += att_hidden_grad_reg;
+	atomicAdd(&qry_hidden_grad[blockIdx.y * blockDim.x + threadIdx.x], att_hidden_grad_reg);
+}
 
 template <>
 inline void FullyConnectedFW < float > (cublasHandle_t cublas_handle,
