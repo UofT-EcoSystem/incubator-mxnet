@@ -130,13 +130,13 @@ private:
 
 		if (_param.layer_norm)
 		{
-			_temp_space_size = 2 * src_hidden.shape_.Size() + 
+			_temp_space_size = 3 * src_hidden.shape_.Size() + 
 			 	           2 * _param.batch_size * 
 					       _param.seq_length;
 		}
 		else 
 		{
-			_temp_space_size = 2 * src_hidden.shape_.Size();
+			_temp_space_size = 3 * src_hidden.shape_.Size();
 		}
 
 		_initialized = true;
@@ -185,9 +185,10 @@ public:
 		DType * ptr_att_hidden_ws = workspace.dptr_;
 		DType * ptr_att_hidden    = workspace.dptr_ + src_hidden.shape_.Size();
 
-		DType * ptr_gamma, * ptr_beta, 
-		      * ptr_att_hidden_mean,
-		      * ptr_att_hidden_std;
+		DType * ptr_gamma = nullptr, 
+		      * ptr_beta  = nullptr, 
+		      * ptr_att_hidden_mean = nullptr,
+		      * ptr_att_hidden_std  = nullptr;
 
 		if (_param.layer_norm)
 		{
@@ -219,8 +220,8 @@ public:
 		}
 
 		MLPAttScoringFuncForwardKernelContig < double, DType, int > <<<
-			dim3(_param.batch_size,
-			     _param.seq_length),
+			dim3(_param.seq_length,
+			     _param.batch_size),
 			dim3(32, blockDim_y),
 			blockDim_y > 1 ?  blockDim_y      * 32 * sizeof(double) + 
 			                 (blockDim_y / 2) * 32 * sizeof(int) 
@@ -261,7 +262,8 @@ public:
 	{
 		using namespace mshadow;
 
-		std::size_t in_expected = 3, out_expected = 1;
+		std::size_t in_expected = _param.layer_norm ? 5 : 3, 
+		           out_expected = 1;
 
 		CHECK_EQ( in_data.size(),  in_expected);
 		CHECK_EQ( in_grad.size(),  in_expected);
@@ -275,11 +277,11 @@ public:
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 
 		// get the input data in the forward pass
-		Tensor < gpu, 2, DType > qry_hidden      =  in_data[int(EnumOpInputs ::QryHidden)]
+		Tensor < gpu, 2, DType > qry_hidden = in_data[int(EnumOpInputs::QryHidden)]
 			.get < gpu, 2, DType > (cuda_stream);
-		Tensor < gpu, 3, DType > src_hidden      =  in_data[int(EnumOpInputs ::SrcHidden)]
+		Tensor < gpu, 3, DType > src_hidden = in_data[int(EnumOpInputs::SrcHidden)]
 			.get < gpu, 3, DType > (cuda_stream);
-		Tensor < gpu, 2, DType > h2s_weight      =  in_data[int(EnumOpInputs ::H2SWeight)]
+		Tensor < gpu, 2, DType > h2s_weight = in_data[int(EnumOpInputs::H2SWeight)]
 			.get < gpu, 2, DType > (cuda_stream);
 
 		Tensor < gpu, 2, DType > qry_hidden_grad =  in_grad[int(EnumOpInputs ::QryHidden)]
@@ -317,31 +319,66 @@ public:
 		Tensor < gpu, 1, DType > workspace = ctx.requested[int(EnumOpWorkspace::TempSpace)]
 			.get_space_typed < gpu, 1, DType > (Shape1(_temp_space_size), cuda_stream);
 		
-		DType * ptr_att_hidden = workspace.dptr_;
-		DType * ptr_att_hidden_grad = 
-			workspace.dptr_ + 1 * _param.batch_size * _param.seq_length * _param.state_size;
-		DType * ptr_att_hidden_exp  = _param.layer_norm ? 
-			workspace.dptr_ + 2 * _param.batch_size * _param.seq_length * _param.state_size : nullptr;
-		DType * ptr_att_hidden_var  = _param.layer_norm ? 
-			workspace.dptr_ + 3 * _param.batch_size * _param.seq_length * _param.state_size : nullptr;
+		DType * ptr_att_hidden_ws   = workspace.dptr_,
+		      * ptr_att_hidden      = worksapce.dptr_ +     src_hidden.shape_.Size(),
+		      * ptr_att_hidden_grad = workspace.dptr_ + 2 * src_hidden.shape_.Size();
+		
+		DType * ptr_gamma = nullptr,
+		      * ptr_beta  = nullptr,
+		      * ptr_att_hidden_mean = nullptr,
+		      * ptr_att_hidden_std  = nullptr;
+
+		if (_param.layer_norm)
+		{
+			TBlob gamma = in_data[int(EnumOpInputs::Gamma)];
+			TBlob beta  = in_data[int(EnumOpInputs::Beta)];
+			CHECK_EQ(gamma.CheckContiguous());
+			CHECK_EQ(beta .CheckContiguous());
+			ptr_gamma = gamma.dptr_;
+			ptr_beta  = beta .dptr_;
+			ptr_att_hidden_mean = workspace.dptr_ + 3 * src_hidden.shape_.Size();
+			ptr_att_hidden_std  = workspace.dptr_ + 3 * src_hidden.shape_.Size()
+			                                      + _param.batch_size *
+							        _param.seq_length;
+		}
+
+		unsigned blockDim_y;
+
+		if (_param.state_size <= 128)
+		{
+			blockDim_y = 1;
+		}
+		else if (_param.state_size <= 512)
+		{
+			blockDim_y = 2;
+		}
+		else
+		{
+			blockDim_y = 4;
+		}
 
 		// !Important: Replay the forward pass computation.
-		_cuda_fused_mlp_att_scoring_func_forward < DType >
-			<<<
-				dim3(_param.seq_length,
-				     _param.batch_size),
-				_param.state_size,
-				_param.state_size * sizeof(DType),
-				Stream < gpu > ::GetStream(cuda_stream)
-			>>>
-			(
-				qry_hidden.dptr_,
-				src_hidden.dptr_,
-				ptr_att_hidden,
-				ptr_att_hidden_exp,
-				ptr_att_hidden_var,
-				_param.layer_norm
-			);
+		MLPAttScoringFuncForwardKernelContig < double, DType, int > <<<
+			dim3(_param.seq_length,
+			     _param.batch_size),
+			dim3(32, blockDim_y),
+			blockDim_y > 1 ?  blockDim_y      * 32 * sizeof(double) + 
+			                 (blockDim_y / 2) * 32 * sizeof(int)
+				       :  0,
+			Stream < gpu > ::GetStream(cuda_stream)
+			>>> (
+			_param.batch_size * _param.state_size,
+			_param.state_size,
+			_param.layer_norm,
+			_param.eps,
+			src_hidden.dptr_,
+			qry_hidden.dptr_,
+			ptr_att_hidden_ws,
+			ptr_gamma,
+			ptr_beta,
+			ptr_att_hidden,
+			ptr_att_hidden_mean,
+			ptr_att_hidden_std);
 
 		CHECK_EQ(cuda_stream->blas_handle_ownership_, Stream < gpu > ::OwnHandle) << 
 			"Must initialize the cuBLAS handle in CUDA stream.";

@@ -13,7 +13,7 @@ namespace mxnet {
 enum class EnumOpInputs    { QryHidden, SrcHidden, 
                              H2SWeight, 
 			     Gamma, Beta };
-enum class EnumOpOutputs   { AttScores, AttHiddenMean, AttHiddenSTD };
+enum class EnumOpOutputs   { AttScores };
 enum class EnumOpWorkspace { TempSpace };
 
 		} // namespace 
@@ -21,7 +21,7 @@ enum class EnumOpWorkspace { TempSpace };
 struct MLPAttScoringFuncParam : public dmlc::Parameter < MLPAttScoringFuncParam >
 {
 	unsigned batch_size, seq_length, state_size;
-	bool layer_norm; float eps
+	bool layer_norm; float eps;
 
 	DMLC_DECLARE_PARAMETER(MLPAttScoringFuncParam)
 	{
@@ -89,11 +89,12 @@ public:
 	}
 	std::vector < std::string > ListOutputs  () const override 
 	{
-		if (_param.layer_norm)
-			return { "att_scores", "att_hidden_mean",
-			               	       "att_hidden_std" };
-		else
-			return { "att_scores" };
+		// if (_param.layer_norm)
+		// 	return { "att_scores", "att_hidden_mean",
+		// 	               	       "att_hidden_std" };
+		// else
+		// 	return { "att_scores" };
+		return { "att_scores" };
 
 	}
 	int NumVisibleOutputs() const override 
@@ -146,11 +147,11 @@ public:
 		att_scores_shape[2] = 1; // [batch_size x seq_length x 1]
 		
 		out_shape->push_back(att_scores_shape); // att_scores
-		if (_param.layer_norm)
-		{
-			out_shape->push_back(Shape1(state_size)); // att_hidden_mean
-			out_shape->push_back(Shape1(state_size)); // att_hidden_std
-		}
+		// if (_param.layer_norm)
+		// {
+		// 	out_shape->push_back(Shape1(state_size)); // att_hidden_mean
+		// 	out_shape->push_back(Shape1(state_size)); // att_hidden_std
+		// }
 
 		return true;
 	}
@@ -181,11 +182,11 @@ public:
 		out_type->clear();
 
 		out_type->push_back(src_hidden_type); // att_scores
-		if (_param.layer_norm)
-		{
-			out_shape->push_back(src_hidden_type); // att_hidden_mean
-			out_shape->push_back(src_hidden_type); // att_hidden_std
-		}
+		// if (_param.layer_norm)
+		// {
+		// 	out_shape->push_back(src_hidden_type); // att_hidden_mean
+		// 	out_shape->push_back(src_hidden_type); // att_hidden_std
+		// }
 		
 		return true;
 	}
