@@ -12,6 +12,10 @@ class CULayerNormOp : public Operator
 private:
         LayerNormParam _param;
         bool _initialized = false;
+        dim3 _part_grad_block_dim, 
+             _part_grad_grid_dim, 
+             _gb_block_dim, _gb_grid_dim;
+        int _npart;
 public:
         explicit CULayerNormOp(LayerNormParam param)
         {
@@ -29,6 +33,13 @@ private:
                 _param.state_size = in_data[int(EnumOpInputs::Data)].shape_
                                            [in_data[int(EnumOpInputs::Data)].shape_.ndim() - 1];
                 _param.batch_size = in_data[int(EnumOpInputs::Data)].shape_.Size() / _param.state_size;
+
+                GetGammaBetaGradKernelParams(_param.batch_size,
+                        _param.state_size,
+                        &_part_grad_block_dim,
+                        &_part_grad_grid_dim,
+                        &_gb_block_dim,
+                        &_gb_grid_dim, &_npart);
 
                 _initialized = true;
         }
@@ -82,23 +93,26 @@ public:
                         blockDim_y = 4;
                 }
 
-                LayerNormFusedForwardKernelContig < double, DType, int > <<<
-                        _param.batch_size,
-                        dim3(32, blockDim_y),
-                        blockDim_y > 1 ?  blockDim_y      * 32 * sizeof(double) + 
-                                         (blockDim_y / 2) * 32 * sizeof(int) 
-                                       :  0,
-                        Stream < gpu > ::GetStream(cuda_stream)
-                        >>> (
-                        _param.batch_size,
-                        _param.state_size,
-                        _param.eps,
-                        data  .dptr < DType > (),
-                        gamma .dptr < DType > (),
-                        beta  .dptr < DType > (),
-                        output.dptr < DType > (),
-                        mean  .dptr < DType > (),
-                        std   .dptr < DType > ());
+                LayerNormFusedForwardKernelContig < double, DType, int > 
+                        <<<
+                                _param.batch_size,
+                                dim3(32, blockDim_y),
+                                blockDim_y > 1 ?  blockDim_y      * 32 * sizeof(double) + 
+                                                 (blockDim_y / 2) * 32 * sizeof(int) 
+                                               :  0,
+                                Stream < gpu > ::GetStream(cuda_stream)
+                        >>> 
+                        (
+                                _param.batch_size,
+                                _param.state_size,
+                                _param.eps,
+                                data  .dptr < DType > (),
+                                gamma .dptr < DType > (),
+                                beta  .dptr < DType > (),
+                                output.dptr < DType > (),
+                                mean  .dptr < DType > (),
+                                std   .dptr < DType > ()
+                        );
         }
         virtual void Backward(const OpContext & ctx,
                               const std::vector < TBlob > & out_grad,
@@ -146,104 +160,108 @@ public:
                 CHECK_NE(gamma_grad_req, kWriteInplace);
                 CHECK_NE(beta_grad_req,  kWriteInplace);
 
-                dim3 part_grad_block_dim, 
-                     part_grad_grid_dim, 
-                     gb_block_dim, gb_grid_dim;
-                int npart;
-
-                GetGammaBetaGradKernelParams(_param.batch_size,
-                                             _param.state_size,
-                                             &part_grad_block_dim,
-                                             &part_grad_grid_dim,
-                                             &gb_block_dim,
-                                             &gb_grid_dim, &npart);
                 Tensor < gpu, 1, double > workspace = ctx.requested[0]
                         .get_space_typed < gpu, 1, double > (
-                                Shape1(2 * npart * _param.state_size), cuda_stream);
+                                Shape1(2 * _npart * _param.state_size), cuda_stream);
                 double * part_gamma_grad_ptr = workspace.dptr_;
-                double * part_beta_grad_ptr  = workspace.dptr_ + npart * _param.state_size;
+                double * part_beta_grad_ptr  = workspace.dptr_ + _npart * _param.state_size;
 
-                const int nshared_K1 = 2 * (part_grad_block_dim.x + 1) * 
-                                            part_grad_block_dim.y * sizeof(double);
-                const int nshared_K2 = 2 * gb_block_dim.x * gb_block_dim.y * sizeof(double);
+                const int nshared_K1 = 2 * (_part_grad_block_dim.x + 1) * 
+                                            _part_grad_block_dim.y * sizeof(double);
+                const int nshared_K2 = 2 * _gb_block_dim.x * _gb_block_dim.y * sizeof(double);
                 
-                LayerNormFusedBackwardKernel_PartGammaBeta <<<
-                        part_grad_grid_dim,
-                        part_grad_block_dim,
-                        nshared_K1,
-                        Stream < gpu > ::GetStream(cuda_stream)
-                        >>> (
-                        _param.batch_size,
-                        _param.state_size,
-                        data       .dptr < DType > (),
-                        output_grad.dptr < DType > (),
-                        mean       .dptr < DType > (),
-                        std        .dptr < DType > (),
-                        part_gamma_grad_ptr,
-                        part_beta_grad_ptr);
-                if (gamma_grad_req == kAddTo && beta_grad_req != kAddTo)
-                {
-                        LayerNormFusedBackwardKernel_GammaBeta < true, false > <<<
-                                gb_grid_dim,
-                                gb_block_dim, 
-                                nshared_K2, 
-                                Stream < gpu > ::GetStream(cuda_stream) 
-                                >>> (
+                LayerNormFusedBackwardKernel_PartGammaBeta 
+                        <<<
+                                _part_grad_grid_dim,
+                                _part_grad_block_dim,
+                                nshared_K1,
+                                Stream < gpu > ::GetStream(cuda_stream)
+                        >>> 
+                        (
                                 _param.batch_size,
                                 _param.state_size,
-                                npart,
+                                data       .dptr < DType > (),
+                                output_grad.dptr < DType > (),
+                                mean       .dptr < DType > (),
+                                std        .dptr < DType > (),
                                 part_gamma_grad_ptr,
-                                part_beta_grad_ptr,
-                                gamma_grad.dptr < DType > (), 
-                                beta_grad .dptr < DType > ());
+                                part_beta_grad_ptr
+                        );
+                if (gamma_grad_req == kAddTo && beta_grad_req != kAddTo)
+                {
+                        LayerNormFusedBackwardKernel_GammaBeta < true, false > 
+                                <<<
+                                        _gb_grid_dim,
+                                        _gb_block_dim, 
+                                        nshared_K2, 
+                                        Stream < gpu > ::GetStream(cuda_stream) 
+                                >>> 
+                                (
+                                        _param.batch_size,
+                                        _param.state_size,
+                                        _npart,
+                                        part_gamma_grad_ptr,
+                                        part_beta_grad_ptr,
+                                        gamma_grad.dptr < DType > (), 
+                                        beta_grad .dptr < DType > ()
+                                );
                 }
                 else if (gamma_grad_req != kAddTo && beta_grad_req == kAddTo)
                 {
-                        LayerNormFusedBackwardKernel_GammaBeta < false, true > <<<
-                                gb_grid_dim,
-                                gb_block_dim, 
-                                nshared_K2, 
-                                Stream < gpu > ::GetStream(cuda_stream) 
-                                >>> (
-                                _param.batch_size,
-                                _param.state_size,
-                                npart,
-                                part_gamma_grad_ptr,
-                                part_beta_grad_ptr,
-                                gamma_grad.dptr < DType > (), 
-                                beta_grad .dptr < DType > ());
+                        LayerNormFusedBackwardKernel_GammaBeta < false, true > 
+                                <<<
+                                        _gb_grid_dim,
+                                        _gb_block_dim, 
+                                        nshared_K2, 
+                                        Stream < gpu > ::GetStream(cuda_stream) 
+                                >>> 
+                                (
+                                        _param.batch_size,
+                                        _param.state_size,
+                                        _npart,
+                                        part_gamma_grad_ptr,
+                                        part_beta_grad_ptr,
+                                        gamma_grad.dptr < DType > (), 
+                                        beta_grad .dptr < DType > ()
+                                );
                 }
                 else if (gamma_grad_req == kAddTo && beta_grad_req == kAddTo)
                 {
-                        LayerNormFusedBackwardKernel_GammaBeta < true, true > <<<
-                                gb_grid_dim,
-                                gb_block_dim, 
-                                nshared_K2, 
-                                Stream < gpu > ::GetStream(cuda_stream) 
-                                >>> (
-                                _param.batch_size,
-                                _param.state_size,
-                                npart,
-                                part_gamma_grad_ptr,
-                                part_beta_grad_ptr,
-                                gamma_grad.dptr < DType > (), 
-                                beta_grad .dptr < DType > ());
+                        LayerNormFusedBackwardKernel_GammaBeta < true, true > 
+                                <<<
+                                        _gb_grid_dim,
+                                        _gb_block_dim, 
+                                        nshared_K2, 
+                                        Stream < gpu > ::GetStream(cuda_stream) 
+                                >>> 
+                                (
+                                        _param.batch_size,
+                                        _param.state_size,
+                                        _npart,
+                                        part_gamma_grad_ptr,
+                                        part_beta_grad_ptr,
+                                        gamma_grad.dptr < DType > (), 
+                                        beta_grad .dptr < DType > ()
+                                );
                 }
                 else
                 {
-                        LayerNormFusedBackwardKernel_GammaBeta < false, false > <<<
-                                gb_grid_dim,
-                                gb_block_dim, 
-                                nshared_K2, 
-                                Stream < gpu > ::GetStream(cuda_stream) 
-                                >>> (
-                                _param.batch_size,
-                                _param.state_size,
-                                npart,
-                                part_gamma_grad_ptr,
-                                part_beta_grad_ptr,
-                                gamma_grad.dptr < DType > (), 
-                                beta_grad .dptr < DType > ());
+                        LayerNormFusedBackwardKernel_GammaBeta < false, false > 
+                                <<<
+                                        _gb_grid_dim,
+                                        _gb_block_dim, 
+                                        nshared_K2, 
+                                        Stream < gpu > ::GetStream(cuda_stream) 
+                                >>> 
+                                (
+                                        _param.batch_size,
+                                        _param.state_size,
+                                        _npart,
+                                        part_gamma_grad_ptr,
+                                        part_beta_grad_ptr,
+                                        gamma_grad.dptr < DType > (), 
+                                        beta_grad .dptr < DType > ()
+                                );
                 }
 
                 unsigned blockDim_y;
@@ -267,35 +285,43 @@ public:
 
                 if (data_grad_req == kAddTo)
                 {
-                        LayerNormFusedBackwardKernel_Data < 4, true, double > <<< 
-                                _param.batch_size,
-                                dim3(32, blockDim_y),
-                                blockDim_y > 1 ? blockDim_y * 32 * sizeof(double) : 0,
-                                Stream < gpu > ::GetStream(cuda_stream) >>> (
-                                _param.batch_size,
-                                _param.state_size,
-                                data.dptr < DType > (),
-                                output_grad.dptr < DType > (),
-                                mean       .dptr < DType > (),
-                                std        .dptr < DType > (),
-                                gamma      .dptr < DType > (),
-                                data_grad  .dptr < DType > ());
+                        LayerNormFusedBackwardKernel_Data < 4, true, double > 
+                                <<< 
+                                        _param.batch_size,
+                                        dim3(32, blockDim_y),
+                                        blockDim_y > 1 ? blockDim_y * 32 * sizeof(double) : 0,
+                                        Stream < gpu > ::GetStream(cuda_stream) 
+                                >>> 
+                                (
+                                        _param.batch_size,
+                                        _param.state_size,
+                                        data.dptr < DType > (),
+                                        output_grad.dptr < DType > (),
+                                        mean       .dptr < DType > (),
+                                        std        .dptr < DType > (),
+                                        gamma      .dptr < DType > (),
+                                        data_grad  .dptr < DType > ()
+                                );
                 }
                 else
                 {
-                        LayerNormFusedBackwardKernel_Data < 4, false, double > <<< 
-                                _param.batch_size,
-                                dim3(32, blockDim_y),
-                                blockDim_y > 1 ? blockDim_y * 32 * sizeof(double) : 0,
-                                Stream < gpu > ::GetStream(cuda_stream) >>> (
-                                _param.batch_size,
-                                _param.state_size,
-                                data.dptr < DType > (),
-                                output_grad.dptr < DType > (),
-                                mean       .dptr < DType > (),
-                                std        .dptr < DType > (),
-                                gamma      .dptr < DType > (),
-                                data_grad  .dptr < DType > ());
+                        LayerNormFusedBackwardKernel_Data < 4, false, double > 
+                                <<< 
+                                        _param.batch_size,
+                                        dim3(32, blockDim_y),
+                                        blockDim_y > 1 ? blockDim_y * 32 * sizeof(double) : 0,
+                                        Stream < gpu > ::GetStream(cuda_stream) 
+                                >>> 
+                                (
+                                        _param.batch_size,
+                                        _param.state_size,
+                                        data.dptr < DType > (),
+                                        output_grad.dptr < DType > (),
+                                        mean       .dptr < DType > (),
+                                        std        .dptr < DType > (),
+                                        gamma      .dptr < DType > (),
+                                        data_grad  .dptr < DType > ()
+                                );
                 }
         }
 };
