@@ -374,6 +374,7 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     if (type == "Reshape")            return false;
     if (type == "SwapAxis")           return false;
     if (type == "tile")               return false;
+    if (type == "transpose")          return false;
     if (type == "SliceChannel")       return false;
 
     if (type == "softmax")            return false;
@@ -382,7 +383,7 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     if (type == "BatchNorm")          return false;
     if (type == "CuDNNBatchNorm")     return false;
 
-    // We need the mirroring to stop when the a cell state of an LSTM cell is encountered.
+    // We need the mirroring to stop when the cell state of an LSTM cell is encountered.
     // The reason is because unlike input and hidden states that are blocked
     //   by the input-to-hidden and hidden-to-hidden connections,
     //   the cell states do not need to go through a fully-connected layer 
@@ -395,7 +396,7 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
       return false;
     }
     // Ditto
-    if (type == "LSTMNonLinBlock" && mirror_depth > 0){
+    if (type == "LSTMNonLinBlock" && mirror_depth > 0) {
       return false;
     }
 
