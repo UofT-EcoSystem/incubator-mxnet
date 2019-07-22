@@ -91,6 +91,19 @@ inline void EmplaceBackZeros(const NDArrayStorageType stype, const TShape &shape
                            , const std::string & name = DEFAULT_MEMORY_TAG("unknown")
 #endif // MXNET_USE_MEMORY_PROFILER
                              ) {
+  // LOG(INFO) << "Inferred StorageType (EmplaceBackZeros): " << int(stype);
+  // const int MAX_STACK_SIZE = 2;
+  // void * stack [MAX_STACK_SIZE];
+
+  // int nframes = backtrace(stack, MAX_STACK_SIZE);
+  // // _ferr << "\n\n" << "Stack trace returned " << nframes << " entries:" << std::endl;
+  // char ** msgs = backtrace_symbols(stack, nframes);
+  // if (msgs != nullptr) {
+  //   for (int i = 0; i < nframes; ++i) {
+  //     LOG(INFO) << "[bt] (" << i << ") " << msgs[i];
+  //   }
+  // }
+
   // NDArray with default storage
   if (stype == kDefaultStorage) {
     vec->emplace_back(shape, ctx, false, dtype
@@ -389,23 +402,6 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
   }
   if (!need_grad) return g;
 
-  std::cout << "Graph Attributes: " << std::endl;
-  for (const auto& attr : g.attrs) {
-    std::cout << "\t" << attr.first << std::endl;
-  }
-
-  // g = InferShape(std::move(g), std::move(in_arg_shapes), "__shape__");
-  // if (g.GetAttr<size_t>("shape_num_unknown_nodes") != 0U) {
-  //   HandleInferShapeError(num_forward_inputs_, g.indexed_graph(),
-  //                         g.GetAttr<nnvm::ShapeVector>("shape"));
-  // }
-
-  // g = InferType(std::move(g), std::move(in_arg_dtypes), "__dtype__");
-  // if (g.GetAttr<size_t>("dtype_num_unknown_nodes") != 0U) {
-  //   HandleInferTypeError(num_forward_inputs_, g.indexed_graph(),
-  //                        g.GetAttr<nnvm::DTypeVector>("dtype"));
-  // }
-
   for (size_t i = 0; i < g.outputs.size(); ++i) {
     NodeEntry ngrad{nnvm::Node::Create(), 0, 0};
     head_grad_entry_.emplace_back(AttrHint(ngrad, g.outputs[i]));
@@ -497,6 +493,28 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
   zero_ops.push_back(nnvm::Op::Get("zeros_like"));
   zero_ops.push_back(nnvm::Op::Get("_zeros"));
 
+  // LOG(INFO) << "InArg Size  : " << in_arg_shapes.size();
+  // LOG(INFO) << "InArg DType : " << in_arg_dtypes.size();
+
+  LOG(INFO) << "Graph Attributes: ";
+  for (const auto& attr : g.attrs) {
+    LOG(INFO) << "\t" << attr.first;
+  }
+
+  g = InferShape(std::move(g), std::move(in_arg_shapes), "__shape__");
+  if (g.GetAttr<size_t>("shape_num_unknown_nodes") != 0U) {
+    HandleInferShapeError(num_forward_inputs_, g.indexed_graph(),
+                          g.GetAttr<nnvm::ShapeVector>("shape"));
+  }
+
+  g = InferType(std::move(g), std::move(in_arg_dtypes), "__dtype__");
+  if (g.GetAttr<size_t>("dtype_num_unknown_nodes") != 0U) {
+    HandleInferTypeError(num_forward_inputs_, g.indexed_graph(),
+                         g.GetAttr<nnvm::DTypeVector>("dtype"));
+  }
+
+  LOG(INFO) << "g.outputs.size  (pre-Gradient) : " << g.outputs.size();
+
   // take gradient
   nnvm::Graph g_grad = nnvm::pass::Gradient(
       g, symbol.outputs, xs, head_grad_entry_,
@@ -507,9 +525,13 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     g.outputs.push_back(e);
   }
 
-  // g.attrs.erase("shape");
+  LOG(INFO) << "g.outputs.size (post-Gradient) : " << g.outputs.size(); 
+  LOG(INFO) << "xs.size : " << xs.size();
+  LOG(INFO) << "g_grad.outputs.size : " << g_grad.outputs.size();
+
+  g.attrs.erase("shape");
   // g.attrs.erase("shape_num_unknown_nodes");
-  // g.attrs.erase("dtype");
+  g.attrs.erase("dtype");
   // g.attrs.erase("dtype_num_unknown_nodes");
 
   return g;
@@ -675,8 +697,9 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
          mirrored_aux_top = 0;
   nnvm::ShapeVector mirrored_arg_shapes;
   nnvm::DTypeVector mirrored_arg_dtypes;
+  const size_t mirrored_num_forward_inputs = symbol.ListInputs(nnvm::Symbol::kAll).size();
 
-  for (size_t i = 0; i < num_forward_inputs_; ++i) {
+  for (size_t i = 0; i < mirrored_num_forward_inputs; ++i) {
     const uint32_t nid = mirrored_idx.input_nodes().at(i);
 
     if (mirrored_mutable_nodes.count(nid)) {
@@ -743,9 +766,9 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
     }
   }
 
-  std::cout << "Graph Attributes: " << std::endl;
+  LOG(INFO) << "Graph Attributes: ";
   for (const auto& attr : g.attrs) {
-    std::cout << "\t" << attr.first << std::endl;
+    LOG(INFO) << "\t" << attr.first;
   }
 
   // expand arg_shapes and arg_dtypes to contain backward inputs
@@ -935,6 +958,9 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
     const TShape& inferred_shape = inferred_shapes[eid];
     const int inferred_dtype = inferred_dtypes[eid];
     const NDArrayStorageType inferred_stype = (NDArrayStorageType) inferred_stypes[eid];
+
+    LOG(INFO) << "Inferred StorageType: " << int(inferred_stypes[eid]);
+
     const std::string& arg_name = idx[nid].source->attrs.name;
     // aux_states
     if (mutable_nodes.count(nid)) {
@@ -997,6 +1023,17 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
           auto grad_oid = grad_store_.size() + num_forward_outputs_;
           auto grad_eid = idx.entry_id(idx.outputs()[grad_oid]);
           auto grad_stype = (NDArrayStorageType) inferred_stypes[grad_eid];
+
+          LOG(INFO) << "Inferred StorageType (Gradient): " << int(grad_stype);
+          LOG(INFO) << "Inferred StorageType Size: "
+                    << inferred_stypes.size();
+          LOG(INFO) << "Gradient Entry OID: " << grad_oid;
+          LOG(INFO) << "Gradient Entry EID: " << grad_eid;
+          LOG(INFO) << "# of IndexedGraph Outputs: "
+                    << idx.outputs().size();
+          LOG(INFO) << "# of IndexedGraph NodeEntries: " 
+                    << idx.num_node_entries();
+
           if (nullptr != shared_exec && grad_stype == kDefaultStorage &&
               shared_exec->arg_grad_map().at(arg_name).storage_type() == kDefaultStorage) {
             // try to reuse memory from shared_exec
@@ -1140,8 +1177,9 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
       mirrored_g.indexed_graph();
   nnvm::ShapeVector mirrored_arg_shapes(mirrored_idx.input_nodes().size(), TShape());
   nnvm::DTypeVector mirrored_arg_dtypes(mirrored_idx.input_nodes().size(), -1);
+  const size_t mirrored_num_forward_inputs = symbol.ListInputs(nnvm::Symbol::kAll).size();
 
-  for (size_t i = 0; i < num_forward_inputs_; ++i) {
+  for (size_t i = 0; i < mirrored_num_forward_inputs; ++i) {
     const uint32_t nid = mirrored_idx.input_nodes().at(i);
     const std::string& name = 
         mirrored_idx[nid].source->attrs.name;
@@ -1160,6 +1198,7 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
   nnvm::Graph g = InitGraph(symbol, default_ctx, ctx_map, in_arg_ctxes,
                             arg_grad_ctxes, aux_state_ctxes, grad_req_types,
                             std::move(mirrored_arg_shapes), std::move(mirrored_arg_dtypes));
+  LOG(INFO) << "g.outputs.size (post-InitGraph) : " << g.outputs.size();
   // The following code of shape and dtype inferences and argument
   // initialization is for simple_bind only. Regular bind operation
   // should do this differently.
@@ -1187,10 +1226,12 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
     }
   }
 
-  std::cout << "Graph Attributes: " << std::endl;
+  LOG(INFO) << "Graph Attributes: ";
   for (const auto& attr : g.attrs) {
-    std::cout << "\t" << attr.first << std::endl;
+    LOG(INFO) << "\t" << attr.first;
   }
+
+  LOG(INFO) << "g.outputs.size  (pre-Inference) : " << g.outputs.size();
 
   g = InferShape(std::move(g), std::move(arg_shapes), "__shape__");
   if (g.GetAttr<size_t>("shape_num_unknown_nodes") != 0U) {
@@ -1209,6 +1250,8 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
     HandleInferStorageTypeError(num_forward_inputs_, g.indexed_graph(),
                                 g.GetAttr<StorageTypeVector>("storage_type"));
   }
+
+  LOG(INFO) << "g.outputs.size (post-Inference) : " << g.outputs.size();
 
   // Create in_args, arg_grads, and aux_states using
   // the inferred shapes and dtypes.
