@@ -636,6 +636,37 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
   std::vector<Context> aux_state_ctxes(aux_states.size());
   std::transform(aux_states.begin(), aux_states.end(), aux_state_ctxes.begin(), get_ctx1);
 
+  // CHANGE(BackwardMirroring) 
+  // mirror the inference process below to obtain 
+  //   the shapes and dtypes of the inputs
+  // Such information is needed by the backward mirroring pass.
+  nnvm::Graph mirrored_g; mirrored_g.outputs = symbol.outputs;
+  const nnvm::IndexedGraph& mirrored_idx = 
+      mirrored_g.indexed_graph();
+  const std::unordered_set<uint32_t>& mirrored_mutable_nodes = 
+      mirrored_idx.mutable_input_nodes();
+  size_t mirrored_arg_top = 0, 
+         mirrored_aux_top = 0;
+  nnvm::ShapeVector mirrored_arg_shapes;
+  nnvm::DTypeVector mirrored_arg_dtypes;
+
+  for (size_t i = 0; i < num_forward_inputs_; ++i) {
+    const uint32_t nid = mirrored_idx.input_nodes().at(i);
+
+    if (mirrored_mutable_nodes.count(nid)) {
+      CHECK_LT(mirrored_aux_top, aux_states.size());
+      mirrored_arg_shapes.push_back(aux_states[mirrored_aux_top].shape());
+      mirrored_arg_dtypes.push_back(aux_states[mirrored_aux_top].dtype());
+      ++mirrored_aux_top;
+    } else {
+      CHECK_LT(mirrored_arg_top, in_args.size());
+      mirrored_arg_shapes.push_back(in_args[mirrored_arg_top].shape());
+      mirrored_arg_shapes.push_back(in_args[mirrored_arg_top].dtype());
+      ++mirrored_arg_top;
+    }
+  }
+
+  // CHANGE(BackwardMirroring) Pass the mirrored `in_arg_shape/dtype` to the `InitGraph`.
   nnvm::Graph g = InitGraph(symbol, default_ctx, ctx_map, in_arg_ctxes,
                             arg_grad_ctxes, aux_state_ctxes, grad_req_types);
 
@@ -779,8 +810,7 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
         EmplaceBackZeros(grad_stype, inferred_shape, arg_grad_ctxes[arg_top],
                          inferred_dtype, arg_grad_vec
 #if MXNET_USE_MEMORY_PROFILER
-                       , 
-                       "arg_grad" + arg_name                 
+                       , "arg_grad" + arg_name                 
 #endif // MXNET_USE_MEMORY_PROFILER
                          );
         if (log_verbose_) {
