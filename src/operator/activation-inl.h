@@ -161,7 +161,11 @@ class ActivationProp : public OperatorProperty {
     const std::vector<int> &in_data,
     const std::vector<int> &out_data) const override {
 #if MXNET_USE_CUDNN == 1
-    return {out_grad[activation::kOut], out_data[activation::kOut], in_data[activation::kData]};
+    if (dmlc::GetEnv("USE_CUDNN_ACTIVATION", 0) == 1) {
+      return {out_grad[activation::kOut], out_data[activation::kOut], in_data[activation::kData]};
+    } else {
+      return {out_grad[activation::kOut], out_data[activation::kOut]};
+    }
 #else
     return {out_grad[activation::kOut], out_data[activation::kOut]};
 #endif  // MXNET_USE_CUDNN

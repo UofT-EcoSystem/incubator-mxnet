@@ -30,6 +30,9 @@
 
 namespace mxnet {
 namespace op {
+
+static bool logged_non_cudnn_activation = false;
+
 template<>
 Operator *CreateOp<gpu>(ActivationParam param, int dtype, const TShape& dshape) {
   Operator *op = NULL;
@@ -42,9 +45,34 @@ Operator *CreateOp<gpu>(ActivationParam param, int dtype, const TShape& dshape) 
   }
 
 #if MXNET_USE_CUDNN == 1
-  MSHADOW_REAL_TYPE_SWITCH(dtype, DType, {
-    op = new CuDNNActivationOp<DType>(param);
-  })
+  if (dmlc::GetEnv("USE_CUDNN_ACTIVATION", 0) == 1) {
+    MSHADOW_REAL_TYPE_SWITCH(dtype, DType, {
+      op = new CuDNNActivationOp<DType>(param);
+    })
+  } else {
+    MSHADOW_REAL_TYPE_SWITCH(dtype, DType, {
+      switch (param.act_type) {
+        case activation::kReLU:
+          op = new ActivationOp<gpu, mshadow_op::relu, mshadow_op::relu_grad, DType>();
+          break;
+        case activation::kSigmoid:
+          op = new ActivationOp<gpu, mshadow_op::sigmoid, mshadow_op::sigmoid_grad, DType>();
+          break;
+        case activation::kTanh:
+          op = new ActivationOp<gpu, mshadow_op::tanh, mshadow_op::tanh_grad, DType>();
+          break;
+        default:
+          LOG(FATAL) << "unknown activation";
+      }
+    })
+  }  // if (dmlc::GetEnv("USE_CUDNN_ACTIVATION", 0) == 1)
+  if (!logged_non_cudnn_activation) {
+    LOG(INFO) << "MXNet uses cuDNN activation? : "
+              << std::boolalpha
+              << bool(dmlc::GetEnv("USE_CUDNN_ACTIVATION", 0))
+              << std::noboolalpha;
+    logged_non_cudnn_activation = true;
+  }
 #else
   MSHADOW_REAL_TYPE_SWITCH(dtype, DType, {
     switch (param.act_type) {
