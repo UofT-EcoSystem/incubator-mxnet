@@ -712,7 +712,7 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
     } else {
       CHECK_LT(mirrored_arg_top, in_args.size());
       mirrored_arg_shapes.push_back(in_args[mirrored_arg_top].shape());
-      mirrored_arg_shapes.push_back(in_args[mirrored_arg_top].dtype());
+      mirrored_arg_dtypes.push_back(in_args[mirrored_arg_top].dtype());
       ++mirrored_arg_top;
     }
   }
