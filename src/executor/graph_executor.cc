@@ -386,8 +386,8 @@ inline ValueType get_node_attr(
  */
 nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
                                          const std::vector<OpReqType>& grad_req_types,
-                                         nnvm::ShapeVector&& in_arg_shapes,
-                                         nnvm::DTypeVector&& in_arg_dtypes) {
+                                         const nnvm::ShapeVector& in_arg_shapes,
+                                         const nnvm::DTypeVector& in_arg_dtypes) {
   using nnvm::NodePtr;
   using nnvm::NodeEntry;
   // initial information
@@ -521,7 +521,7 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
   nnvm::Graph g_grad = nnvm::pass::Gradient(
       g, symbol.outputs, xs, head_grad_entry_,
       AggregateGradient, need_mirror, nullptr,
-      zero_ops, "_copy");
+      zero_ops, "_copy", in_arg_shapes, in_arg_dtypes);
   CHECK_EQ(g_grad.outputs.size(), xs.size());
   for (const auto &e : g_grad.outputs) {
     g.outputs.push_back(e);
@@ -718,9 +718,9 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
   }
 
   // CHANGE(BackwardMirroring) Pass the mirrored `in_arg_shape/dtype` to the `InitGraph`.
-  nnvm::Graph g = InitGraph(symbol, default_ctx, ctx_map, in_arg_ctxes,
-                            arg_grad_ctxes, aux_state_ctxes, grad_req_types,
-                            std::move(mirrored_arg_shapes), std::move(mirrored_arg_dtypes));
+  nnvm::Graph g = InitGraph(symbol, default_ctx, ctx_map,
+      in_arg_ctxes, arg_grad_ctxes, aux_state_ctxes,
+      grad_req_types, mirrored_arg_shapes, mirrored_arg_dtypes);
 
   // create arg_shapes and arg_dtypes for shape and type inferences
   const auto& idx = g.indexed_graph();
@@ -1197,9 +1197,9 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
     }
   }
 
-  nnvm::Graph g = InitGraph(symbol, default_ctx, ctx_map, in_arg_ctxes,
-                            arg_grad_ctxes, aux_state_ctxes, grad_req_types,
-                            std::move(mirrored_arg_shapes), std::move(mirrored_arg_dtypes));
+  nnvm::Graph g = InitGraph(symbol, default_ctx, ctx_map,
+      in_arg_ctxes, arg_grad_ctxes, aux_state_ctxes,
+      grad_req_types, mirrored_arg_shapes, mirrored_arg_dtypes);
   // LOG(INFO) << "g.outputs.size (post-InitGraph) : " << g.outputs.size();
   // The following code of shape and dtype inferences and argument
   // initialization is for simple_bind only. Regular bind operation
@@ -1295,12 +1295,11 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
                                const std::vector<Context>& arg_grad_ctxes,
                                const std::vector<Context>& aux_state_ctxes,
                                const std::vector<OpReqType>& grad_req_types,
-                               nnvm::ShapeVector&& in_arg_shapes,
-                               nnvm::DTypeVector&& in_arg_dtypes) {
+                               const nnvm::ShapeVector& in_arg_shapes,
+                               const nnvm::DTypeVector& in_arg_dtypes) {
   // setup gradient
   nnvm::Graph g = InitFullGraph(symbol, grad_req_types,
-                                std::move(in_arg_shapes),
-                                std::move(in_arg_dtypes));
+                                in_arg_shapes, in_arg_dtypes);
   // CHANGE(BackwardMirroring)
   // Propagate the shapes and dtypes information
   //   of input arguments to the gradient pass.
