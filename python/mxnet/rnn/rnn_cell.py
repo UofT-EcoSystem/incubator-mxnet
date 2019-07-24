@@ -465,7 +465,7 @@ class LSTMCell(BaseRNNCell):
             next_h, next_c = symbol.LSTMNonLinBlock(
                     input_plus_state_h=i2h+h2h, 
                     state_c=states[1],
-                    name='%s_nonlin_block'%name)
+                    name='%snonlin_block'%name)
             return next_h, [next_h, next_c]
         
         gates = i2h + h2h
