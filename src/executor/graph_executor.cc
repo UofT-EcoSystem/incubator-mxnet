@@ -475,17 +475,14 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     //   the cell states do not need to go through a fully-connected layer 
     //   and can be "infinitely" mirrored backward until the start of the sequence.
     // This will cause huge performance overhead, especially when the sequence length is long.
-    if (std::regex_match(node.attrs.name, std::regex("(.*)(state)"))) {
+    if ((std::regex_match(node.attrs.name, std::regex("(.*)(state)"))) || 
+        (type == "LSTMNonLinBlock" && mirror_depth > 0) || 
+        (type == "EcoLSTMCell")) {
       // LOG(INFO) << "Speculating that a cell state is reached @Node "
       //           << node.attrs.name << std::endl
       //           << "\t""Mirroring is forced to stop at depth " << mirror_depth << std::endl;
       return false;
     }
-    // Ditto
-    if (type == "LSTMNonLinBlock" && mirror_depth > 0) {
-      return false;
-    }
-
     return true;
   };
 
