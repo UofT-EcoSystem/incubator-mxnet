@@ -417,12 +417,17 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
 
   int do_mirror = dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR", 0);
   
-  std::function<bool(const nnvm::Node&, const unsigned)> need_mirror = [do_mirror](
-      const nnvm::Node& node,
-      const unsigned mirror_depth) -> bool {
-    if (node.is_variable()) return false;
-    const std::string& type = node.attrs.op->name;
-    if (get_node_attr(node, "__force_mirroring__", false)) return true;
+  std::function<bool(
+      const nnvm::NodePtr&, 
+      const nnvm::NodePtr&)> need_mirror = [do_mirror](
+      const nnvm::NodePtr& node,
+      const nnvm::NodePtr& parent_node) -> bool {
+    if (node->is_variable()) return false;
+    const std::string& type = node->attrs.op->name;
+    const std::string& parent_type = 
+        parent_node == nullptr ? "" : 
+        parent_node->attrs.op->name;
+    if (get_node_attr(*node, "__force_mirroring__", false)) return true;
     if (do_mirror == 0) return false;
     if (type == "Dropout")            return false;
     if (type == "Embedding")          return false;
@@ -447,9 +452,16 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     if (type == "FullyConnected") {
       const op::FullyConnectedProp* fc_prop = dynamic_cast<
           const op::FullyConnectedProp*>(
-          op::OpPropGetOpProperty(node.attrs));
+          op::OpPropGetOpProperty(node->attrs));
       std::map<std::string, std::string> fc_param = fc_prop->GetParams();
       if (fc_param["num_hidden"] == "1") {
+        return true;
+      }
+      if (parent_node == nullptr) {
+        // Fully-Connected layers of depth 0 shall be allowed.
+        // The reason is because they only request the input to compute the gradients
+        //   and hence even if we set the fully-connected layers
+        //   as part of the mirroring, the layers themselves will NOT be recomputed.
         return true;
       }
       return false;
@@ -475,8 +487,9 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     //   the cell states do not need to go through a fully-connected layer 
     //   and can be "infinitely" mirrored backward until the start of the sequence.
     // This will cause huge performance overhead, especially when the sequence length is long.
-    if ((std::regex_match(node.attrs.name, std::regex("(.*)(state)"))) || 
-        (type == "LSTMNonLinBlock" && mirror_depth > 0) || 
+    if ((std::regex_match(node->attrs.name, std::regex("(.*)(state)"))) || 
+        (type == "LSTMNonLinBlock" && 
+         parent_type == "LSTMNonLinBlock") || 
         (type == "EcoLSTMCell")) {
       // LOG(INFO) << "Speculating that a cell state is reached @Node "
       //           << node.attrs.name << std::endl
