@@ -415,6 +415,12 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     }
   }
 
+  using nnvm::Op;
+  using nnvm::OpMap;
+  using nnvm::FGradient;
+  // `grad_fun_map` maps the operator to gradient function
+  static const OpMap<FGradient>& grad_fun_map =
+      Op::GetAttr<FGradient>("FGradient");
   int do_mirror = dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR", 0);
   
   std::function<bool(
@@ -429,13 +435,12 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
         parent_node->attrs.op->name;
     if (get_node_attr(*node, "__force_mirroring__", false)) return true;
     if (do_mirror == 0) return false;
+
     if (type == "Dropout")            return false;
     if (type == "Embedding")          return false;
 
     if (type == "_zeros")             return false;
     if (type == "zeros_like")         return false;
-
-    if (type == "broadcast_not_equal") return false;
     
     if (type == "SequenceReverse")    return false;
     if (type == "SequenceLast")       return false;
@@ -446,26 +451,6 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     if (type == "sum")                return false;
     if (type == "EcoMean")            return false;
     if (type == "mean")               return false;
-
-    if (type == "Convolution")        return false;
-    if (type == "batch_dot")          return false;
-    if (type == "FullyConnected") {
-      const op::FullyConnectedProp* fc_prop = dynamic_cast<
-          const op::FullyConnectedProp*>(
-          op::OpPropGetOpProperty(node->attrs));
-      std::map<std::string, std::string> fc_param = fc_prop->GetParams();
-      if (fc_param["num_hidden"] == "1") {
-        return true;
-      }
-      if (parent_node == nullptr) {
-        // Fully-Connected layers of depth 0 shall be allowed.
-        // The reason is because they only request the input to compute the gradients
-        //   and hence even if we set the fully-connected layers
-        //   as part of the mirroring, the layers themselves will NOT be recomputed.
-        return true;
-      }
-      return false;
-    }
 
     if (type == "expand_dims")        return false;
     if (type == "Concat")             return false;
@@ -480,6 +465,64 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     
     if (type == "BatchNorm")          return false;
     if (type == "CuDNNBatchNorm")     return false;
+
+    if (parent_node == nullptr) {
+      if (grad_fun_map.count(node->op())) {
+        // create an empty vector of node entries and handle it to the operator
+        //   and if the returned inputs gradients depend ONLY on the 
+        std::vector<NodeEntry> input_grads = 
+            grad_fun_map[node->op()](
+              node, std::vector<NodeEntry>(
+                node->num_outputs(),
+                NodeEntry{nullptr, 0, 0}
+              )
+            );
+        bool is_dead_mirror_node = true;
+
+        for (const NodeEntry& input_grad : input_grads) {
+          const NodePtr& input_grad_node = 
+              input_grad.node;
+
+          if (input_grad_node == nullptr) {
+            continue;
+          }
+          for (const NodeEntry& e : input_grad_node->inputs) {
+            if (e.node == node) {
+              // the outputs of node are required to compute the gradients
+              is_dead_mirror_node = false;
+            }  // if (e.node == node)
+          }  // for (e ∈ input_grad_node->inputs)
+        }  // for (input_grad ∈ input_grads)
+        if (is_dead_mirror_node) {
+          // directly return true if the mirror node is dead
+          // The reason is because if the outputs of 
+          //   the mirror node are NOT taken,
+          //   its forward pass will also NOT be replayed
+          //   and hence the overhead can be safely neglected.
+          return true;
+        }  // if (is_dead_mirror_node)
+      }  // if (grad_fun_map.count(node->op()))
+    }  // if (parent_node == nullptr)
+
+    if (type == "Convolution")        return false;
+    if (type == "batch_dot")          return false;
+    if (type == "FullyConnected") {
+      const op::FullyConnectedProp* fc_prop = dynamic_cast<
+          const op::FullyConnectedProp*>(
+          op::OpPropGetOpProperty(node->attrs));
+      std::map<std::string, std::string> fc_param = fc_prop->GetParams();
+      if (fc_param["num_hidden"] == "1") {
+        return true;
+      }
+      // if (parent_node == nullptr) {
+      //   // Fully-Connected layers of depth 0 shall be allowed.
+      //   // The reason is because they only request the input to compute the gradients
+      //   //   and hence even if we set the fully-connected layers
+      //   //   as part of the mirroring, the layers themselves will NOT be recomputed.
+      //   return true;
+      // }
+      return false;
+    }
 
     // We need the mirroring to stop when the cell state of an LSTM cell is encountered.
     // The reason is because unlike input and hidden states that are blocked
