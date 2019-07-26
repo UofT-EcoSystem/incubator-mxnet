@@ -466,6 +466,7 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     if (type == "BatchNorm")          return false;
     if (type == "CuDNNBatchNorm")     return false;
 
+    /*
     if (parent_node == nullptr) {
       if (grad_fun_map.count(node->op())) {
         // create an empty vector of node entries and handle it to the operator
@@ -503,9 +504,20 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
         }  // if (is_dead_mirror_node)
       }  // if (grad_fun_map.count(node->op()))
     }  // if (parent_node == nullptr)
+     */
 
-    if (type == "Convolution")        return false;
-    if (type == "batch_dot")          return false;
+    if (type == "Convolution") {
+      if (parent_node == nullptr) {
+        return true;
+      }
+      return false;
+    }
+    if (type == "batch_dot") {
+      if (parent_node == nullptr) {
+        return true;
+      }
+      return false;
+    }
     if (type == "FullyConnected") {
       const op::FullyConnectedProp* fc_prop = dynamic_cast<
           const op::FullyConnectedProp*>(
@@ -514,13 +526,13 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
       if (fc_param["num_hidden"] == "1") {
         return true;
       }
-      // if (parent_node == nullptr) {
-      //   // Fully-Connected layers of depth 0 shall be allowed.
-      //   // The reason is because they only request the input to compute the gradients
-      //   //   and hence even if we set the fully-connected layers
-      //   //   as part of the mirroring, the layers themselves will NOT be recomputed.
-      //   return true;
-      // }
+      if (parent_node == nullptr) {
+        // Fully-Connected layers of depth 0 shall be allowed.
+        // The reason is because they only request the input to compute the gradients
+        //   and hence even if we set the fully-connected layers
+        //   as part of the mirroring, the layers themselves will NOT be recomputed.
+        return true;
+      }
       return false;
     }
 
