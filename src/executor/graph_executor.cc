@@ -436,6 +436,16 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     if (get_node_attr(*node, "__force_mirroring__", false)) return true;
     if (do_mirror == 0) return false;
 
+#if BASELINE_BACKWARD_MIRRORING
+    if (type == "Dropout") return false;
+    if (type == "Convolution") return false;
+    if (type == "FullyConnected") return false;
+    if (type == "Concat") return false;
+    if (type == "SoftmaxOutput") return false;
+    if (type == "BatchNorm") return false;
+    if (type == "CuDNNBatchNorm") return false;
+    return true;
+#else 
     if (type == "Dropout")            return false;
     if (type == "Embedding")          return false;
 
@@ -550,6 +560,7 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
       return false;
     }
     return true;
+#endif  // BASELINE_BACKWARD_MIRRORING
   };
 
   std::vector<const nnvm::Op*> zero_ops;
@@ -1055,16 +1066,6 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
           auto grad_oid = grad_store_.size() + num_forward_outputs_;
           auto grad_eid = idx.entry_id(idx.outputs()[grad_oid]);
           auto grad_stype = (NDArrayStorageType) inferred_stypes[grad_eid];
-
-          // LOG(INFO) << "Inferred StorageType (Gradient): " << int(grad_stype);
-          // LOG(INFO) << "Inferred StorageType Size: "
-          //           << inferred_stypes.size();
-          // LOG(INFO) << "Gradient Entry OID: " << grad_oid;
-          // LOG(INFO) << "Gradient Entry EID: " << grad_eid;
-          // LOG(INFO) << "# of IndexedGraph Outputs: "
-          //           << idx.outputs().size();
-          // LOG(INFO) << "# of IndexedGraph NodeEntries: " 
-          //           << idx.num_node_entries();
 
           if (nullptr != shared_exec && grad_stype == kDefaultStorage &&
               shared_exec->arg_grad_map().at(arg_name).storage_type() == kDefaultStorage) {
