@@ -556,30 +556,6 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
   zero_ops.push_back(nnvm::Op::Get("zeros_like"));
   zero_ops.push_back(nnvm::Op::Get("_zeros"));
 
-  // LOG(INFO) << "InArg Size  : " << in_arg_shapes.size();
-  // LOG(INFO) << "InArg DType : " << in_arg_dtypes.size();
-
-  // LOG(INFO) << "Graph Attributes: ";
-  // for (const auto& attr : g.attrs) {
-  //   LOG(INFO) << "\t" << attr.first;
-  // }
-
-  // g = InferShape(std::move(g), std::move(in_arg_shapes), "__shape__");
-  // if (g.GetAttr<size_t>("shape_num_unknown_nodes") != 0U) {
-  //   HandleInferShapeError(num_forward_inputs_, g.indexed_graph(),
-  //                         g.GetAttr<nnvm::ShapeVector>("shape"));
-  // }
-
-  // g = InferType(std::move(g), std::move(in_arg_dtypes), "__dtype__");
-  // if (g.GetAttr<size_t>("dtype_num_unknown_nodes") != 0U) {
-  //   HandleInferTypeError(num_forward_inputs_, g.indexed_graph(),
-  //                        g.GetAttr<nnvm::DTypeVector>("dtype"));
-  // }
-  // g = nnvm::pass::InferShape(g, in_arg_shapes, "__shape__");
-  // g = nnvm::pass::InferType (g, in_arg_dtypes, "__dtype__");
-
-  // LOG(INFO) << "g.outputs.size  (pre-Gradient) : " << g.outputs.size();
-
   // take gradient
   nnvm::Graph g_grad = nnvm::pass::Gradient(
       g, symbol.outputs, xs, head_grad_entry_,
@@ -589,15 +565,6 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
   for (const auto &e : g_grad.outputs) {
     g.outputs.push_back(e);
   }
-
-  // LOG(INFO) << "g.outputs.size (post-Gradient) : " << g.outputs.size(); 
-  // LOG(INFO) << "xs.size : " << xs.size();
-  // LOG(INFO) << "g_grad.outputs.size : " << g_grad.outputs.size();
-
-  // g.attrs.erase("shape");
-  // g.attrs.erase("shape_num_unknown_nodes");
-  // g.attrs.erase("dtype");
-  // g.attrs.erase("dtype_num_unknown_nodes");
 
   return g;
 }
