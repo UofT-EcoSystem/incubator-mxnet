@@ -447,9 +447,7 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     if (type == "SequenceMask")       return false;
     if (type == "ParSequenceReverse") return false;
 
-    if (type == "EcoReduceSum")       return false;
     if (type == "sum")                return false;
-    if (type == "EcoMean")            return false;
     if (type == "mean")               return false;
 
     if (type == "expand_dims")        return false;
