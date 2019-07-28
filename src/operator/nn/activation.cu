@@ -51,12 +51,6 @@ void ActivationCompute<gpu>(const nnvm::NodeAttrs& attrs,
     const std::vector<TBlob>& inputs,
     const std::vector<OpReqType>& req,
     const std::vector<TBlob>& outputs) {
-
-  std::cout << "Node Attr " << attrs.name << std::endl;
-  std::cout << "\t""OpContext:" << std::endl;
-  std::cout << "\t\t""need_grad : " << ctx.need_grad << std::endl;
-  std::cout << "\t\t""is_train  : " << ctx.is_train  << std::endl;
-
   CHECK_EQ(inputs.size(), 1U);
   CHECK_EQ(outputs.size(), 1U);
   const ActivationParam& param = nnvm::get<ActivationParam>(attrs.parsed);
