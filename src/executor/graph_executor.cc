@@ -418,131 +418,65 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
   using nnvm::Op;
   using nnvm::OpMap;
   using nnvm::FGradient;
+  using nnvm::pass::MirrorType;
   // `grad_fun_map` maps the operator to gradient function
   static const OpMap<FGradient>& grad_fun_map =
       Op::GetAttr<FGradient>("FGradient");
   int do_mirror = dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR", 0);
   
-  std::function<bool(
-      const nnvm::NodePtr&, 
+  std::function<MirrorType(
       const nnvm::NodePtr&)> need_mirror = [do_mirror](
-      const nnvm::NodePtr& node,
-      const nnvm::NodePtr& parent_node) -> bool {
-    if (node->is_variable()) return false;
-    const std::string& type = node->attrs.op->name;
-    const std::string& parent_type = 
-        parent_node == nullptr ? "" : 
-        parent_node->attrs.op->name;
-    if (get_node_attr(*node, "__force_mirroring__", false)) return true;
-    if (do_mirror == 0) return false;
+      const nnvm::NodePtr& node_ptr) -> MirrorType {
+
+    if (node_ptr->is_variable()) return MirrorType::kNone;
+
+    const std::string& type = node_ptr->attrs.op->name;
+
+    if (get_node_attr(*node_ptr, "__force_mirroring__", false)) return MirrorType::kBoth;
+    if (do_mirror == 0) return MirrorType::kNone;
 
 #if BASELINE_BACKWARD_MIRRORING
-    if (type == "Dropout") return false;
-    if (type == "Convolution") return false;
-    if (type == "FullyConnected") return false;
-    if (type == "Concat") return false;
-    if (type == "SoftmaxOutput") return false;
-    if (type == "BatchNorm") return false;
-    if (type == "CuDNNBatchNorm") return false;
-    return true;
+    if (type == "Dropout")        return MirrorType::kNone;
+    if (type == "Convolution")    return MirrorType::kNone;
+    if (type == "FullyConnected") return MirrorType::kNone;
+    if (type == "Concat")         return MirrorType::kNone;
+    if (type == "SoftmaxOutput")  return MirrorType::kNone;
+    if (type == "BatchNorm")      return MirrorType::kNone;
+    if (type == "CuDNNBatchNorm") return MirrorType::kNone;
+    return MirrorType::kBoth;
 #else 
-    if (type == "Dropout")            return false;
-    if (type == "Embedding")          return false;
+    if (type == "Embedding")          return MirrorType::kNone;
 
-    if (type == "_zeros")             return false;
-    if (type == "zeros_like")         return false;
+    if (type == "_zeros")             return MirrorType::kNone;
+    if (type == "zeros_like")         return MirrorType::kNone;
     
-    if (type == "SequenceReverse")    return false;
-    if (type == "SequenceLast")       return false;
-    if (type == "SequenceMask")       return false;
-    if (type == "ParSequenceReverse") return false;
+    if (type == "SequenceReverse")    return MirrorType::kNone;
+    if (type == "SequenceLast")       return MirrorType::kNone;
+    if (type == "SequenceMask")       return MirrorType::kNone;
+    if (type == "ParSequenceReverse") return MirrorType::kNone;
 
-    if (type == "sum")                return false;
-    if (type == "mean")               return false;
+    if (type == "sum")                return MirrorType::kNone;
+    if (type == "mean")               return MirrorType::kNone;
 
-    if (type == "expand_dims")        return false;
-    if (type == "Concat")             return false;
-    if (type == "Reshape")            return false;
-    if (type == "SwapAxis")           return false;
-    if (type == "tile")               return false;
-    if (type == "transpose")          return false;
-    if (type == "SliceChannel")       return false;
+    if (type == "expand_dims")        return MirrorType::kNone;
+    if (type == "Concat")             return MirrorType::kNone;
+    if (type == "Reshape")            return MirrorType::kNone;
+    if (type == "SwapAxis")           return MirrorType::kNone;
+    if (type == "tile")               return MirrorType::kNone;
+    if (type == "transpose")          return MirrorType::kNone;
+    if (type == "SliceChannel")       return MirrorType::kNone;
 
-    if (type == "softmax")            return false;
-    if (type == "SoftmaxOutput")      return false;
-    
-    if (type == "BatchNorm")          return false;
-    if (type == "CuDNNBatchNorm")     return false;
+    if (type == "softmax")            return MirrorType::kNone;
+    if (type == "SoftmaxOutput")      return MirrorType::kNone;
 
-    /*
-    if (parent_node == nullptr) {
-      if (grad_fun_map.count(node->op())) {
-        // create an empty vector of node entries and handle it to the operator
-        //   and if the returned inputs gradients depend ONLY on the 
-        std::vector<NodeEntry> input_grads = 
-            grad_fun_map[node->op()](
-              node, std::vector<NodeEntry>(
-                node->num_outputs(),
-                NodeEntry{nullptr, 0, 0}
-              )
-            );
-        bool is_dead_mirror_node = true;
+    if (type == "Dropout")            return MirrorType::kNone;
 
-        for (const NodeEntry& input_grad : input_grads) {
-          const NodePtr& input_grad_node = 
-              input_grad.node;
+    if (type == "BatchNorm")          return MirrorType::kNone;
+    if (type == "CuDNNBatchNorm")     return MirrorType::kNone;
 
-          if (input_grad_node == nullptr) {
-            continue;
-          }
-          for (const NodeEntry& e : input_grad_node->inputs) {
-            if (e.node == node) {
-              // the outputs of node are required to compute the gradients
-              is_dead_mirror_node = false;
-            }  // if (e.node == node)
-          }  // for (e ∈ input_grad_node->inputs)
-        }  // for (input_grad ∈ input_grads)
-        if (is_dead_mirror_node) {
-          // directly return true if the mirror node is dead
-          // The reason is because if the outputs of 
-          //   the mirror node are NOT taken,
-          //   its forward pass will also NOT be replayed
-          //   and hence the overhead can be safely neglected.
-          return true;
-        }  // if (is_dead_mirror_node)
-      }  // if (grad_fun_map.count(node->op()))
-    }  // if (parent_node == nullptr)
-     */
-
-    if (type == "Convolution") {
-      if (parent_node == nullptr) {
-        return true;
-      }
-      return false;
-    }
-    if (type == "batch_dot") {
-      if (parent_node == nullptr) {
-        return true;
-      }
-      return false;
-    }
-    if (type == "FullyConnected") {
-      const op::FullyConnectedProp* fc_prop = dynamic_cast<
-          const op::FullyConnectedProp*>(
-          op::OpPropGetOpProperty(node->attrs));
-      std::map<std::string, std::string> fc_param = fc_prop->GetParams();
-      if (fc_param["num_hidden"] == "1") {
-        return true;
-      }
-      if (parent_node == nullptr) {
-        // Fully-Connected layers of depth 0 shall be allowed.
-        // The reason is because they only request the input to compute the gradients
-        //   and hence even if we set the fully-connected layers
-        //   as part of the mirroring, the layers themselves will NOT be recomputed.
-        return true;
-      }
-      return false;
-    }
+    if (type == "Convolution")        return MirrorType::kInput;
+    if (type == "batch_dot")          return MirrorType::kInput;
+    if (type == "FullyConnected")     return MirrorType::kInput;
 
     // We need the mirroring to stop when the cell state of an LSTM cell is encountered.
     // The reason is because unlike input and hidden states that are blocked
@@ -550,16 +484,11 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     //   the cell states do not need to go through a fully-connected layer 
     //   and can be "infinitely" mirrored backward until the start of the sequence.
     // This will cause huge performance overhead, especially when the sequence length is long.
-    if ((std::regex_match(node->attrs.name, std::regex("(.*)(state)"))) || 
-        (type == "LSTMNonLinBlock" && 
-         parent_type == "LSTMNonLinBlock") || 
-        (type == "EcoLSTMCell")) {
-      // LOG(INFO) << "Speculating that a cell state is reached @Node "
-      //           << node.attrs.name << std::endl
-      //           << "\t""Mirroring is forced to stop at depth " << mirror_depth << std::endl;
-      return false;
+    if (std::regex_match(node_ptr->attrs.name, std::regex("(.*)(state)"))
+        ) {
+      return MirrorType::kNone;
     }
-    return true;
+    return MirrorType::kBoth;
 #endif  // BASELINE_BACKWARD_MIRRORING
   };
 
