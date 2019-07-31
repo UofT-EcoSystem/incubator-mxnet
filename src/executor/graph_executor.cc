@@ -424,6 +424,26 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
       Op::GetAttr<FGradient>("FGradient");
   int do_mirror = dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR", 0);
   
+#if BASELINE_BACKWARD_MIRRORING
+  std::function<bool(
+      const nnvm::NodePtr&)> need_mirror = [do_mirror](
+      const nnvm::NodePtr& node_ptr) -> bool {
+    if (node_ptr->is_variable()) return false;
+
+    const std::string& type = node_ptr->attrs.op->name;
+
+    if (get_node_attr(*node_ptr, "__force_mirroring__", false)) return true;
+    if (do_mirror == 0) return false;
+
+    if (type == "Dropout")        return false;
+    if (type == "Convolution")    return false;
+    if (type == "FullyConnected") return false;
+    if (type == "Concat")         return false;
+    if (type == "SoftmaxOutput")  return false;
+    if (type == "BatchNorm")      return false;
+    if (type == "CuDNNBatchNorm") return false;
+    return true;
+#else  // !BASELINE_BACKWARD_MIRRORING
   std::function<MirrorType(
       const nnvm::NodePtr&)> need_mirror = [do_mirror](
       const nnvm::NodePtr& node_ptr) -> MirrorType {
@@ -435,16 +455,6 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     if (get_node_attr(*node_ptr, "__force_mirroring__", false)) return MirrorType::kBoth;
     if (do_mirror == 0) return MirrorType::kNone;
 
-#if BASELINE_BACKWARD_MIRRORING
-    if (type == "Dropout")        return MirrorType::kNone;
-    if (type == "Convolution")    return MirrorType::kNone;
-    if (type == "FullyConnected") return MirrorType::kNone;
-    if (type == "Concat")         return MirrorType::kNone;
-    if (type == "SoftmaxOutput")  return MirrorType::kNone;
-    if (type == "BatchNorm")      return MirrorType::kNone;
-    if (type == "CuDNNBatchNorm") return MirrorType::kNone;
-    return MirrorType::kBoth;
-#else 
     if (type == "Embedding")          return MirrorType::kNone;
 
     if (type == "_zeros")             return MirrorType::kNone;
