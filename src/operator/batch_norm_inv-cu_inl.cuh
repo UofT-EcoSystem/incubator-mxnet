@@ -10,10 +10,10 @@ namespace mxnet {
 template < typename RealType >
 static __global__ void _cuda_batch_norm_inv_forward(
         const RealType * const __restrict__ output,
-        const RealType * const __restrict__ gamma,
-        const RealType * const __restrict__ beta,
         const RealType * const __restrict__ mean,
         const RealType * const __restrict__ inv_var,
+        const RealType * const __restrict__ gamma,
+        const RealType * const __restrict__ beta,
               RealType * const __restrict__ data,
         const unsigned shape_size, 
         const unsigned batch_size,
@@ -60,24 +60,24 @@ public:
 
                 std::size_t in_expected = 5, out_expected = 1;
 
-                CHECK_EQ( in_data.size(),  in_expected); // output, gamma, beta
-                                                         // mean, inv_var
+                CHECK_EQ( in_data.size(),  in_expected); // output, mean, inv_var, 
+                                                         // gamma, beta
                 CHECK_EQ(out_data.size(), out_expected); // data
 
                 Stream < gpu > * cuda_stream = ctx.get_stream < gpu > (); 
 
                 TBlob output  =  in_data[int(EnumOpInputs ::Output)];
-                TBlob gamma   =  in_data[int(EnumOpInputs ::Gamma)];
-                TBlob beta    =  in_data[int(EnumOpInputs ::Beta)];
                 TBlob mean    =  in_data[int(EnumOpInputs ::Mean)];
                 TBlob inv_var =  in_data[int(EnumOpInputs ::InvVar)];
+                TBlob gamma   =  in_data[int(EnumOpInputs ::Gamma)];
+                TBlob beta    =  in_data[int(EnumOpInputs ::Beta)];
                 TBlob data    = out_data[int(EnumOpOutputs::Data)];
 
                 CHECK_EQ(output .CheckContiguous(), true);
-                CHECK_EQ(gamma  .CheckContiguous(), true);
-                CHECK_EQ(beta   .CheckContiguous(), true);
                 CHECK_EQ(mean   .CheckContiguous(), true);
                 CHECK_EQ(inv_var.CheckContiguous(), true);
+                CHECK_EQ(gamma  .CheckContiguous(), true);
+                CHECK_EQ(beta   .CheckContiguous(), true);
                 CHECK_EQ(data   .CheckContiguous(), true);
 
                 if (!_initialized)
@@ -92,10 +92,10 @@ public:
                         >>>
                         (
                                 reinterpret_cast < DType * > (output .dptr_),
-                                reinterpret_cast < DType * > (gamma  .dptr_),
-                                reinterpret_cast < DType * > (beta   .dptr_),
                                 reinterpret_cast < DType * > (mean   .dptr_),
                                 reinterpret_cast < DType * > (inv_var.dptr_),
+                                reinterpret_cast < DType * > (gamma  .dptr_),
+                                reinterpret_cast < DType * > (beta   .dptr_),
                                 reinterpret_cast < DType * > (data   .dptr_),
                                _param.shape_size,
                                _param.batch_size,
@@ -107,10 +107,10 @@ public:
 template < typename RealType >
 __global__ void _cuda_batch_norm_inv_forward(
         const RealType * const __restrict__ output,
-        const RealType * const __restrict__ gamma,
-        const RealType * const __restrict__ beta,
         const RealType * const __restrict__ mean,
         const RealType * const __restrict__ inv_var,
+        const RealType * const __restrict__ gamma,
+        const RealType * const __restrict__ beta,
               RealType * const __restrict__ data,
         const unsigned shape_size, 
         const unsigned batch_size,
