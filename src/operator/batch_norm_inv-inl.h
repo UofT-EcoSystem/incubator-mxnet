@@ -10,7 +10,7 @@ namespace mxnet {
         namespace op {
                 namespace {
 
-enum class EnumOpInputs  { Output, Mean, InvVar, Gamma, Beta };
+enum class EnumOpInputs  { Output, Gamma, Beta, Mean, InvVar };
 enum class EnumOpOutputs { Data };
 
                 }  // anonymous namespace
@@ -69,7 +69,7 @@ public:
 
 	std::vector < std::string > ListArguments() const override
 	{
-		return { "output", "mean", "inv_var", "gamma", "beta" };
+		return { "output", "gamma", "beta", "mean", "inv_var" };
 	}
 	std::vector < std::string > ListOutputs  () const override
 	{
@@ -92,17 +92,17 @@ public:
 	{
 		using namespace mshadow;
 
-		// output, mean, inv_var, gamma, beta
+		// output, gamma, beta, mean, inv_var
 		CHECK_EQ(in_shape->size(), 5); 
 
 		const TShape & oshape = (*in_shape)[int(EnumOpInputs::Output)];
 		
 		unsigned batch_size = oshape[1];
 
-		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::Mean),   Shape1(batch_size));
-		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::InvVar), Shape1(batch_size));
 		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::Gamma),  Shape1(batch_size));
 		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::Beta),   Shape1(batch_size));
+		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::Mean),   Shape1(batch_size));
+		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::InvVar), Shape1(batch_size));
 		
 		out_shape->clear();
 

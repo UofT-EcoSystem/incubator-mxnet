@@ -27,10 +27,10 @@ DMLC_REGISTER_PARAMETER(BatchNormInvParam);
 MXNET_REGISTER_OP_PROPERTY(BatchNormInv, BatchNormInvProp)
 	.describe("Applies the BatchNormInv operator.")
 	.add_argument ("output",  "NDArray-or-Symbol", "Output")
-	.add_argument ("mean",    "NDArray-or-Symbol", "Mean")
-	.add_argument ("inv_var", "NDArray-or-Symbol", "Inverse Variance")
 	.add_argument ("gamma",   "NDArray-or-Symbol", "Gamma")
 	.add_argument ("beta",    "NDArray-or-Symbol", "Beta")
+	.add_argument ("mean",    "NDArray-or-Symbol", "Mean")
+	.add_argument ("inv_var", "NDArray-or-Symbol", "Inverse Variance")
 	.add_arguments(BatchNormInvParam::__FIELDS__());
 
 	} // namespace op
