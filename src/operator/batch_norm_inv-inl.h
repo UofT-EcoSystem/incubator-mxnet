@@ -96,26 +96,14 @@ public:
 		
 		unsigned batch_size = oshape[1];
 
-		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::Mean),
-			Shape1(batch_size));
-		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::InvVar),
-			Shape1(batch_size));
-		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::I2HWeight),
-			Shape2(4 * state_size, input_size));
-		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::I2HBias),
-			Shape1(4 * state_size));
-		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::H2HWeight),
-			Shape2(4 * state_size, state_size));
-		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::H2HBias),
-			Shape1(4 * state_size));
+		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::Mean),   Shape1(batch_size));
+		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::InvVar), Shape1(batch_size));
+		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::Gamma),  Shape1(batch_size));
+		SHAPE_ASSIGN_CHECK(*in_shape, int(EnumOpInputs::Beta),   Shape1(batch_size));
 		
 		out_shape->clear();
 
-		out_shape->push_back((*in_shape)[int(EnumOpInputs::StateH)]); // state_h_out
-		out_shape->push_back((*in_shape)[int(EnumOpInputs::StateC)]); // state_c_out
-		
-		out_shape->push_back((*in_shape)[int(EnumOpInputs::StateH)]); // input_fm
-		out_shape->push_back((*in_shape)[int(EnumOpInputs::StateH)]); // forget_fm
+		out_shape->push_back((*in_shape)[int(EnumOpInputs::Output)]); // Data 
 
 		return true;
 	}
@@ -145,22 +133,19 @@ public:
 
 		out_type->clear();
 
-		out_type->push_back(itype); // state_h_out
-		out_type->push_back(itype); // state_c_out
-		out_type->push_back(itype); // input_fm
-		out_type->push_back(itype); // forget_fm
+		out_type->push_back(itype); // Data
 		
 		return true;
 	}
 
 	OperatorProperty * Copy() const override
 	{
-		return new EcoLSTMCellProp(_param);
+		return new BatchNormInvProp(_param);
 	}
 
 	std::string TypeString() const override
 	{
-		return "EcoLSTMCell";
+		return "BatchNormInv";
 	}
 
 	std::vector < int > DeclareBackwardDependency(
@@ -168,28 +153,7 @@ public:
 		const std::vector < int > &  in_data,
 		const std::vector < int > & out_data) const override
 	{
-		return { in_data[int(EnumOpInputs ::Input)],
-		         in_data[int(EnumOpInputs ::StateH)],
-			 in_data[int(EnumOpInputs ::StateC)],
-			 in_data[int(EnumOpInputs ::I2HWeight)],
-			 in_data[int(EnumOpInputs ::H2HWeight)],
-			out_data[int(EnumOpOutputs::StateHOut)],
-			out_data[int(EnumOpOutputs::StateCOut)],
-			out_data[int(EnumOpOutputs::InputFM)],
-			out_data[int(EnumOpOutputs::ForgetFM)],
-			out_grad[int(EnumOpOutputs::StateHOut)],
-			out_grad[int(EnumOpOutputs::StateCOut)] };
-	}
-
-	std::vector < ResourceRequest >  ForwardResource(
-		const std::vector < TShape > & in_shape) const override
-	{
-		return { ResourceRequest::kTempSpace };
-	}
-	std::vector < ResourceRequest > BackwardResource(
-		const std::vector < TShape > & in_shape) const override
-	{
-		return { ResourceRequest::kTempSpace };
+		return { };
 	}
 
 	Operator * CreateOperator  (Context ctx) const override
