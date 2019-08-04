@@ -17,7 +17,10 @@ enum class EnumOpOutputs { Data };
 
 struct BatchNormInvParam : public dmlc::Parameter < BatchNormInvParam >
 {
-        DMLC_DECLARE_PARAMETER(BatchNormInvParam);
+	unsigned shape_size, batch_size, stride_dim;
+
+        DMLC_DECLARE_PARAMETER(BatchNormInvParam)
+	{};
 };
 
 template < typename xpu, typename DType >
