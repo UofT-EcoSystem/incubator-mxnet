@@ -440,8 +440,8 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     if (type == "FullyConnected") return false;
     if (type == "Concat")         return false;
     if (type == "SoftmaxOutput")  return false;
-    if (type == "BatchNorm")      return false;
-    if (type == "CuDNNBatchNorm") return false;
+    // if (type == "BatchNorm")      return false;
+    // if (type == "CuDNNBatchNorm") return false;
     return true;
 #else  // !BASELINE_BACKWARD_MIRRORING
   std::function<MirrorType(
@@ -481,8 +481,8 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
 
     if (type == "Dropout")            return MirrorType::kNone;
 
-    if (type == "BatchNorm")          return MirrorType::kNone;
-    if (type == "CuDNNBatchNorm")     return MirrorType::kNone;
+    // if (type == "BatchNorm")          return MirrorType::kNone;
+    // if (type == "CuDNNBatchNorm")     return MirrorType::kNone;
 
     if (type == "Convolution")        return MirrorType::kInput;
     if (type == "batch_dot")          return MirrorType::kInput;

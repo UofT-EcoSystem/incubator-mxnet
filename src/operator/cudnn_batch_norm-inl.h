@@ -79,7 +79,7 @@ class CuDNNBatchNormOp : public Operator {
       CHECK_GE(out_data.size(), 1U);
       CHECK_GE(req.size(), 1U);
     }
-    CHECK_EQ(req[cudnnbatchnorm::kOut], kWriteTo);
+    // CHECK_EQ(req[cudnnbatchnorm::kOut], kWriteTo);
     CHECK_GE(in_data[cudnnbatchnorm::kData].ndim(), 2);
     CHECK_LE(in_data[cudnnbatchnorm::kData].ndim(), 4);
 
