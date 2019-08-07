@@ -182,8 +182,8 @@ USE_CPP_PACKAGE = 0
 # TORCH_PATH = $(HOME)/torch
 # MXNET_PLUGINS += plugin/torch/torch.mk
 
-# WARPCTC_PATH = $(HOME)/warp-ctc
-# MXNET_PLUGINS += plugin/warpctc/warpctc.mk
+WARPCTC_PATH = $(HOME)/warp-ctc
+MXNET_PLUGINS += plugin/warpctc/warpctc.mk
 
 # whether to use sframe integration. This requires build sframe
 # git@github.com:dato-code/SFrame.git
