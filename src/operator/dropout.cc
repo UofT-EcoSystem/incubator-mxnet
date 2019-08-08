@@ -31,7 +31,8 @@ template<>
 Operator *CreateOp<cpu>(DropoutParam param, int dtype) {
   Operator *op = NULL;
   MSHADOW_REAL_TYPE_SWITCH(dtype, DType, {
-    op = new DropoutOp<cpu, float>(param);
+    // op = new DropoutOp<cpu, float>(param);
+    op = nullptr;
   });
   return op;
 }
