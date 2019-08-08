@@ -90,6 +90,47 @@ struct DropoutParam : public dmlc::Parameter<DropoutParam> {
   }
 };  // struct DropoutParam
 
+#if defined(__CUDACC__)
+
+__global__ void binarize_mask(
+    const float    * const __restrict__ mask,
+          unsigned * const __restrict__ binarized_mask,
+    const unsigned mask_size) {
+  const unsigned g_threadIdx = threadIdx.x + blockIdx.x * blockDim.x;
+
+  if (g_threadIdx >= mask_size) {
+    return;
+  }
+  unsigned bit_mask = 1 << ((g_threadIdx / 32 + 1) * 32 - g_threadIdx - 1);
+  if (mask[g_threadIdx]) {
+    binarized_mask[g_threadIdx / 32] |=   bit_mask;
+  } else {
+    binarized_mask[g_threadIdx / 32] &= (~bit_mask);
+  }
+}
+
+__global__ void unbinarize_mask(
+          float    * const __restrict__ mask,
+    const unsigned * const __restrict__ binarized_mask,
+    const unsigned mask_size) {
+  const unsigned g_threadIdx = threadIdx.x + blockIdx.x * blockDim.x;
+
+  if (g_threadIdx >= mask_size) {
+    return;
+  }
+  unsigned bit_mask = 1 << ((g_threadIdx / 32 + 1) * 32 - g_threadIdx - 1);
+  unsigned bit = binarized_mask[g_threadIdx / 32] & bit_mask;
+  if (bit) {
+    mask[g_threadIdx] = 1;
+  } else {
+    mask[g_threadIdx] = 0;
+  }
+}
+
+#endif  // defined(__CUDACC__)
+
+static bool logged_binarized_dropout = false;
+
 template<typename xpu, typename DType>
 class DropoutOp : public Operator {
  public:
@@ -113,6 +154,32 @@ class DropoutOp : public Operator {
     Tensor<xpu, 2, DType> data = in_data[dropout::kData].FlatTo2D<xpu, DType>(s);
     Tensor<xpu, 2, DType> out = out_data[dropout::kOut].FlatTo2D<xpu, DType>(s);
     if (ctx.is_train || mode_ == dropout::kAlways) {
+
+      if (!logged_binarized_dropout) {
+        LOG(INFO) << "MXNet uses binarized dropout? : "
+                  << std::boolalpha
+                  << bool(dmlc::GetEnv("USE_BINARIZED_DROPOUT", 0))
+                  << std::noboolalpha;
+        logged_binarized_dropout = true;
+      }
+
+      if (dmlc::GetEnv("USE_BINARIZED_DROPOUT", 0)) {
+
+      CHECK_EQ(ctx.requested.size(), 2);
+      CHECK_GE(out_data[dropout::kMask].shape_.Size() * 32, 
+                in_data[dropout::kData]);
+      Tensor<xpu, 1, DType> mask = ctx.requested[1]
+          .get_space_typed<xpu, 1, DType>(Shape1(data.shape_.Size()), s);
+      Random<xpu> *prnd = ctx.requested[dropout::kRandom].get_random<xpu, real_t>(s);
+      mask = tcast<DType>(F<mshadow_op::threshold>(
+             prnd->uniform(mask.shape_), pkeep_) * (1.0f / pkeep_));
+      Tensor<xpu, 1, DType> binarized_mask = out_data[dropout::kMask].get<xpu, 1, DType>(s);
+      binarize_mask <<< (data.shape_.Size() - 1) / 128 + 1, 128, 0, 
+                        Stream<gpu>::GetStream(s) >>> 
+          (mask.dptr_, reinterpret_cast<unsigned *>(binarized_mask.dptr_), data.shape_.Size());
+
+      } else {
+
       Tensor<xpu, 2, DType> mask = out_data[dropout::kMask].FlatTo2D<xpu, DType>(s);
 #if !defined(__CUDACC__) && defined(USE_MKL) && defined(_OPENMP)
       DType* outptr = out.dptr_;
@@ -130,6 +197,8 @@ class DropoutOp : public Operator {
              prnd->uniform(mask.shape_), pkeep_) * (1.0f / pkeep_));
       Assign(out, req[dropout::kOut], data * mask);
 #endif  // USE_MKL && _OPENMP
+
+      }
     } else {
       Assign(out, req[dropout::kOut], F<mshadow_op::identity>(data));
     }
@@ -148,9 +217,22 @@ class DropoutOp : public Operator {
     CHECK_EQ(in_grad.size(), 1U);
     Stream<xpu> *s = ctx.get_stream<xpu>();
     Tensor<xpu, 2, DType> grad = out_grad[dropout::kOut].FlatTo2D<xpu, DType>(s);
-    Tensor<xpu, 2, DType> mask = out_data[dropout::kMask].FlatTo2D<xpu, DType>(s);
     Tensor<xpu, 2, DType> gdata = in_grad[dropout::kData].FlatTo2D<xpu, DType>(s);
     if (ctx.is_train || mode_ == dropout::kAlways) {
+
+      if (dmlc::GetEnv("USE_BINARIZED_DROPOUT", 0)) {
+
+      CHECK_EQ(ctx.requested.size(), 1);
+      Tensor<xpu, 1, DType> binarized_mask = out_data[dropout::kMask].get<xpu, 1, DType>(s);
+      Tensor<xpu, 1, DType> mask = ctx.requested[0]
+          .get_space_typed<xpu, 1, DType>(Shape1(data.shape_.Size()), s);
+      unbinarize_mask <<< (data.shape_.Size() - 1) / 128 + 1, 128, 0, 
+                          Stream<gpu>::GetStream(s) >>> 
+          (mask.dptr_, reinterpret_cast<unsigned *>(binarized_mask.dptr_), data.shape_.Size());
+      Assign(gdata, req[dropout::kData], grad * mask);
+
+      } else {
+
 #if !defined(__CUDACC__) && defined(USE_MKL) && defined(_OPENMP)
       DType* ingradptr = gdata.dptr_;
       DType* outgradptr = grad.dptr_;
@@ -163,8 +245,10 @@ class DropoutOp : public Operator {
         ingradptr[i] = outgradptr[i] * maskptr[i] * (1.0f / pkeep_);
       }
 #else  // USE_MKL && _OPENMP
+      Tensor<xpu, 2, DType> mask = out_data[dropout::kMask].FlatTo2D<xpu, DType>(s);
       Assign(gdata, req[dropout::kData], grad * mask);
 #endif  // USE_MKL && _OPENMP
+      }
     } else {
       Assign(gdata, req[dropout::kData], F<mshadow_op::identity>(grad));
     }
@@ -199,7 +283,11 @@ class DropoutProp : public OperatorProperty {
     if (dshape.ndim() == 0) return false;
     out_shape->clear();
     out_shape->push_back(dshape);
-    out_shape->push_back(dshape);
+    if (dmlc::GetEnv("USE_BINARIZED_DROPOUT", 0)) {
+      out_shape->push_back(TShape1((dshape.Size() - 1) / 32 + 1));
+    } else {
+      out_shape->push_back(dshape);
+    }
     return true;
   }
 
@@ -253,7 +341,21 @@ class DropoutProp : public OperatorProperty {
 
   std::vector<ResourceRequest> ForwardResource(
     const std::vector<TShape> &in_shape) const override {
-    return {ResourceRequest::kRandom};
+    if (dmlc::GetEnv("USE_BINARIZED_DROPOUT", 0)) {
+      return {ResourceRequest::kRandom,
+              ResourceRequest::kTempSpace};
+    } else {
+      return {ResourceRequest::kRandom};
+    }
+  }
+
+  std::vector<ResourceRequest> BackwardResource(
+    const std::vector<TShape> &in_shape) const override {
+    if (dmlc::GetEnv("USE_BINARIZED_DROPOUT", 0)) {
+      return {ResourceRequest::kTempSpace};
+    } else {
+      return {};
+    }
   }
 
   int NumVisibleOutputs() const override {
