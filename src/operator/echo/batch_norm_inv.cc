@@ -3,6 +3,7 @@
 namespace mxnet {
 	namespace op {
 
+/*
 template <>
 Operator * CreateOp < cpu > (BatchNormInvParam param, int dtype)
 {
@@ -21,6 +22,7 @@ Operator * BatchNormInvProp::CreateOperatorEx(Context ctx,
 {
 	DO_BIND_DISPATCH(CreateOp, _param, (*in_type)[0]);
 }
+ */
 
 DMLC_REGISTER_PARAMETER(BatchNormInvParam);
 
@@ -109,5 +111,5 @@ NNVM_REGISTER_OP(BatchNormInv)
 	.add_argument ("beta",    "NDArray-or-Symbol", "Beta")
 	.add_arguments(BatchNormInvParam::__FIELDS__());
 
-	} // namespace op
-} // namespace mxnet
+	}  // namespace op
+}  // namespace mxnet

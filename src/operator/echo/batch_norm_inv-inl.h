@@ -4,7 +4,7 @@
 #include <dmlc/parameter.h>
 #include <mxnet/operator.h>
 
-#include "operator_common.h"
+#include "../operator_common.h"
 
 namespace mxnet {
         namespace op {
@@ -13,7 +13,7 @@ namespace mxnet {
 enum class EnumOpInputs  { Output, Mean, InvVar, Gamma, Beta };
 enum class EnumOpOutputs { Data };
 
-                }  // anonymous namespace
+                }  // namespace anonymous
 
 struct BatchNormInvParam : public dmlc::Parameter < BatchNormInvParam >
 {
@@ -23,6 +23,7 @@ struct BatchNormInvParam : public dmlc::Parameter < BatchNormInvParam >
 	{};
 };
 
+/*
 template < typename xpu, typename DType >
 class BatchNormInvOp : public Operator
 {
@@ -171,6 +172,7 @@ public:
 };
 
 #endif // DMLC_USE_CXX11
+ */
 
         }  // namespace op
 }  // namespace mxnet

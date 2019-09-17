@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vector>
+// #include <vector>
 
 #include "batch_norm_inv-inl.h"
 
@@ -8,7 +8,7 @@ namespace mxnet {
         namespace op {
 
 template < typename RealType >
-static __global__ void _cuda_batch_norm_inv_forward(
+static __global__ void cudaBatchNormInvForward(
         const RealType * const __restrict__ output,
         const RealType * const __restrict__ mean,
         const RealType * const __restrict__ inv_var,
@@ -19,6 +19,7 @@ static __global__ void _cuda_batch_norm_inv_forward(
         const unsigned batch_size,
         const unsigned stride_dim);
 
+/*
 template < typename DType >
 class CUBatchNormInvOp : public Operator 
 {
@@ -85,7 +86,7 @@ public:
                         _Init(cuda_stream, in_data, out_data);
                 }
 
-                _cuda_batch_norm_inv_forward < DType >
+                cudaBatchNormInvForward < DType >
                         <<<
                                 (_param.shape_size - 1) / 128 + 1, 128, 0,
                                 Stream < gpu > ::GetStream(cuda_stream)
@@ -102,10 +103,11 @@ public:
                                _param.stride_dim
                         );
         }
-};
+};  // class CUBatchNormInvOp
+ */
 
 template < typename RealType >
-__global__ void _cuda_batch_norm_inv_forward(
+__global__ void cudaBatchNormInvForward(
         const RealType * const __restrict__ output,
         const RealType * const __restrict__ mean,
         const RealType * const __restrict__ inv_var,

@@ -3,6 +3,7 @@
 namespace mxnet {
 	namespace op {
 
+/*
 template <> 
 Operator * CreateOp < gpu > (BatchNormInvParam param, int dtype)
 {
@@ -12,6 +13,7 @@ Operator * CreateOp < gpu > (BatchNormInvParam param, int dtype)
 
 	return op;
 }
+ */
 
 void BatchNormInvComputeGPU(const nnvm::NodeAttrs & attrs,
                             const OpContext & ctx,
@@ -44,7 +46,7 @@ void BatchNormInvComputeGPU(const nnvm::NodeAttrs & attrs,
 	CHECK_EQ(beta   .CheckContiguous(), true);
 	CHECK_EQ(data   .CheckContiguous(), true);
 
-	_cuda_batch_norm_inv_forward < DType >
+	cudaBatchNormInvForward < DType >
 		<<<
 			(output.shape_.Size() - 1) / 128 + 1, 128, 0,
 			Stream < gpu > ::GetStream(cuda_stream)
@@ -66,5 +68,6 @@ void BatchNormInvComputeGPU(const nnvm::NodeAttrs & attrs,
 NNVM_REGISTER_OP(BatchNormInv)
 	.set_attr<FCompute>("FCompute<gpu>", BatchNormInvComputeGPU);
 
-	} // namespace op
-} // namespace mxnet
+	}  // namespace op
+}  // namespace mxnet
+
