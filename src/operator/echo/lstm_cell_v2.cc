@@ -1,0 +1,39 @@
+#include "lstm_cell_v2-inl.h"
+
+namespace mxnet {
+	namespace op {
+
+template <>
+Operator * CreateOp < cpu > (LSTMCellV2Param param, int dtype)
+{
+	LOG(FATAL) << "Operator LSTMCellV2 is only available for GPU at the moment.";
+
+	Operator * op = nullptr;
+
+	MSHADOW_REAL_TYPE_SWITCH(dtype, DType, { op = new LSTMCellV2Op < cpu, DType > (param);});
+
+	return op;
+}
+
+Operator * LSTMCellV2Prop::CreateOperatorEx(Context ctx,
+                                            std::vector < TShape > * in_shape,
+                                            std::vector < int >    * in_type) const
+{
+	DO_BIND_DISPATCH(CreateOp, _param, (*in_type)[0]);
+}
+
+DMLC_REGISTER_PARAMETER(LSTMCellV2Param);
+
+MXNET_REGISTER_OP_PROPERTY(LSTMCellV2, LSTMCellV2Prop)
+	.describe("Applies the LSTMCellV2 for faster compute and less memory footprint.")
+	.add_argument ("input"  , "NDArray-or-Symbol", "Input to the LSTM Cell")
+	.add_argument ("state_h", "NDArray-or-Symbol", "Hidden State of the Previous Time Step")
+	.add_argument ("state_c", "NDArray-or-Symbol", "Cell ""State of the Previous Time Step")
+	.add_argument ("i2h_weight", "NDArray-or-Symbol", "Input-to-Hidden Weight")
+	.add_argument ("i2h_bias"  , "NDArray-or-Symbol", "Input-to-Hidden Bias")
+	.add_argument ("h2h_weight", "NDArray-or-Symbol", "Hidden-to-Hidden Weight")
+	.add_argument ("h2h_bias"  , "NDArray-or-Symbol", "Hidden-to-Hidden Bias")
+	.add_arguments(LSTMCellV2Param::__FIELDS__());
+
+	}  // namespace op
+}  // namespace mxnet

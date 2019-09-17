@@ -1,13 +1,13 @@
 #pragma once
 
-#include "lstm_cell-inl.h"
+#include "lstm_cell_v2-inl.h"
 
 namespace mxnet {
 	namespace op {
 
 /**
  * Forward Pass of the LSTM Cell
- * This kernel shall be launched using the parameter <<< ceil(BxH / 128), 128, 0, cuda_stream >>>.
+ * 
  * @param1  workspace   [B x 4H]
  * @param1  i2h_bias        [4H]
  * @param2  h2h_bias        [4H]
@@ -22,7 +22,7 @@ namespace mxnet {
  * @param11 batch_minor: (Runtime Parameter)
  */
 template < typename RealType >
-__global__ void _cuda_lstm_cell__forward(
+__global__ void cudaLSTMCellForward(
 	const RealType * const __restrict__ workspace,
 	const RealType * const __restrict__ i2h_bias,
 	const RealType * const __restrict__ h2h_bias,
@@ -36,7 +36,7 @@ __global__ void _cuda_lstm_cell__forward(
 
 /**
  * Backward Pass of the LSTM Cell
- * This kernel shall be launched using the parameter <<< ceil(BxH / 128), 128, 0, cuda_stream >>>.
+ * 
  * @param1  workspace        [B x 4H]
  * @param2  bias_grad            [4H]
  * @param3  state_c_grad     [B x  H]
@@ -52,7 +52,7 @@ __global__ void _cuda_lstm_cell__forward(
  * @param13 state_size: (Parameter)
  */
 template < typename RealType >
-__global__ void _cuda_lstm_cell_backward(
+__global__ void cudaLSTMCellBackward(
 	      RealType * const __restrict__ workspace,
 	      RealType * const __restrict__ bias_grad,
 	      RealType * const __restrict__ state_c_grad,
@@ -95,10 +95,8 @@ static inline void FullyConnectedBWWeight(cublasHandle_t cublas_handle,
 	const RealType * const __restrict__  X,
 	      RealType * const __restrict__ dW,
 	const RealType * const __restrict__ dY,
-	const OpReqType grad_req,
-	const unsigned batch_size, 
-	const unsigned input_size,
-	const unsigned state_size);
+	const OpReqType grad_req,  const unsigned batch_size, 
+	const unsigned input_size, const unsigned state_size);
 
 // FullyConnected Layer $Y = X W^T$ Backward Pass on Data ($dX = dY W$)
 // @param1 dX [batch_size x input_size]
@@ -112,21 +110,19 @@ static inline void FullyConnectedBWData  (cublasHandle_t cublas_handle,
 	      RealType * const __restrict__ dX,
 	const RealType * const __restrict__  W,
 	const RealType * const __restrict__ dY,
-	const OpReqType grad_req,
-	const unsigned batch_size, 
-	const unsigned input_size,
-	const unsigned state_size);
+	const OpReqType grad_req,  const unsigned batch_size, 
+	const unsigned input_size, const unsigned state_size);
 
 template < typename DType >
-class CUEcoLSTMCellOp : public Operator
+class CULSTMCellV2Op : public Operator
 {
 private:
-	EcoLSTMCellParam _param;
+	LSTMCellV2Param _param;
 	bool _initialized = false;
 	bool _batch_minor = false;
 	unsigned _temp_space_size;
 public:
-	explicit CUEcoLSTMCellOp(EcoLSTMCellParam param)
+	explicit CULSTMCellV2Op(LSTMCellV2Param param)
 	{
 		_param = param;
 	}
@@ -250,9 +246,10 @@ public:
 				 _param.state_size * 4,
 				 _batch_minor);
 		
-		_cuda_lstm_cell__forward < DType >
+		cudaLSTMCellForward < DType >
 			<<<
-				(BxH - 1) / 128 + 1, 128, 0, Stream < gpu > ::GetStream(cuda_stream)
+				(BxH - 1) / 128 + 1, 128, 0, 
+				Stream < gpu > ::GetStream(cuda_stream)
 			>>> 
 			(
 				workspace.dptr_,
@@ -364,9 +361,10 @@ public:
 				Stream < gpu > ::GetStream(cuda_stream)));
 		}
 
-		_cuda_lstm_cell_backward < DType >
+		cudaLSTMCellBackward < DType >
 			<<<
-				(BxH - 1) / 128 + 1, 128, 0, Stream < gpu > ::GetStream(cuda_stream)
+				(BxH - 1) / 128 + 1, 128, 0, 
+				Stream < gpu > ::GetStream(cuda_stream)
 			>>>
 			(
 				workspace.dptr_,
@@ -420,7 +418,7 @@ static __forceinline__ __device__ RealType __cu_sigmoid(RealType i)
 }
 
 template < typename RealType >
-__global__ void _cuda_lstm_cell__forward(
+__global__ void cudaLSTMCellForward(
 	const RealType * const __restrict__ workspace,
 	const RealType * const __restrict__ i2h_bias,
 	const RealType * const __restrict__ h2h_bias,
@@ -479,7 +477,7 @@ __global__ void _cuda_lstm_cell__forward(
 }
 
 template < typename RealType >
-__global__ void _cuda_lstm_cell_backward(
+__global__ void cudaLSTMCellBackward(
 	      RealType * const __restrict__ workspace,
 	      RealType * const __restrict__ bias_grad,
 	      RealType * const __restrict__ state_c_grad,
@@ -626,5 +624,5 @@ inline void FullyConnectedBWData < float > (cublasHandle_t cublas_handle,
 				&beta,  dX, input_size));
 }
 
-	} // namespace op
-} // namespace mxnet
+	}  // namespace op
+}  // namespace mxnet

@@ -6,7 +6,7 @@ namespace mxnet {
 template <>
 Operator * CreateOp < cpu > (LSTMNonLinBlockParam param, int dtype) 
 {
-	LOG(FATAL) << "LSTM Non-Linear Block is only available for GPU at the moment.";
+	LOG(FATAL) << "Operator LSTMNonlinBlock is only available for GPU at the moment.";
 
 	Operator * op = nullptr;
   	

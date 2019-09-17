@@ -4,7 +4,7 @@
 #include <dmlc/parameter.h>
 #include <mxnet/operator.h>
 
-#include "operator_common.h"
+#include "../operator_common.h"
 
 namespace mxnet {
 	namespace op {
@@ -16,22 +16,22 @@ enum class EnumOpInputs  { Input, StateH, StateC,
 enum class EnumOpOutputs { StateHOut, StateCOut, InputFM, ForgetFM };
 enum class EnumOpWorkspace { TempSpace };
 
-		} // anonymous namespace
+		}  // namespace anonymous
 
-struct EcoLSTMCellParam : public dmlc::Parameter < EcoLSTMCellParam >
+struct LSTMCellV2Param : public dmlc::Parameter < LSTMCellV2Param >
 {
 	unsigned batch_size, input_size, state_size;
 
-	DMLC_DECLARE_PARAMETER(EcoLSTMCellParam) {}
+	DMLC_DECLARE_PARAMETER(LSTMCellV2Param) {}
 };
 
 template < typename xpu, typename DType >
-class EcoLSTMCellOp : public Operator
+class LSTMCellV2Op : public Operator
 {
 private:
-	EcoLSTMCellParam _param;
+	LSTMCellV2Param _param;
 public:
-	explicit EcoLSTMCellOp(EcoLSTMCellParam param)
+	explicit LSTMCellV2Op(LSTMCellV2Param param)
 	{
 		// empty
 	}
@@ -56,18 +56,18 @@ public:
 };
 
 template < typename xpu >
-Operator * CreateOp(EcoLSTMCellParam param, int dtype);
+Operator * CreateOp(LSTMCellV2Param param, int dtype);
 
 #if DMLC_USE_CXX11
 
-class EcoLSTMCellProp : public OperatorProperty
+class LSTMCellV2Prop : public OperatorProperty
 {
 private:
-	EcoLSTMCellParam _param;
+	LSTMCellV2Param _param;
 public:
-	EcoLSTMCellProp() {}
+	LSTMCellV2Prop() {}
 	explicit
-	EcoLSTMCellProp(EcoLSTMCellParam param) : _param(param) {}
+	LSTMCellV2Prop(LSTMCellV2Param param) : _param(param) {}
 
 	std::vector < std::string > ListArguments() const override
 	{
@@ -176,12 +176,12 @@ public:
 
 	OperatorProperty * Copy() const override
 	{
-		return new EcoLSTMCellProp(_param);
+		return new LSTMCellV2Prop(_param);
 	}
 
 	std::string TypeString() const override
 	{
-		return "EcoLSTMCell";
+		return "LSTMCellV2";
 	}
 
 	std::vector < int > DeclareBackwardDependency(
@@ -222,9 +222,9 @@ public:
 	Operator * CreateOperatorEx(Context ctx,
 	                            std::vector < TShape > * in_shape,
 				    std::vector < int >    * in_type) const override;
-}; // class EcoLSTMCellProp
+};  // class LSTMCellV2Prop
 
-#endif // DMLC_USE_CXX11
+#endif  // DMLC_USE_CXX11
 
-	} // namespace op
-} // namespace mxnet
+	}  // namespace op
+}  // namespace mxnet
