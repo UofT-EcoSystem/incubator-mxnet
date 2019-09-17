@@ -8,7 +8,7 @@ namespace mxnet {
 
 /**
  * Forward Pass of the MLP Attention Layer Scoring Function
- * This kernel shall be launched using the parameter <<< (B, T), H, H * sizeof(RealType), cuda_stream >>>
+ * 
  * @param1 qry_hidden [B     x H]:  (Input) Query  Hidden State
  * @param2 src_hidden [B x T x H]:  (Input) Source Hidden State
  * @param3 att_hidden [B x T x H]: (Output) Attention Hidden State
@@ -18,7 +18,7 @@ namespace mxnet {
  * @param6 layer_norm: (Parameter) Whether to perform Layer Normalization
  */
 template < typename RealType >
-static __global__ void _cuda_fused_mlp_att_scoring_func_forward(
+static __global__ void cudaFusedMLPAttScoringFuncForward(
 	const RealType * const __restrict__ qry_hidden,
 	const RealType * const __restrict__ src_hidden,
 	      RealType * const __restrict__ att_hidden, 
@@ -28,7 +28,7 @@ static __global__ void _cuda_fused_mlp_att_scoring_func_forward(
 
 /**
  * Backward Pass of the MLP Attention Layer Scoring Function
- * This kernel shall be launched using the parameter <<< (B, T), H, H * sizeof(RealType), cuda_stream >>>
+ * 
  * @param1 qry_hidden      [B     x H]:  (Input) Query  Hidden State
  * @param2 qry_hidden_grad [B     x H]: (Output) Query  Hidden State Gradient
  * @param3 src_hidden      [B x T x H]:  (Input) Source Hidden State
@@ -40,7 +40,7 @@ static __global__ void _cuda_fused_mlp_att_scoring_func_forward(
  * @param9 layer_norm: (Parameter) Whether Layer Normalization is performed in the Forward Pass
  */
 template < typename RealType >
-static __global__ void _cuda_fused_mlp_att_scoring_func_backward(
+static __global__ void cudaFusedMLPAttScoringFuncBackward(
 	const RealType * const __restrict__ qry_hidden,
 	      RealType * const __restrict__ qry_hidden_grad,
 	const RealType * const __restrict__ src_hidden,
@@ -51,13 +51,16 @@ static __global__ void _cuda_fused_mlp_att_scoring_func_backward(
 	const RealType * const __restrict__ att_hidden_var,
 	const bool layer_norm);
 
-// FullyConnected Layer Y = X W^T Forward Pass
-// @param1 X [batch_size x input_size]:  (Input) Input  Variable  `X`
-// @param2 W [state_size x input_size]:  (Input) Weight Parameter `W`
-// @param3 Y [batch_size x state_size]: (Output) Output Variable  `Y`
-// @param4 batch_size: (Parameter) Batch Size
-// @param5 input_size: (Parameter) Input Size
-// @param6 state_size: (Parameter) State Size
+/**
+ * FullyConnected Layer Y = X W^T Forward Pass
+ * 
+ * @param1 X [batch_size x input_size]:  (Input) Input  Variable  `X`
+ * @param2 W [state_size x input_size]:  (Input) Weight Parameter `W`
+ * @param3 Y [batch_size x state_size]: (Output) Output Variable  `Y`
+ * @param4 batch_size: (Parameter) Batch Size
+ * @param5 input_size: (Parameter) Input Size
+ * @param6 state_size: (Parameter) State Size
+ */
 template < typename RealType >
 static inline void FullyConnectedFW(cublasHandle_t cublas_handle,
 	const RealType * const __restrict__ X,
@@ -65,13 +68,16 @@ static inline void FullyConnectedFW(cublasHandle_t cublas_handle,
 	      RealType * const __restrict__ Y,
 	const unsigned batch_size, const unsigned input_size, const unsigned state_size);
 
-// FullyConnected Layer Y = XW^T Backward Pass on Weight (dW = dY^T X)
-// @param1  X [batch_size x input_dim] :  (Input)  Input Variable  `X`
-// @param2 dW [num_hidden x input_dim] : (Output) Weight Parameter Gradient `dW`
-// @param3 dY [batch_size x num_hidden]:  (Input) Output Gradient `dY`
-// @param4 batch_size: (Parameter) Batch Size
-// @param5 input_size: (Parameter) Input Size
-// @param6 state_size: (Parameter) State Size
+/**
+ * FullyConnected Layer Y = XW^T Backward Pass on Weight (dW = dY^T X)
+ * 
+ * @param1  X [batch_size x input_dim] :  (Input)  Input Variable  `X`
+ * @param2 dW [num_hidden x input_dim] : (Output) Weight Parameter Gradient `dW`
+ * @param3 dY [batch_size x num_hidden]:  (Input) Output Gradient `dY`
+ * @param4 batch_size: (Parameter) Batch Size
+ * @param5 input_size: (Parameter) Input Size
+ * @param6 state_size: (Parameter) State Size
+ */
 template < typename RealType >
 static inline void FullyConnectedBWWeight(cublasHandle_t cublas_handle,
 	const RealType * const __restrict__  X,
@@ -80,13 +86,16 @@ static inline void FullyConnectedBWWeight(cublasHandle_t cublas_handle,
 	const OpReqType req,       const unsigned batch_size, 
 	const unsigned input_size, const unsigned state_size);
 
-// FullyConnected Layer Y = XW^T Backward Pass on Data (dX = dY W)
-// @param1 dX [batch_size x input_size]: (Output)  Input Gradient `dX`
-// @param2  W [state_size x input_size]:  (Input) Weight Parameter `W`
-// @param3 dY [batch_size x state_size]:  (Input) Output Gradient `dY`
-// @param4 batch_size: (Parameter) Batch Size
-// @param5 input_size: (Parameter) Input Size
-// @param6 state_size: (Parameter) State Size
+/**
+ * FullyConnected Layer Y = XW^T Backward Pass on Data (dX = dY W)
+ * 
+ * @param1 dX [batch_size x input_size]: (Output)  Input Gradient `dX`
+ * @param2  W [state_size x input_size]:  (Input) Weight Parameter `W`
+ * @param3 dY [batch_size x state_size]:  (Input) Output Gradient `dY`
+ * @param4 batch_size: (Parameter) Batch Size
+ * @param5 input_size: (Parameter) Input Size
+ * @param6 state_size: (Parameter) State Size
+ */
 template < typename RealType >
 static inline void FullyConnectedBWData  (cublasHandle_t cublas_handle,
 	      RealType * const __restrict__ dX,
@@ -169,9 +178,9 @@ public:
 		Tensor < gpu, 1, DType > workspace = ctx.requested[int(EnumOpWorkspace::TempSpace)]
 			.get_space_typed < gpu, 1, DType > (Shape1(_temp_space_size), cuda_stream);
 		
-		DType * ptr_att_hidden = workspace.dptr_;
+		DType * att_hidden_dptr = workspace.dptr_;
 
-		_cuda_fused_mlp_att_scoring_func_forward < DType >
+		cudaFusedMLPAttScoringFuncForward < DType >
 			<<<
 				dim3(_param.seq_length, 
 				     _param.batch_size),
@@ -182,7 +191,7 @@ public:
 			(
 				qry_hidden.dptr_,
 				src_hidden.dptr_,
-				ptr_att_hidden,
+				att_hidden_dptr,
 				nullptr, nullptr,
 				_param.layer_norm
 			);
@@ -191,7 +200,7 @@ public:
 			"Must initialize the cuBLAS handle in CUDA stream.";
 		
 		FullyConnectedFW(Stream < gpu > ::GetBlasHandle(cuda_stream),
-		                 ptr_att_hidden,
+		                 att_hidden_dptr,
 		                 h2s_weight.dptr_,
 			         att_scores.dptr_,
 			         _param.batch_size * _param.seq_length, 
@@ -264,16 +273,16 @@ public:
 		Tensor < gpu, 1, DType > workspace = ctx.requested[int(EnumOpWorkspace::TempSpace)]
 			.get_space_typed < gpu, 1, DType > (Shape1(_temp_space_size), cuda_stream);
 		
-		DType * ptr_att_hidden = workspace.dptr_;
-		DType * ptr_att_hidden_grad = 
+		DType * att_hidden_dptr = workspace.dptr_;
+		DType * att_hidden_grad_dptr = 
 			workspace.dptr_ + 1 * _param.batch_size * _param.seq_length * _param.state_size;
-		DType * ptr_att_hidden_exp  = _param.layer_norm ? 
+		DType * att_hidden_exp_dptr  = _param.layer_norm ? 
 			workspace.dptr_ + 2 * _param.batch_size * _param.seq_length * _param.state_size : nullptr;
-		DType * ptr_att_hidden_var  = _param.layer_norm ? 
+		DType * att_hidden_var_dptr  = _param.layer_norm ? 
 			workspace.dptr_ + 3 * _param.batch_size * _param.seq_length * _param.state_size : nullptr;
 
 		// !Important: Replay the forward pass computation.
-		_cuda_fused_mlp_att_scoring_func_forward < DType >
+		cudaFusedMLPAttScoringFuncForward < DType >
 			<<<
 				dim3(_param.seq_length,
 				     _param.batch_size),
@@ -284,9 +293,9 @@ public:
 			(
 				qry_hidden.dptr_,
 				src_hidden.dptr_,
-				ptr_att_hidden,
-				ptr_att_hidden_exp,
-				ptr_att_hidden_var,
+				att_hidden_dptr,
+				att_hidden_exp_dptr,
+				att_hidden_var_dptr,
 				_param.layer_norm
 			);
 
@@ -294,21 +303,21 @@ public:
 			"Must initialize the cuBLAS handle in CUDA stream.";
 		
 		FullyConnectedBWWeight(Stream < gpu > ::GetBlasHandle(cuda_stream),
-				       ptr_att_hidden,
+				       att_hidden_dptr,
 				       h2s_weight_grad.dptr_,
 				       att_scores_grad.dptr_,
 				       req[int(EnumOpInputs::H2SWeight)],
 				       _param.batch_size * _param.seq_length,
 				       _param.state_size, 1);
 		FullyConnectedBWData  (Stream < gpu > ::GetBlasHandle(cuda_stream),
-		                       ptr_att_hidden_grad,
+		                       att_hidden_grad_dptr,
 				       h2s_weight     .dptr_,
 				       att_scores_grad.dptr_,
 				       OpReqType::kWriteTo,
 				       _param.batch_size * _param.seq_length,
 				       _param.state_size, 1);
 		
-		_cuda_fused_mlp_att_scoring_func_backward
+		cudaFusedMLPAttScoringFuncBackward
 			<<<
 				dim3(_param.seq_length,
 				     _param.batch_size),
@@ -321,14 +330,14 @@ public:
 				qry_hidden_grad.dptr_,
 				src_hidden.dptr_,
 				src_hidden_grad.dptr_,
-				ptr_att_hidden,
-				ptr_att_hidden_grad,
-				ptr_att_hidden_exp,
-				ptr_att_hidden_var,
+				att_hidden_dptr,
+				att_hidden_grad_dptr,
+				att_hidden_exp_dptr,
+				att_hidden_var_dptr,
 				_param.layer_norm
 			);
 	}
-}; // class CUMLPAttScoringFuncOp
+};  // class CUMLPAttScoringFuncOp
 
 /**
  * Perform sum reduction across *this* thread block.
@@ -392,7 +401,7 @@ static __forceinline__ __device__ RealType __cu_reduce_sum(
 }
 
 template < typename RealType >
-__global__ void _cuda_fused_mlp_att_scoring_func_forward(
+__global__ void cudaFusedMLPAttScoringFuncForward(
 	const RealType * const __restrict__ qry_hidden,
 	const RealType * const __restrict__ src_hidden,
 	      RealType * const __restrict__ att_hidden, 
@@ -449,7 +458,7 @@ __global__ void _cuda_fused_mlp_att_scoring_func_forward(
 }
 
 template < typename RealType >
-__global__ void _cuda_fused_mlp_att_scoring_func_backward(
+__global__ void cudaFusedMLPAttScoringFuncBackward(
 	const RealType * const __restrict__ qry_hidden,
 	      RealType * const __restrict__ qry_hidden_grad,
 	const RealType * const __restrict__ src_hidden,
@@ -567,5 +576,5 @@ inline void FullyConnectedBWData < float > (cublasHandle_t cublas_handle,
 				& beta, dX, input_size));
 }
 
-	} // namespace op
-} // namespace mxnet
+	}  // namespace op
+}  // namespace mxnet

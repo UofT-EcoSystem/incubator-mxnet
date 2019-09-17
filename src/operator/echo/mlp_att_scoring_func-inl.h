@@ -4,7 +4,7 @@
 #include <dmlc/parameter.h>
 #include <mxnet/operator.h>
 
-#include "operator_common.h"
+#include "../operator_common.h"
 
 namespace mxnet {
 	namespace op {
@@ -14,7 +14,7 @@ enum class EnumOpInputs    { QryHidden, SrcHidden, H2SWeight };
 enum class EnumOpOutputs   { AttScores };
 enum class EnumOpWorkspace { TempSpace };
 
-		} // namespace 
+		}  // namespace anonymous
 
 struct MLPAttScoringFuncParam : public dmlc::Parameter < MLPAttScoringFuncParam >
 {
@@ -200,5 +200,5 @@ public:
 
 #endif // DMLC_USE_CXX11
 
-	} // namespace op
-} // namespace mxnet
+	}  // namespace op
+}  // namespace mxnet

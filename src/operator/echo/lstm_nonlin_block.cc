@@ -33,5 +33,5 @@ MXNET_REGISTER_OP_PROPERTY(LSTMNonLinBlock, LSTMNonLinBlockProp)
 		"Cell State of the Previous Time Step")
 	.add_arguments(LSTMNonLinBlockParam::__FIELDS__());
 
-	} // namespace op
-} // namespace mxnet
+	}  // namespace op
+}  // namespace mxnet

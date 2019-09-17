@@ -11,6 +11,7 @@ namespace mxnet {
 
 /**
  * Forward Pass of the LSTM Nonlinear Block
+ * 
  * @param1  input     [B x 4H]
  * @param2  state_h   [B x 4H]
  * @param3  state_c   [B x  H]
@@ -25,7 +26,7 @@ namespace mxnet {
  * @param12 is_train: (Runtime Parameter)
  */
 template < typename RealType >
-static __global__ void _cuda_lstm_nonlin_block__forward(
+static __global__ void cudaLSTMNonlinBlockForward(
 	const RealType * const __restrict__ input_plus_state_h,
 	const RealType * const __restrict__ state_c,
 	      RealType * const __restrict__ input_fm,
@@ -38,6 +39,7 @@ static __global__ void _cuda_lstm_nonlin_block__forward(
 
 /**
  * Backward Pass of the LSTM Nonlinear Block
+ * 
  * @param1  input_grad   [B x 4H]
  * @param2  state_h_grad [B x 4H]
  * @param3  state_c_grad [B x  H]
@@ -52,7 +54,7 @@ static __global__ void _cuda_lstm_nonlin_block__forward(
  * @param12 state_size: (Parameter)
  */
 template < typename RealType >
-static __global__ void _cuda_lstm_nonlin_block_backward(
+static __global__ void cudaLSTMNonlinBlockBackward(
 	      RealType * const __restrict__ input_plus_state_h_grad,
 	      RealType * const __restrict__ state_c_grad,
 	const RealType * const __restrict__ state_c,
@@ -144,16 +146,17 @@ public:
 
 		const unsigned BxH = _param.batch_size * _param.state_size;
 
-		_cuda_lstm_nonlin_block__forward < DType >
+		cudaLSTMNonlinBlockForward < DType >
 			<<<
-				(BxH - 1) / 128 + 1, 128, 0, Stream < gpu > ::GetStream(cuda_stream)
+				(BxH - 1) / 128 + 1, 128, 0, 
+				Stream < gpu > ::GetStream(cuda_stream)
 			>>> 
 			(
 				input_plus_state_h.dptr_, 
 				state_c.dptr_,
-				input_fm.dptr_,
+				input_fm .dptr_,
 				forget_fm.dptr_,
-				iactv_fm.dptr_,
+				iactv_fm .dptr_,
 				output_fm.dptr_,
 				state_h_out.dptr_,
 				state_c_out.dptr_,
@@ -221,24 +224,25 @@ public:
 
 		const unsigned BxH = _param.batch_size * _param.state_size;
 
-		_cuda_lstm_nonlin_block_backward < DType >
+		cudaLSTMNonlinBlockBackward < DType >
 			<<<
-				(BxH - 1) / 128 + 1, 128, 0, Stream < gpu > ::GetStream(cuda_stream)
+				(BxH - 1) / 128 + 1, 128, 0, 
+				Stream < gpu > ::GetStream(cuda_stream)
 			>>> 
 			(
 				input_plus_state_h_grad.dptr_,
 				state_c_grad.dptr_,
 				state_c.dptr_,
-				input_fm.dptr_,
+				input_fm .dptr_,
 				forget_fm.dptr_,
-				iactv_fm.dptr_,
+				iactv_fm .dptr_,
 				output_fm.dptr_,
 				state_h_out_grad.dptr_,
 				state_c_out_grad.dptr_,
 			        _param.batch_size, _param.state_size
 			);
 	}
-}; // class CULSTMNonLinBlockOp
+};  // class CULSTMNonLinBlockOp
 
 template < typename RealType >
 static __forceinline__ __device__ RealType __cu_sigmoid(RealType i)
@@ -247,7 +251,7 @@ static __forceinline__ __device__ RealType __cu_sigmoid(RealType i)
 }
 
 template < typename RealType >
-__global__ void _cuda_lstm_nonlin_block__forward(
+__global__ void cudaLSTMNonlinBlockForward(
 	const RealType * const __restrict__ input_plus_state_h,
 	const RealType * const __restrict__ state_c,
 	      RealType * const __restrict__ input_fm,
@@ -285,7 +289,7 @@ __global__ void _cuda_lstm_nonlin_block__forward(
 }
 
 template < typename RealType >
-__global__ void _cuda_lstm_nonlin_block_backward(
+__global__ void cudaLSTMNonlinBlockBackward(
 	      RealType * const __restrict__ input_plus_state_h_grad,
 	      RealType * const __restrict__ state_c_grad,
 	const RealType * const __restrict__ state_c,
@@ -349,5 +353,5 @@ __global__ void _cuda_lstm_nonlin_block_backward(
 		output_gate_grad * output_gate * (1 - output_gate);
 }
 
-	} // namespace op
-} // namespace mxnet
+	}  // namespace op
+}  // namespace mxnet

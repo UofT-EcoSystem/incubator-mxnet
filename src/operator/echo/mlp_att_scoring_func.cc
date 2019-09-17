@@ -31,5 +31,5 @@ MXNET_REGISTER_OP_PROPERTY(MLPAttScoringFunc, MLPAttScoringFuncProp)
 	.add_argument("h2s_weight", "NDArray-or-Symbol", "Hidden-to-Score Weight")
 	.add_arguments(MLPAttScoringFuncParam::__FIELDS__());
 
-	} // namespace op
-} // namespace mxnet
+	}  // namespace op
+}  // namespace mxnet

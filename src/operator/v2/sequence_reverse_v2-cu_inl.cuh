@@ -6,8 +6,6 @@ namespace mxnet {
 	namespace op {
 		namespace v2 {
 
-#if defined(__CUDACC__)
-
 /**
  * Forward & Backward Pass of the Parallel Reverse Sequence
  * 
@@ -161,7 +159,7 @@ public:
 				req[int(EnumOpInputs::Data)]
 			);
 	}
-}; // class CUSequenceReverseV2Op
+};  // class CUSequenceReverseV2Op
 
 template < typename RealType >
 __global__ void cudaReverseSequence(
@@ -198,8 +196,6 @@ __global__ void cudaReverseSequence(
                            data[seq_idx * gridDim.x * blockDim.x + batch_state_idx];
 	}
 }
-
-#endif // __CUDACC__
 
 		}  // namespace v2
 	}  // namespace op

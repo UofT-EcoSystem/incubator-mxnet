@@ -13,5 +13,5 @@ Operator * CreateOp < gpu > (LSTMNonLinBlockParam param, int dtype)
 	return op;
 }
 
-	} // namespace op
-} // namespace mxnet
+	}  // namespace op
+}  // namespace mxnet

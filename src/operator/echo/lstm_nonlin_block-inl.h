@@ -6,7 +6,7 @@
 #include <dmlc/parameter.h>
 #include <mxnet/operator.h>
 
-#include "operator_common.h"
+#include "../operator_common.h"
 
 namespace mxnet {
 	namespace op {
@@ -18,7 +18,7 @@ enum class EnumOpOutputs { StateHOut, StateCOut,
 			   IActvFM, OutputFM };
 // NO Need for Temporary Workspace
 
-		} // anonymous namespace
+		}  // namespace anonymous
 
 struct LSTMNonLinBlockParam : public dmlc::Parameter < LSTMNonLinBlockParam >
 {
@@ -212,9 +212,9 @@ public:
 	Operator * CreateOperatorEx(Context ctx, 
 				    std::vector < TShape > * in_shape,
         			    std::vector < int >    * in_type) const override;
-}; // class LSTMNonLinBlockProp
+};  // class LSTMNonLinBlockProp
 
 #endif // DMLC_USE_CXX11
 
-	} // namespace op
-} // namespace mxnet
+	}  // namespace op
+}  // namespace mxnet
