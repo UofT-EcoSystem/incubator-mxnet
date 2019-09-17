@@ -1,39 +1,40 @@
 #pragma once
 
-#include "par_sequence_reverse-inl.h"
+#include "sequence_reverse_v2-inl.h"
 
 namespace mxnet {
 	namespace op {
+		namespace v2 {
 
 #if defined(__CUDACC__)
 
 /**
- * Forward Pass of the Parallel Reverse Sequence
- * This kernel shall be launched using the parameter <<< (T, B), H, cuda_stream >>>
- * @param1 data     [T x B x H]:  (Input) Input Data
- * @param2 data_rev [T x B x H]: (Output) Input Data reversed along the Time Axis
- * @param4 sequence_length [B]: Sequence Length of Each Batch
+ * Forward & Backward Pass of the Parallel Reverse Sequence
+ * 
+ * @param1 data   [T x B x H]
+ * @param2 output [T x B x H]
+ * @param3 sequence_length [B]: Sequence Length of Each Batch
  */
 template < typename RealType >
-static __global__ void _cuda_par_reverse_sequence(
+static __global__ void cudaReverseSequence(
 	const RealType * const __restrict__ data,
-	      RealType * const __restrict__ data_rev,
+	      RealType * const __restrict__ output,
 	const RealType * const __restrict__ sequence_length,
 	const OpReqType req = OpReqType::kWriteTo);
 
 template < typename DType >
-class CUParSequenceReverseOp : public Operator 
+class CUSequenceReverseV2Op : public Operator 
 {
 private:
-	ParSequenceReverseParam _param;
+	SequenceReverseV2Param _param;
 
 	bool _initialized = false;
 public:
-	explicit CUParSequenceReverseOp(ParSequenceReverseParam param)
+	explicit CUSequenceReverseV2Op(SequenceReverseV2Param param)
 	{
 		_param = param;
 	}
-	~CUParSequenceReverseOp() {}
+	~CUSequenceReverseV2Op() {}
 private:
 	void _Init(mshadow::Stream < gpu > * cuda_stream,
 	           const std::vector < TBlob > &  in_data,
@@ -65,24 +66,24 @@ public:
 		std::size_t in_expected = _param.use_sequence_length ? 2 : 1, out_expected = 1;
 
 		CHECK_EQ( in_data.size(),  in_expected); // data, sequence_length
-		CHECK_EQ(out_data.size(), out_expected); // data_rev
+		CHECK_EQ(out_data.size(), out_expected); // output
 
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 
-		Tensor < gpu, 3, DType > data     =  in_data[int(EnumOpInputs ::Data)]
+		Tensor < gpu, 3, DType > data   =  in_data[int(EnumOpInputs ::Data)]
 			.get < gpu, 3, DType > (cuda_stream);
-		Tensor < gpu, 3, DType > data_rev = out_data[int(EnumOpOutputs::DataRev)]
+		Tensor < gpu, 3, DType > output = out_data[int(EnumOpOutputs::Output)]
 			.get < gpu, 3, DType > (cuda_stream);
 
-		CHECK_EQ(data    .CheckContiguous(), true);
-		CHECK_EQ(data_rev.CheckContiguous(), true);
+		CHECK_EQ(data  .CheckContiguous(), true);
+		CHECK_EQ(output.CheckContiguous(), true);
 
 		if (!_initialized)
 		{
 			_Init(cuda_stream, in_data, out_data);
 		}
 
-		DType * ptr_sequence_length = nullptr;
+		DType * sequence_length_dptr = nullptr;
 
 		if (_param.use_sequence_length)
 		{
@@ -90,10 +91,10 @@ public:
 				.get < gpu, 1, DType > (cuda_stream);
 			CHECK_EQ(sequence_length.CheckContiguous(), true);
 
-			ptr_sequence_length = sequence_length.dptr_;
+			sequence_length_dptr = sequence_length.dptr_;
 		}
 
-		_cuda_par_reverse_sequence < DType >
+		cudaReverseSequence < DType >
 			<<<
 				dim3(_param.batch_size, 
 				     _param.seq_length),
@@ -101,9 +102,9 @@ public:
 				Stream < gpu > ::GetStream(cuda_stream)
 			>>>
 			(
-				data    .dptr_,
-				data_rev.dptr_,
-				ptr_sequence_length
+				data  .dptr_,
+				output.dptr_,
+				sequence_length_dptr
 			);
 	}
 
@@ -127,15 +128,15 @@ public:
 
 		Stream < gpu > * cuda_stream = ctx.get_stream < gpu > ();
 		
-		Tensor < gpu, 3, DType > data_grad     =  in_grad[int(EnumOpInputs ::Data)]
+		Tensor < gpu, 3, DType > data_grad   =  in_grad[int(EnumOpInputs ::Data)]
 			.get < gpu, 3, DType > (cuda_stream);
-		Tensor < gpu, 3, DType > data_rev_grad = out_grad[int(EnumOpOutputs::DataRev)]
+		Tensor < gpu, 3, DType > output_grad = out_grad[int(EnumOpOutputs::Output)]
 			.get < gpu, 3, DType > (cuda_stream);
 		
-		CHECK_EQ(data_grad    .CheckContiguous(), true);
-		CHECK_EQ(data_rev_grad.CheckContiguous(), true);
+		CHECK_EQ(data_grad  .CheckContiguous(), true);
+		CHECK_EQ(output_grad.CheckContiguous(), true);
 
-		DType * ptr_sequence_length = nullptr;
+		DType * sequence_length_dptr = nullptr;
 
 		if (_param.use_sequence_length)
 		{
@@ -143,10 +144,10 @@ public:
 				.get < gpu, 1, DType > (cuda_stream);
 			CHECK_EQ(sequence_length.CheckContiguous(), true);
 
-			ptr_sequence_length = sequence_length.dptr_;
+			sequence_length_dptr = sequence_length.dptr_;
 		}
 
-		_cuda_par_reverse_sequence < DType >
+		cudaReverseSequence < DType >
 			<<<
 				dim3(_param.batch_size, 
 				     _param.seq_length),
@@ -154,18 +155,18 @@ public:
 				Stream < gpu > ::GetStream(cuda_stream)
 			>>>
 			(
-				data_rev_grad.dptr_,
-				data_grad    .dptr_,
-				ptr_sequence_length,
+				output_grad.dptr_,
+				data_grad  .dptr_,
+				sequence_length_dptr,
 				req[int(EnumOpInputs::Data)]
 			);
 	}
-}; // class CUParSequenceReverseOp
+}; // class CUSequenceReverseV2Op
 
 template < typename RealType >
-__global__ void _cuda_par_reverse_sequence(
+__global__ void cudaReverseSequence(
 	const RealType * const __restrict__ data,
-	      RealType * const __restrict__ data_rev,
+	      RealType * const __restrict__ output,
 	const RealType * const __restrict__ sequence_length, const OpReqType req)
 {
 	const unsigned seq_idx = blockIdx.y, batch_idx = blockIdx.x;
@@ -184,22 +185,22 @@ __global__ void _cuda_par_reverse_sequence(
 			remapped_seq_idx = seq_idx;
 		}
 	}
-	const unsigned batch_state_idx = blockIdx.x *  blockDim.x + 
-						      threadIdx.x;
+	const unsigned batch_state_idx = blockIdx.x * blockDim.x + threadIdx.x;
 
 	if (req == OpReqType::kWriteTo || req == OpReqType::kWriteInplace)
 	{
-		data_rev[remapped_seq_idx * gridDim.x * blockDim.x + batch_state_idx] = 
-			     data[seq_idx * gridDim.x * blockDim.x + batch_state_idx];
+		output[remapped_seq_idx * gridDim.x * blockDim.x + batch_state_idx] = 
+                           data[seq_idx * gridDim.x * blockDim.x + batch_state_idx];
 	}
 	else if (req == OpReqType::kAddTo)
 	{
-		data_rev[remapped_seq_idx * gridDim.x * blockDim.x + batch_state_idx] += 
-			     data[seq_idx * gridDim.x * blockDim.x + batch_state_idx];
+		output[remapped_seq_idx * gridDim.x * blockDim.x + batch_state_idx] += 
+                           data[seq_idx * gridDim.x * blockDim.x + batch_state_idx];
 	}
 }
 
 #endif // __CUDACC__
 
-	} // namespace op
-} // namespace mxnet
+		}  // namespace v2
+	}  // namespace op
+}  // namespace mxnet
