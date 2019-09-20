@@ -420,103 +420,114 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
   using nnvm::FGradient;
   using nnvm::pass::MirrorType;
   // `grad_fun_map` maps the operator to gradient function
-  static const OpMap<FGradient>& grad_fun_map =
-      Op::GetAttr<FGradient>("FGradient");
-  int do_mirror = dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR", 0);
-  
-#if BASELINE_BACKWARD_MIRRORING
-  std::function<bool(
-      const nnvm::NodePtr&)> need_mirror = [do_mirror](
-      const nnvm::NodePtr& node_ptr) -> bool {
-    if (node_ptr->is_variable()) return false;
-
-    const std::string& type = node_ptr->attrs.op->name;
-
-    if (get_node_attr(*node_ptr, "__force_mirroring__", false)) return true;
-    if (do_mirror == 0) return false;
-
-    if (type == "Dropout")        return false;
-    if (type == "Convolution")    return false;
-    if (type == "FullyConnected") return false;
-    if (type == "Concat")         return false;
-    if (type == "SoftmaxOutput")  return false;
-    // if (type == "BatchNorm")      return false;
-    // if (type == "CuDNNBatchNorm") return false;
-    return true;
-#else  // !BASELINE_BACKWARD_MIRRORING
-  std::function<MirrorType(
-      const nnvm::NodePtr&)> need_mirror = [do_mirror](
-      const nnvm::NodePtr& node_ptr) -> MirrorType {
-
-    if (node_ptr->is_variable()) return MirrorType::kNone;
-
-    const std::string& type = node_ptr->attrs.op->name;
-
-    if (get_node_attr(*node_ptr, "__force_mirroring__", false)) return MirrorType::kBoth;
-    if (do_mirror == 0) return MirrorType::kNone;
-
-    if (type == "Embedding")          return MirrorType::kNone;
-
-    if (type == "_zeros")             return MirrorType::kNone;
-    if (type == "zeros_like")         return MirrorType::kNone;
-    
-    if (type == "SequenceReverse")    return MirrorType::kNone;
-    if (type == "SequenceLast")       return MirrorType::kNone;
-    if (type == "SequenceMask")       return MirrorType::kNone;
-    if (type == "ParSequenceReverse") return MirrorType::kNone;
-
-    if (type == "sum")                return MirrorType::kNone;
-    if (type == "mean")               return MirrorType::kNone;
-
-    if (type == "expand_dims")        return MirrorType::kNone;
-    if (type == "Concat")             return MirrorType::kNone;
-    if (type == "Reshape")            return MirrorType::kNone;
-    if (type == "SwapAxis")           return MirrorType::kNone;
-    if (type == "tile")               return MirrorType::kNone;
-    if (type == "transpose")          return MirrorType::kNone;
-    if (type == "SliceChannel")       return MirrorType::kNone;
-
-    if (type == "softmax")            return MirrorType::kNone;
-    if (type == "SoftmaxOutput")      return MirrorType::kNone;
-
-    if (type == "Dropout")            return MirrorType::kNone;
-
-    // if (type == "BatchNorm")          return MirrorType::kNone;
-    // if (type == "CuDNNBatchNorm")     return MirrorType::kNone;
-
-    if (type == "Convolution")        return MirrorType::kInput;
-    if (type == "batch_dot")          return MirrorType::kInput;
-    if (type == "FullyConnected")     return MirrorType::kInput;
-
-    // We need the mirroring to stop when the cell state of an LSTM cell is encountered.
-    // The reason is because unlike input and hidden states that are blocked
-    //   by the input-to-hidden and hidden-to-hidden connections,
-    //   the cell states do not need to go through a fully-connected layer 
-    //   and can be "infinitely" mirrored backward until the start of the sequence.
-    // This will cause huge performance overhead, especially when the sequence length is long.
-    if (std::regex_match(node_ptr->attrs.name, std::regex("(.*)(state)"))
-        ) {
-      return MirrorType::kNone;
-    }
-    return MirrorType::kBoth;
-#endif  // BASELINE_BACKWARD_MIRRORING
-  };
+  // static const OpMap<FGradient>& grad_fun_map =
+  //     Op::GetAttr<FGradient>("FGradient");
 
   std::vector<const nnvm::Op*> zero_ops;
   zero_ops.push_back(nnvm::Op::Get("zeros_like"));
   zero_ops.push_back(nnvm::Op::Get("_zeros"));
 
   // take gradient
-  nnvm::Graph g_grad = nnvm::pass::Gradient(
-      g, symbol.outputs, xs, head_grad_entry_,
-      AggregateGradient, need_mirror, nullptr,
-      zero_ops, "_copy", in_arg_shapes, in_arg_dtypes);
-  CHECK_EQ(g_grad.outputs.size(), xs.size());
-  for (const auto &e : g_grad.outputs) {
-    g.outputs.push_back(e);
-  }
+  if (dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR_V2", 0)) {
+    int do_mirror = dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR_V2", 0);
+  
+    std::function<MirrorType(
+        const nnvm::NodePtr&)> need_mirror = [do_mirror](
+        const nnvm::NodePtr& node_ptr) -> MirrorType {
 
-  return g;
+      if (node_ptr->is_variable()) return MirrorType::kNone;
+
+      const std::string& type = node_ptr->attrs.op->name;
+
+      if (get_node_attr(*node_ptr, "__force_mirroring__", false)) return MirrorType::kBoth;
+      if (do_mirror == 0) return MirrorType::kNone;
+
+      if (type == "Embedding")          return MirrorType::kNone;
+
+      if (type == "_zeros")             return MirrorType::kNone;
+      if (type == "zeros_like")         return MirrorType::kNone;
+      
+      if (type == "SequenceReverse")    return MirrorType::kNone;
+      if (type == "SequenceLast")       return MirrorType::kNone;
+      if (type == "SequenceMask")       return MirrorType::kNone;
+      if (type == "ParSequenceReverse") return MirrorType::kNone;
+
+      if (type == "sum")                return MirrorType::kNone;
+      if (type == "mean")               return MirrorType::kNone;
+
+      if (type == "expand_dims")        return MirrorType::kNone;
+      if (type == "Concat")             return MirrorType::kNone;
+      if (type == "Reshape")            return MirrorType::kNone;
+      if (type == "SwapAxis")           return MirrorType::kNone;
+      if (type == "tile")               return MirrorType::kNone;
+      if (type == "transpose")          return MirrorType::kNone;
+      if (type == "SliceChannel")       return MirrorType::kNone;
+
+      if (type == "softmax")            return MirrorType::kNone;
+      if (type == "SoftmaxOutput")      return MirrorType::kNone;
+
+      if (type == "Dropout")            return MirrorType::kNone;
+
+      // if (type == "BatchNorm")          return MirrorType::kNone;
+      // if (type == "CuDNNBatchNorm")     return MirrorType::kNone;
+
+      if (type == "Convolution")        return MirrorType::kInput;
+      if (type == "batch_dot")          return MirrorType::kInput;
+      if (type == "FullyConnected")     return MirrorType::kInput;
+
+      // We need the mirroring to stop when the cell state of an LSTM cell is encountered.
+      // The reason is because unlike input and hidden states that are blocked
+      //   by the input-to-hidden and hidden-to-hidden connections,
+      //   the cell states do not need to go through a fully-connected layer 
+      //   and can be "infinitely" mirrored backward until the start of the sequence.
+      // This will cause huge performance overhead, especially when the sequence length is long.
+      if (std::regex_match(node_ptr->attrs.name, std::regex("(.*)(state)"))
+          ) {
+        return MirrorType::kNone;
+      }
+      return MirrorType::kBoth;
+    };
+    nnvm::Graph g_grad = nnvm::pass::GradientV2(
+        g, symbol.outputs, xs, head_grad_entry_,
+        AggregateGradient, need_mirror, nullptr,
+        zero_ops, "_copy", in_arg_shapes, in_arg_dtypes);
+    CHECK_EQ(g_grad.outputs.size(), xs.size());
+    for (const auto &e : g_grad.outputs) {
+      g.outputs.push_back(e);
+    }
+    return g;
+  } else {
+    int do_mirror = dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR", 0);
+
+    std::function<bool(
+        const nnvm::NodePtr&)> need_mirror = [do_mirror](
+        const nnvm::NodePtr& node_ptr) -> bool {
+      if (node_ptr->is_variable()) return false;
+
+      const std::string& type = node_ptr->attrs.op->name;
+
+      if (get_node_attr(*node_ptr, "__force_mirroring__", false)) return true;
+      if (do_mirror == 0) return false;
+
+      if (type == "Dropout")        return false;
+      if (type == "Convolution")    return false;
+      if (type == "FullyConnected") return false;
+      if (type == "Concat")         return false;
+      if (type == "SoftmaxOutput")  return false;
+      // if (type == "BatchNorm")      return false;
+      // if (type == "CuDNNBatchNorm") return false;
+      return true;
+    };
+    nnvm::Graph g_grad = nnvm::pass::Gradient(
+          g, symbol.outputs, xs, head_grad_entry_,
+          AggregateGradient, need_mirror, nullptr, 
+          zero_ops, "_copy");
+    CHECK_EQ(g_grad.outputs.size(), xs.size());
+    for (const auto &e : g_grad.outputs) {
+      g.outputs.push_back(e);
+    }
+    return g;
+  }
 }
 
 /*!
