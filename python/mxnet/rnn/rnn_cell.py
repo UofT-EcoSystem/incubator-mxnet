@@ -444,24 +444,22 @@ class LSTMCell(BaseRNNCell):
 
         import os
 
-        if int(os.environ['USE_ECO_LSTM_CELL']):
-
-            next_h, next_c = symbol.EcoLSTMCell(input=inputs, state_h=states[0], state_c=states[1],
-                                                i2h_weight=self._iW, i2h_bias=self._iB,
-                                                h2h_weight=self._hW, h2h_bias=self._hB,
-                                                name='%slstm_cell'%name)
-
+        if int(os.environ['USE_LSTM_CELL_V2']):
+            next_h, next_c = symbol.LSTMCellV2(
+                    input=inputs, state_h=states[0], state_c=states[1],
+                    i2h_weight=self._iW, i2h_bias=self._iB,
+                    h2h_weight=self._hW, h2h_bias=self._hB,
+                    name='%slstm_cell'%name)
             return next_h, [next_h, next_c]
 
-        i2h = symbol.FullyConnected(data=inputs   , weight=self._iW, bias=self._iB,
-                                    num_hidden=self._num_hidden*4,
-                                    name='%si2h'%name)
-        h2h = symbol.FullyConnected(data=states[0], weight=self._hW, bias=self._hB,
-                                    num_hidden=self._num_hidden*4,
-                                    name='%sh2h'%name)
+        i2h = symbol.FullyConnected(data=inputs, 
+                weight=self._iW, bias=self._iB,
+                num_hidden=self._num_hidden*4, name='%si2h'%name)
+        h2h = symbol.FullyConnected(data=states[0], 
+                weight=self._hW, bias=self._hB,
+                num_hidden=self._num_hidden*4, name='%sh2h'%name)
 
         if int(os.environ['USE_LSTM_NONLIN_BLOCK']):
-
             next_h, next_c = symbol.LSTMNonLinBlock(
                     input_plus_state_h=i2h+h2h, 
                     state_c=states[1],
