@@ -500,14 +500,14 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     int do_mirror = dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR", 0);
 
     std::function<bool(
-        const nnvm::NodePtr&)> need_mirror = [do_mirror](
-        const nnvm::NodePtr& node_ptr) -> bool {
-      if (node_ptr->is_variable()) return false;
+        const nnvm::Node&)> need_mirror = [do_mirror](
+        const nnvm::Node& node) -> bool {
+    if (node.is_variable()) return 0;
 
-      const std::string& type = node_ptr->attrs.op->name;
+    const std::string& type = node.attrs.op->name;
 
-      if (get_node_attr(*node_ptr, "__force_mirroring__", false)) return true;
-      if (do_mirror == 0) return false;
+    if (get_node_attr(node, "__force_mirroring__", false)) return true;
+      if (do_mirror == 0)           return false;
 
       if (type == "Dropout")        return false;
       if (type == "Convolution")    return false;
