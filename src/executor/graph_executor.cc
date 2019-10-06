@@ -514,6 +514,7 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
       if (type == "FullyConnected") return false;
       if (type == "Concat")         return false;
       if (type == "SoftmaxOutput")  return false;
+      if (type == "transpose")      return false;
       // if (type == "BatchNorm")      return false;
       // if (type == "CuDNNBatchNorm") return false;
       return true;
