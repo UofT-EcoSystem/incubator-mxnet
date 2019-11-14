@@ -188,7 +188,13 @@ def fit(args, network, data_loader, **kwargs):
         eval_metrics.append(mx.metric.create('top_k_accuracy', top_k=args.top_k))
 
     # callbacks that run after each batch
-    batch_end_callbacks = [mx.callback.Speedometer(args.batch_size, args.disp_batches)]
+    # CHANGE(ArmageddonKnight) Changed the speedometer from legacy to CSV.
+    # batch_end_callbacks = [mx.callback.Speedometer(
+    #       args.batch_size, 
+    #       args.disp_batches)]
+    batch_end_callbacks = [mx.callback.CSVSpeedometer(
+            args.batch_size,
+            args.disp_batches)]
     if 'batch_end_callback' in kwargs:
         cbs = kwargs['batch_end_callback']
         batch_end_callbacks += cbs if isinstance(cbs, list) else [cbs]
