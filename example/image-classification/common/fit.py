@@ -73,8 +73,13 @@ def add_fit_args(parser):
                        help='list of gpus to run, e.g. 0 or 0,2,5. empty means using cpu')
     train.add_argument('--kv-store', type=str, default='device',
                        help='key-value store type')
-    train.add_argument('--num-epochs', type=int, default=100,
+    train.add_argument('--num-epoch', type=int, default=100,
                        help='max num of epochs')
+    
+    # CHANGE(ArmageddonKnight) Add an upper bound on the number of batches.
+    train.add_argument('--num-steps',  type=int, default=1000,
+                       help='max num of training steps')
+
     train.add_argument('--lr', type=float, default=0.1,
                        help='initial learning rate')
     train.add_argument('--lr-factor', type=float, default=0.1,
@@ -202,7 +207,9 @@ def fit(args, network, data_loader, **kwargs):
     # run
     model.fit(train,
         begin_epoch        = args.load_epoch if args.load_epoch else 0,
-        num_epoch          = args.num_epochs,
+        num_epoch          = args.num_epoch,
+        # CHANGE(ArmageddonKnight) Add an upper bound on the number of batches.
+        num_steps          = args.num_steps,
         eval_data          = val,
         eval_metric        = eval_metrics,
         kvstore            = kv,

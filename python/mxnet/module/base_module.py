@@ -380,7 +380,10 @@ class BaseModule(object):
             eval_batch_end_callback=None, initializer=Uniform(0.01),
             arg_params=None, aux_params=None, allow_missing=False,
             force_rebind=False, force_init=False, begin_epoch=0, num_epoch=None,
-            validation_metric=None, monitor=None):
+            validation_metric=None, monitor=None
+            # CHANGE(ArmageddonKnight) Add an upper bound on the number of batches.
+            , num_steps=None
+            ):
         """Trains the module parameters.
 
         Checkout `Module Tutorial <http://mxnet.io/tutorials/basic/module.html>`_ to see
@@ -473,6 +476,9 @@ class BaseModule(object):
         ################################################################################
         # training loop
         ################################################################################
+        # CHANGE(ArmageddonKnight) Add an upper bound on the number of batches.
+        nsteps = 0
+
         for epoch in range(begin_epoch, num_epoch):
             tic = time.time()
             eval_metric.reset()
@@ -482,6 +488,12 @@ class BaseModule(object):
             next_data_batch = next(data_iter)
             while not end_of_batch:
                 data_batch = next_data_batch
+
+                # CHANGE(ArmageddonKnight) Add an upper bound on the number of batches.
+                if num_steps is not None and \
+                   nsteps > num_steps:
+                    break
+
                 if monitor is not None:
                     monitor.tic()
                 self.forward_backward(data_batch)
@@ -505,6 +517,9 @@ class BaseModule(object):
                     for callback in _as_list(batch_end_callback):
                         callback(batch_end_params)
                 nbatch += 1
+
+                # CHANGE(ArmageddonKnight) Add an upper bound on the number of batches.
+                nsteps += 1
 
             # one epoch of training is finished
             for name, val in eval_metric.get_name_value():
