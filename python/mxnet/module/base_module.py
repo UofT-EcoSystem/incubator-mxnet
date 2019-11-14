@@ -381,7 +381,7 @@ class BaseModule(object):
             arg_params=None, aux_params=None, allow_missing=False,
             force_rebind=False, force_init=False, begin_epoch=0, num_epoch=None,
             validation_metric=None, monitor=None
-            # CHANGE(ArmageddonKnight) Add an upper bound on the number of batches.
+            # CHANGE(ArmageddonKnight) Added an upper bound on the number of batches.
             , num_steps=None
             ):
         """Trains the module parameters.
@@ -476,7 +476,7 @@ class BaseModule(object):
         ################################################################################
         # training loop
         ################################################################################
-        # CHANGE(ArmageddonKnight) Add an upper bound on the number of batches.
+        # CHANGE(ArmageddonKnight) Added an upper bound on the number of batches.
         nsteps = 0
 
         for epoch in range(begin_epoch, num_epoch):
@@ -489,14 +489,20 @@ class BaseModule(object):
             while not end_of_batch:
                 data_batch = next_data_batch
 
-                # CHANGE(ArmageddonKnight) Add an upper bound on the number of batches.
+                # CHANGE(ArmageddonKnight) Added an upper bound on the number of batches.
                 if num_steps is not None and \
                    nsteps > num_steps:
                     break
 
                 if monitor is not None:
                     monitor.tic()
-                self.forward_backward(data_batch)
+                
+                # CHANGE(ArmageddonKnight) Disabled the `forward_backward` method call.
+                # self.forward_backward(data_batch)
+                self.forward(data_batch)
+                self.update_metric(eval_metric, data_batch.label)
+                self.backward()
+
                 self.update()
                 try:
                     # pre fetch next batch
@@ -505,7 +511,8 @@ class BaseModule(object):
                 except StopIteration:
                     end_of_batch = True
 
-                self.update_metric(eval_metric, data_batch.label)
+                # CHANGE(ArmageddonKnight) Disabled the `forward_backward` method call.
+                # self.update_metric(eval_metric, data_batch.label)
 
                 if monitor is not None:
                     monitor.toc_print()
@@ -518,7 +525,7 @@ class BaseModule(object):
                         callback(batch_end_params)
                 nbatch += 1
 
-                # CHANGE(ArmageddonKnight) Add an upper bound on the number of batches.
+                # CHANGE(ArmageddonKnight) Added an upper bound on the number of batches.
                 nsteps += 1
 
             # one epoch of training is finished
