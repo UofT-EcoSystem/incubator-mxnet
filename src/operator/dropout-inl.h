@@ -101,7 +101,6 @@ __global__ void binarize_mask(
   if (g_threadIdx >= mask_size) {
     return;
   }
-  __shared__ bool smem_binarized_mask [32];
   // unsigned bit_mask = 1 << ((g_threadIdx / 32 + 1) * 32 - g_threadIdx - 1);
   // if (mask[g_threadIdx]) {
   //   binarized_mask[g_threadIdx / 32] |=   bit_mask;
@@ -109,15 +108,24 @@ __global__ void binarize_mask(
   //   binarized_mask[g_threadIdx / 32] &= (~bit_mask);
   // }
 
-  smem_binarized_mask[g_threadIdx % 32] = mask[g_threadIdx] != 0;
+  // __shared__ bool smem_binarized_mask [32];
+
+  // smem_binarized_mask[g_threadIdx % 32] = mask[g_threadIdx] != 0;
+  // if (threadIdx.x == 0) {
+  //   unsigned accumulated_mask = 0;
+
+  //   for (unsigned i = 0; i < 32; ++i) {
+  //     accumulated_mask += (1 << (31 - i)) * smem_binarized_mask[i];
+  //   }
+
+  //   // printf("%u\n", accumulated_mask);
+  //   binarized_mask[g_threadIdx / 32] = accumulated_mask;
+  // }
+  unsigned accumulated_mask = static_cast<unsigned>(
+      __ballot_sync(0xffffffff, 
+        mask[g_threadIdx] != 0));
+
   if (threadIdx.x == 0) {
-    unsigned accumulated_mask = 0;
-
-    for (unsigned i = 0; i < 32; ++i) {
-      accumulated_mask += (1 << (31 - i)) * smem_binarized_mask[i];
-    }
-
-    // printf("%u\n", accumulated_mask);
     binarized_mask[g_threadIdx / 32] = accumulated_mask;
   }
 }
@@ -132,7 +140,8 @@ __global__ void unbinarize_mask(
   if (g_threadIdx >= mask_size) {
     return;
   }
-  unsigned bit_mask = 1 << ((g_threadIdx / 32 + 1) * 32 - g_threadIdx - 1);
+  // unsigned bit_mask = 1 << ((g_threadIdx / 32 + 1) * 32 - g_threadIdx - 1);
+  unsigned bit_mask = 1 << (g_threadIdx - (g_threadIdx / 32) * 32);
   unsigned bit = binarized_mask[g_threadIdx / 32] & bit_mask;
   if (bit) {
     mask[g_threadIdx] = 1.0 / p;
@@ -244,7 +253,7 @@ class DropoutOp : public Operator {
           .get_space_typed<xpu, 1, DType>(Shape1(gdata.shape_.Size()), s);
       Tensor<xpu, 1, DType> binarized_mask = out_data[dropout::kMask].get<xpu, 1, DType>(s);
 #if defined(__CUDACC__)
-      unbinarize_mask <<< (gdata.shape_.Size() - 1) / 128 + 1, 128, 0, 
+      unbinarize_mask <<< (gdata.shape_.Size() - 1) / 32 + 1, 32, 0, 
                           Stream<gpu>::GetStream(s) >>> 
           (mask.dptr_, reinterpret_cast<unsigned *>(binarized_mask.dptr_), 
            this->pkeep_, gdata.shape_.Size());
