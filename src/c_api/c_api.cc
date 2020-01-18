@@ -54,6 +54,7 @@
 #include "../operator/tensor/matrix_op-inl.h"
 #include "../operator/tvmop/op_module.h"
 #include "../common/utils.h"
+#include "../profiler/gpu_memory_profiler.h"
 #include "nnvm/pass_functions.h"
 
 using namespace mxnet;
@@ -808,7 +809,8 @@ void CreateNDArray(const DataType* shape,
   }
   *out = new NDArray(requested_shape,
                      Context::Create(static_cast<Context::DeviceType>(dev_type), dev_id),
-                     delay_alloc != 0, dtype);
+                     delay_alloc != 0, dtype,
+                     profiler::GpuMemoryProfiler::GetCurrentScope());
 }
 
 int MXNDArrayCreate(const uint32_t *shape,
@@ -820,7 +822,8 @@ int MXNDArrayCreate(const uint32_t *shape,
   API_BEGIN();
   *out = new NDArray(mxnet::TShape(shape, shape + ndim),
                      Context::Create(static_cast<Context::DeviceType>(dev_type), dev_id),
-                     delay_alloc != 0);
+                     delay_alloc != 0, mshadow::default_type_flag,
+                     profiler::GpuMemoryProfiler::GetCurrentScope());
   API_END();
 }
 
@@ -876,7 +879,9 @@ int MXNDArrayCreateSparseEx(int storage_type,
       mxnet::TShape(shape, shape + ndim),
       Context::Create(static_cast<Context::DeviceType>(dev_type), dev_id),
       delay_alloc != 0,
-      dtype, aux_types, aux_shapes);
+      dtype, aux_types, aux_shapes,
+      mxnet::TShape(mshadow::Shape1(0)),
+      profiler::GpuMemoryProfiler::GetCurrentScope());
   API_END();
 }
 
@@ -2189,14 +2194,16 @@ int MXNDArrayGetSharedMemHandle(NDArrayHandle handle, int* shared_pid, int* shar
 int MXNDArrayCreateFromSharedMem(int shared_pid, int shared_id, const uint32_t *shape,
                                  uint32_t ndim, int dtype, NDArrayHandle *out) {
   API_BEGIN();
-  *out = new NDArray(shared_pid, shared_id, mxnet::TShape(shape, shape + ndim), dtype);
+  *out = new NDArray(shared_pid, shared_id, mxnet::TShape(shape, shape + ndim), dtype,
+                     profiler::GpuMemoryProfiler::GetCurrentScope());
   API_END();
 }
 
 int MXNDArrayCreateFromSharedMemEx(int shared_pid, int shared_id, const int *shape,
                                    int ndim, int dtype, NDArrayHandle *out) {
   API_BEGIN();
-  *out = new NDArray(shared_pid, shared_id, mxnet::TShape(shape, shape + ndim), dtype);
+  *out = new NDArray(shared_pid, shared_id, mxnet::TShape(shape, shape + ndim), dtype,
+                     profiler::GpuMemoryProfiler::GetCurrentScope());
   API_END();
 }
 
