@@ -323,7 +323,9 @@ inline ValueType get_node_attr(
  * This is triggered by both simple_bind and bind flows.
  */
 nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
-                                         const std::vector<OpReqType>& grad_req_types) {
+                                         const std::vector<OpReqType>& grad_req_types,
+                                         const nnvm::ShapeVector& in_arg_shapes,
+                                         const nnvm::DTypeVector& in_arg_dtypes) {
   using nnvm::NodePtr;
   using nnvm::NodeEntry;
   // initial information
@@ -356,15 +358,30 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
 
   int do_mirror = dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR", 0);
   auto need_mirror = [do_mirror](const nnvm::Node& node) -> int {
-    if (node.is_variable()) return 0;
+    if (node.is_variable())  return false;
+    if (do_mirror == 0)      return false;
     const std::string& type = node.attrs.op->name;
-    if (type == "Dropout") return false;
-    if (get_node_attr(node, "__force_mirroring__", false)) return true;
-    if (do_mirror == 0) return false;
-    if (type == "Convolution") return false;
-    if (type == "FullyConnected") return false;
-    if (type == "Concat") return false;
-    if (type == "SoftmaxOutput") return false;
+    if (get_node_attr(node, "__force_mirroring__", true))   return true;
+    if (get_node_attr(node, "__force_mirroring__", false))  return false;
+    // array creation operators
+    if (type == "arange")      return false;
+    if (type == "array")       return false;
+    if (type == "diag")        return false;
+    if (type == "empty")       return false;
+    if (type == "full")        return false;
+    if (type == "load")        return false;
+    if (type == "ones")        return false;
+    if (type == "ones_like")   return false;
+    if (type == "save")        return false;
+    if (type == "zeros")       return false;
+    if (type == "zeros_like")  return false;
+    // compute-heavy layers
+    if (type == "Convolution")     return false;
+    if (type == "FullyConnected")  return false;
+    if (type == "batch_dot")       return false;
+    if (type == "SoftmaxOutput")   return false;
+    // stateful operators
+    if (type == "Dropout")  return false;
     return true;
   };
 
@@ -376,7 +393,7 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
   nnvm::Graph g_grad = nnvm::pass::MXGradient(
       g, symbol.outputs, xs, head_grad_entry_,
       AggregateGradient, need_mirror, nullptr,
-      zero_ops, "_copy");
+      zero_ops, "_copy", in_arg_shapes, in_arg_dtypes);
   CHECK_EQ(g_grad.outputs.size(), xs.size());
   for (const auto &e : g_grad.outputs) {
     g.outputs.push_back(e);
@@ -412,8 +429,38 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
   std::vector<Context> aux_state_ctxes(aux_states.size());
   std::transform(aux_states.begin(), aux_states.end(), aux_state_ctxes.begin(), get_ctx1);
 
+  // Mirror the shape/dtype inference process below to obtain the shapes and
+  // data types of the inputs. Those information is needed by the backward
+  // mirroring algorithm.
+  nnvm::Graph mirrored_g;
+  mirrored_g.outputs = symbol.outputs;
+  const nnvm::IndexedGraph& mirrored_idx = mirrored_g.indexed_graph();
+  const std::unordered_set<uint32_t>& mirrored_mutable_nodes =
+      mirrored_idx.mutable_input_nodes();
+  size_t mirrored_arg_top = 0, mirrored_aux_top = 0;
+  nnvm::ShapeVector mirrored_arg_shapes;
+  nnvm::DTypeVector mirrored_arg_dtypes;
+  const size_t mirrored_num_forward_inputs = symbol.ListInputs(nnvm::Symbol::kAll).size();
+
+  for (size_t i = 0; i < mirrored_num_forward_inputs; ++i) {
+    const uint32_t nid = mirrored_idx.input_nodes().at(i);
+
+    if (mirrored_mutable_nodes.count(nid)) {
+      CHECK_LT(mirrored_aux_top, aux_states.size());
+      mirrored_arg_shapes.push_back(aux_states[mirrored_aux_top].shape());
+      mirrored_arg_dtypes.push_back(aux_states[mirrored_aux_top].dtype());
+      ++mirrored_aux_top;
+    } else {
+      CHECK_LT(mirrored_arg_top, in_args.size());
+      mirrored_arg_shapes.push_back(in_args[mirrored_arg_top].shape());
+      mirrored_arg_dtypes.push_back(in_args[mirrored_arg_top].dtype());
+      ++mirrored_arg_top;
+    }
+  }
+
   nnvm::Graph g = InitGraph(symbol, default_ctx, ctx_map, in_arg_ctxes,
-                            arg_grad_ctxes, aux_state_ctxes, grad_req_types);
+                            arg_grad_ctxes, aux_state_ctxes, grad_req_types,
+                            mirrored_arg_shapes, mirrored_arg_dtypes);
 
   // create arg_shapes and arg_dtypes for shape and type inferences
   const auto& idx = g.indexed_graph();
@@ -995,9 +1042,12 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
                                const std::vector<Context>& in_arg_ctxes,
                                const std::vector<Context>& arg_grad_ctxes,
                                const std::vector<Context>& aux_state_ctxes,
-                               const std::vector<OpReqType>& grad_req_types) {
+                               const std::vector<OpReqType>& grad_req_types,
+                               const nnvm::ShapeVector& in_arg_shapes,
+                               const nnvm::DTypeVector& in_arg_dtypes) {
   // setup gradient
-  nnvm::Graph g = InitFullGraph(symbol, grad_req_types);
+  nnvm::Graph g = InitFullGraph(symbol, grad_req_types,
+                                in_arg_shapes, in_arg_dtypes);
 
 #if MXNET_USE_CUDA && MXNET_ENABLE_CUDA_RTC && !defined(_WIN32)
   if (default_ctx.dev_mask() == Context::kGPU && dmlc::GetEnv("MXNET_USE_FUSION", true)) {

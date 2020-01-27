@@ -277,12 +277,15 @@ namespace pass {
  * \param xs The input to take gradient with respect to.
  * \param ys_out_grad The symbol for additional gradient to be propagate back to y.
  * \param aggregate_fun Aggregation function applied to aggregate the inputs.
- * \param mirror_fun Optional mirror function to do mirror optimization and save memory.
- * \param attr_hint_fun Optional, hint function to output a node that like src, but its attr is same as like.
- * \param zero_ops Optional, list of operators that outputs a single zero array. The first one
- *  must be zeros_like.
- * \param copy_op_str Optional, name of the copy operation required to handle duplicates
- *  on the edge of the graph
+ * \param mirror_fun Optional, mirror function to do mirror optimization and save memory.
+ * \param attr_hint_fun Optional, hint function to output a node that like src,
+ *                      but its attr is same as like.
+ * \param zero_ops Optional, list of operators that outputs a single zero array.
+ *                 The first one must be zeros_like.
+ * \param copy_op_str Optional, name of the copy operation required to handle
+ *                    duplicates on the edge of the graph.
+ * \param in_arg_shapes Optional, shapes of input arguments.
+ * \param in_arg_dtypes Optional, data types of inputs arguments.
  * \return A new graph, whose outputs correspond to inputs of xs.
  */
 inline Graph MXGradient(
@@ -295,10 +298,14 @@ inline Graph MXGradient(
     std::function<NodeEntry(const NodeEntry& src, const NodeEntry &like)>
     attr_hint_fun = nullptr,
     std::vector<const Op*> zero_ops = std::vector<const Op*>(),
-    std::string copy_op_str = std::string()) {
+    std::string copy_op_str = std::string(),
+    nnvm::ShapeVector in_arg_shapes = std::vector<TShape>(),
+    nnvm::DTypeVector in_arg_dtypes = std::vector<int>()) {
   graph.attrs["grad_ys"] = std::make_shared<any>(std::move(ys));
   graph.attrs["grad_xs"] = std::make_shared<any>(std::move(xs));
   graph.attrs["grad_ys_out_grad"] = std::make_shared<any>(std::move(ys_out_grad));
+  graph.attrs["shape_inputs"] = std::make_shared<any>(std::move(in_arg_shapes));
+  graph.attrs["dtype_inputs"] = std::make_shared<any>(std::move(in_arg_dtypes));
   if (aggregate_fun != nullptr) {
     graph.attrs["grad_aggregate_fun"] = std::make_shared<any>(aggregate_fun);
   }
@@ -312,7 +319,7 @@ inline Graph MXGradient(
     graph.attrs["zero_ops"] = std::make_shared<any>(std::move(zero_ops));
   }
   if (copy_op_str != std::string()) {
-      graph.attrs["copy_op"] = std::make_shared<any>(std::move(copy_op_str));
+    graph.attrs["copy_op"] = std::make_shared<any>(std::move(copy_op_str));
   }
   return ApplyPass(std::move(graph), "MXGradient");
 }
