@@ -324,7 +324,7 @@ inline ValueType get_node_attr(
  */
 nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
                                          const std::vector<OpReqType>& grad_req_types,
-                                         const nnvm::ShapeVector& in_arg_shapes,
+                                         const mxnet::ShapeVector& in_arg_shapes,
                                          const nnvm::DTypeVector& in_arg_dtypes) {
   using nnvm::NodePtr;
   using nnvm::NodeEntry;
@@ -435,10 +435,9 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
   nnvm::Graph mirrored_g;
   mirrored_g.outputs = symbol.outputs;
   const nnvm::IndexedGraph& mirrored_idx = mirrored_g.indexed_graph();
-  const std::unordered_set<uint32_t>& mirrored_mutable_nodes =
-      mirrored_idx.mutable_input_nodes();
+  const std::unordered_set<uint32_t>& mirrored_mutable_nodes = mirrored_idx.mutable_input_nodes();
   size_t mirrored_arg_top = 0, mirrored_aux_top = 0;
-  nnvm::ShapeVector mirrored_arg_shapes;
+  mxnet::ShapeVector mirrored_arg_shapes;
   nnvm::DTypeVector mirrored_arg_dtypes;
   const size_t mirrored_num_forward_inputs = symbol.ListInputs(nnvm::Symbol::kAll).size();
 
@@ -846,8 +845,31 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
                          std::unordered_map<std::string, NDArray>* shared_buffer,
                          Executor* shared_exec,
                          const nnvm::NodeEntryMap<NDArray>& feed_dict) {
+  nnvm::Graph mirrored_g;
+  mirrored_g.outputs = symbol.outputs;
+  const nnvm::IndexedGraph& mirrored_idx = mirrored_g.indexed_graph();
+  mxnet::ShapeVector mirrored_arg_shapes(mirrored_idx.input_nodes().size(), TShape());
+  nnvm::DTypeVector mirrored_arg_dtypes(mirrored_idx.input_nodes().size(), -1);
+  const size_t mirrored_num_forward_inputs = symbol.ListInputs(nnvm::Symbol::kAll).size();
+
+  for (size_t i = 0; i < mirrored_num_forward_inputs; ++i) {
+    const uint32_t nid = mirrored_idx.input_nodes().at(i);
+    const std::string& name = mirrored_idx[nid].source->attrs.name;
+    std::unordered_map<std::string, TShape>::const_iterator
+        arg_shape_iter = arg_shape_map.find(name);
+    std::unordered_map<std::string, int>::const_iterator
+        arg_dtype_iter = arg_dtype_map.find(name);
+    if (arg_shape_iter != arg_shape_map.end()) {
+      mirrored_arg_shapes[i] = arg_shape_iter->second;
+    }
+    if (arg_dtype_iter != arg_dtype_map.end()) {
+      mirrored_arg_dtypes[i] = arg_dtype_iter->second;
+    }
+  }
+
   nnvm::Graph g = InitGraph(symbol, default_ctx, ctx_map, in_arg_ctxes, arg_grad_ctxes,
-                            aux_state_ctxes, grad_req_types);
+                            aux_state_ctxes, grad_req_types,
+                            mirrored_arg_shapes, mirrored_arg_dtypes);
 
   // The following code of shape and dtype inferences and argument
   // initialization is for simple_bind only. Regular bind operation
@@ -1043,7 +1065,7 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
                                const std::vector<Context>& arg_grad_ctxes,
                                const std::vector<Context>& aux_state_ctxes,
                                const std::vector<OpReqType>& grad_req_types,
-                               const nnvm::ShapeVector& in_arg_shapes,
+                               const mxnet::ShapeVector& in_arg_shapes,
                                const nnvm::DTypeVector& in_arg_dtypes) {
   // setup gradient
   nnvm::Graph g = InitFullGraph(symbol, grad_req_types,

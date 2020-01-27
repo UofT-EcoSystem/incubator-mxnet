@@ -299,7 +299,7 @@ inline Graph MXGradient(
     attr_hint_fun = nullptr,
     std::vector<const Op*> zero_ops = std::vector<const Op*>(),
     std::string copy_op_str = std::string(),
-    nnvm::ShapeVector in_arg_shapes = std::vector<TShape>(),
+    mxnet::ShapeVector in_arg_shapes = std::vector<mxnet::TShape>(),
     nnvm::DTypeVector in_arg_dtypes = std::vector<int>()) {
   graph.attrs["grad_ys"] = std::make_shared<any>(std::move(ys));
   graph.attrs["grad_xs"] = std::make_shared<any>(std::move(xs));
