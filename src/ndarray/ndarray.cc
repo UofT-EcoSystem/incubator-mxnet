@@ -45,6 +45,10 @@ DMLC_REGISTRY_ENABLE(::mxnet::NDArrayFunctionReg);
 
 namespace mxnet {
 
+namespace kvstore {
+  extern std::string kvstore_key;
+}
+
 NDArray NDArray::grad() const {
   if (Imperative::AGInfo::IsNone(*this)) return NDArray();
   Imperative::AGInfo& info = Imperative::AGInfo::Get(entry_.node);
@@ -1052,7 +1056,12 @@ void NDArray::Load(dmlc::Stream* fi,
 NDArray NDArray::Copy(Context ctx) const {
   NDArray ret;
   if (kDefaultStorage == storage_type()) {
-    ret = NDArray(shape(), ctx, true, dtype_);
+    ret = NDArray(shape(), ctx, true, dtype_
+#if MXNET_USE_MEMORY_PROFILER
+        , kvstore::kvstore_key
+#endif // MXNET_USE_MEMORY_PROFILER
+        );
+    kvstore::kvstore_key = "<unknown>";
   } else if (kUndefinedStorage != storage_type()) {
     ret = NDArray(storage_type(), shape(), ctx, true, dtype_,
                   ptr_->aux_types, ptr_->aux_shapes, storage_shape());

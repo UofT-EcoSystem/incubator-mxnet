@@ -485,7 +485,12 @@ class SGD(Optimizer):
     def create_state(self, index, weight):
         momentum = None
         if self.momentum != 0.0:
-            momentum = zeros(weight.shape, weight.context, dtype=weight.dtype, stype=weight.stype)
+            momentum = zeros(weight.shape, weight.context, dtype=weight.dtype,
+                             stype=weight.stype
+                             # @MXNET_USE_MEMORY_PROFILER
+                           , name='optimizer_state:momentum'
+                             # /MXNET_USE_MEMORY_PROFILER
+                             )
         return momentum
 
     def _update_impl(self, index, weight, grad, state, multi_precision=False):

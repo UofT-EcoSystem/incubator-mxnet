@@ -496,6 +496,138 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
       g.outputs.push_back(e);
     }
     return g;
+  } else if (dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR_V1", 0)) {
+    int do_mirror = dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR_V1", 0);
+  
+    std::function<bool(
+        const nnvm::NodePtr&, 
+        const nnvm::NodePtr&)> need_mirror = [do_mirror](
+        const nnvm::NodePtr& node,
+        const nnvm::NodePtr& parent_node) -> bool {
+      if (node->is_variable()) return false;
+      const std::string& type = node->attrs.op->name;
+      const std::string& parent_type = 
+          parent_node == nullptr ? "" : 
+          parent_node->attrs.op->name;
+      if (get_node_attr(*node, "__force_mirroring__", false)) return true;
+      if (do_mirror == 0) return false;
+      if (type == "Dropout")            return false;
+      if (type == "Embedding")          return false;
+
+      if (type == "_zeros")             return false;
+      if (type == "zeros_like")         return false;
+
+      // if (type == "broadcast_not_equal") return false;
+      
+      if (type == "SequenceReverse")    return false;
+      if (type == "SequenceLast")       return false;
+      if (type == "SequenceMask")       return false;
+      if (type == "ParSequenceReverse") return false;
+
+      // if (type == "EcoReduceSum")       return false;
+      // if (type == "sum")                return false;
+      // if (type == "EcoMean")            return false;
+      // if (type == "mean")               return false;
+
+      if (type == "Convolution")        return false;
+      if (type == "batch_dot")          return false;
+      if (type == "FullyConnected") {
+        const op::FullyConnectedProp* fc_prop = dynamic_cast<
+            const op::FullyConnectedProp*>(
+            op::OpPropGetOpProperty(node->attrs));
+        std::map<std::string, std::string> fc_param = fc_prop->GetParams();
+        if (fc_param["num_hidden"] == "1") {
+          return true;
+        }
+        if (parent_node == nullptr) {
+          // Fully-Connected layers of depth 0 shall be allowed.
+          // The reason is because they only request the input to compute the gradients
+          //   and hence even if we set the fully-connected layers
+          //   as part of the mirroring, the layers themselves will NOT be recomputed.
+          return true;
+        }
+        return false;
+      }
+
+      if (type == "expand_dims")        return false;
+      if (type == "Concat")             return false;
+      if (type == "Reshape")            return false;
+      if (type == "SwapAxis")           return false;
+      if (type == "tile")               return false;
+      if (type == "transpose")          return false;
+      if (type == "SliceChannel")       return false;
+
+      if (type == "softmax")            return false;
+      if (type == "SoftmaxOutput")      return false;
+      
+      // if (type == "BatchNorm")          return false;
+      // if (type == "CuDNNBatchNorm")     return false;
+
+      // We need the mirroring to stop when the cell state of an LSTM cell is encountered.
+      // The reason is because unlike input and hidden states that are blocked
+      //   by the input-to-hidden and hidden-to-hidden connections,
+      //   the cell states do not need to go through a fully-connected layer 
+      //   and can be "infinitely" mirrored backward until the start of the sequence.
+      // This will cause huge performance overhead, especially when the sequence length is long.
+      // if ((std::regex_match(node->attrs.name, std::regex("(.*)(state)"))) || 
+      //     (type == "LSTMNonLinBlock" && 
+      //     parent_type == "LSTMNonLinBlock") || 
+      //     (type == "EcoLSTMCell")) {
+      //   // LOG(INFO) << "Speculating that a cell state is reached @Node "
+      //   //           << node.attrs.name << std::endl
+      //   //           << "\t""Mirroring is forced to stop at depth " << mirror_depth << std::endl;
+      //   return false;
+      // }
+      return true;
+    };
+    std::vector<const nnvm::Op*> zero_ops;
+    zero_ops.push_back(nnvm::Op::Get("zeros_like"));
+    zero_ops.push_back(nnvm::Op::Get("_zeros"));
+
+    // LOG(INFO) << "InArg Size  : " << in_arg_shapes.size();
+    // LOG(INFO) << "InArg DType : " << in_arg_dtypes.size();
+
+    // LOG(INFO) << "Graph Attributes: ";
+    // for (const auto& attr : g.attrs) {
+    //   LOG(INFO) << "\t" << attr.first;
+    // }
+
+    // g = InferShape(std::move(g), std::move(in_arg_shapes), "__shape__");
+    // if (g.GetAttr<size_t>("shape_num_unknown_nodes") != 0U) {
+    //   HandleInferShapeError(num_forward_inputs_, g.indexed_graph(),
+    //                         g.GetAttr<nnvm::ShapeVector>("shape"));
+    // }
+
+    // g = InferType(std::move(g), std::move(in_arg_dtypes), "__dtype__");
+    // if (g.GetAttr<size_t>("dtype_num_unknown_nodes") != 0U) {
+    //   HandleInferTypeError(num_forward_inputs_, g.indexed_graph(),
+    //                        g.GetAttr<nnvm::DTypeVector>("dtype"));
+    // }
+    // g = nnvm::pass::InferShape(g, in_arg_shapes, "__shape__");
+    // g = nnvm::pass::InferType (g, in_arg_dtypes, "__dtype__");
+
+    // LOG(INFO) << "g.outputs.size  (pre-Gradient) : " << g.outputs.size();
+
+    // take gradient
+    nnvm::Graph g_grad = nnvm::pass::GradientV1(
+        g, symbol.outputs, xs, head_grad_entry_,
+        AggregateGradient, need_mirror, nullptr,
+        zero_ops, "_copy", in_arg_shapes, in_arg_dtypes);
+    CHECK_EQ(g_grad.outputs.size(), xs.size());
+    for (const auto &e : g_grad.outputs) {
+      g.outputs.push_back(e);
+    }
+
+    // LOG(INFO) << "g.outputs.size (post-Gradient) : " << g.outputs.size(); 
+    // LOG(INFO) << "xs.size : " << xs.size();
+    // LOG(INFO) << "g_grad.outputs.size : " << g_grad.outputs.size();
+
+    // g.attrs.erase("shape");
+    // g.attrs.erase("shape_num_unknown_nodes");
+    // g.attrs.erase("dtype");
+    // g.attrs.erase("dtype_num_unknown_nodes");
+
+    return g;
   } else {
     int do_mirror = dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR", 0);
 

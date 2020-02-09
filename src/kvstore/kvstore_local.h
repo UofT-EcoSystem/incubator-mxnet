@@ -43,6 +43,8 @@ enum KeyType {
   kIntKey
 };
 
+std::string kvstore_key = "<unknown>";
+
 /**
  * \brief store data in local machine
  */
@@ -141,6 +143,7 @@ class KVStoreLocal : public KVStore {
     for (size_t i = 0; i < keys.size(); ++i) {
       CHECK(local_.find(keys[i]) == local_.end())
           << "duplicate init of key " << keys[i];
+      kvstore_key = "kvstore_init:" + reverse_str_key_dict_[keys[i]];
       local_[keys[i]] = values[i].Copy(pinned_ctx_);
       comm_->Init(keys[i], values[i].storage_type(), values[i].shape(), values[i].dtype());
     }
@@ -161,6 +164,7 @@ class KVStoreLocal : public KVStore {
         // if merged is on gpu, we may need copy weight from cpu to gpu
         if (merged.ctx().dev_mask() != cpu::kDevMask &&
             local.ctx().dev_mask() == cpu::kDevMask) {
+          kvstore_key = "kvstore_push:" + reverse_str_key_dict_[key];
           local = local.Copy(merged.ctx());
         }
         // call the updater with string keys
@@ -177,6 +181,7 @@ class KVStoreLocal : public KVStore {
         }
       } else {
         if (merged.storage_type() != local.storage_type()) {
+          kvstore_key = "kvstore_push:" + reverse_str_key_dict_[key];
           local = merged.Copy(local.ctx());
         } else {
           local = merged;
