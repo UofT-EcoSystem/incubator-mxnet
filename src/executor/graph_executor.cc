@@ -427,8 +427,7 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
   zero_ops.push_back(nnvm::Op::Get("zeros_like"));
   zero_ops.push_back(nnvm::Op::Get("_zeros"));
 
-  nnvm::IndexedGraph idx = g.indexed_graph();
-
+  const nnvm::IndexedGraph& idx = g.indexed_graph();
   LOG(INFO) << "Prior to the Gradient pass, there are "
             << idx.num_nodes() << " nodes and "
             << idx.num_node_entries() << " node entries in the graph";
@@ -502,7 +501,7 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
       g.outputs.push_back(e);
     }
 
-    nnvm::IndexedGraph grad_idx = g_grad.indexed_graph();
+    const nnvm::IndexedGraph& grad_idx = g_grad.indexed_graph();
     LOG(INFO) << "After to the GradientV2 pass, there are "
               << grad_idx.num_nodes() << " nodes and "
               << grad_idx.num_node_entries() << " node entries in the graph";
@@ -540,7 +539,7 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
       g.outputs.push_back(e);
     }
 
-    nnvm::IndexedGraph grad_idx = g_grad.indexed_graph();
+    const nnvm::IndexedGraph& grad_idx = g_grad.indexed_graph();
     LOG(INFO) << "After to the Gradient pass, there are "
               << grad_idx.num_nodes() << " nodes and "
               << grad_idx.num_node_entries() << " node entries in the graph";
