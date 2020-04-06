@@ -427,6 +427,12 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
   zero_ops.push_back(nnvm::Op::Get("zeros_like"));
   zero_ops.push_back(nnvm::Op::Get("_zeros"));
 
+  nnvm::IndexedGraph idx = g.indexed_graph(), grad_idx;
+
+  LOG(INFO) << "Prior to the Gradient pass, there are "
+            << idx.num_nodes() << " nodes and "
+            << idx.num_node_entries() << " node entries in the graph";
+
   // take gradient
   if (dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR_V2", 0)) {
     int do_mirror = dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR_V2", 0);
@@ -495,6 +501,12 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     for (const auto &e : g_grad.outputs) {
       g.outputs.push_back(e);
     }
+
+    grad_idx = g_grad.indexed_graph();
+    LOG(INFO) << "After to the GradientV2 pass, there are "
+              << grad_idx.num_nodes() << " nodes and "
+              << grad_idx.num_node_entries() << " node entries in the graph";
+
     return g;
   } else {
     int do_mirror = dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR", 0);
@@ -527,6 +539,12 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     for (const auto &e : g_grad.outputs) {
       g.outputs.push_back(e);
     }
+
+    grad_idx = g_grad.indexed_graph();
+    LOG(INFO) << "After to the Gradient pass, there are "
+              << grad_idx.num_nodes() << " nodes and "
+              << grad_idx.num_node_entries() << " node entries in the graph";
+
     return g;
   }
 }
