@@ -440,7 +440,7 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
         [do_mirror](const nnvm::Node* const pnode)->bool {
           if (pnode->is_variable()) return false;
 
-          const std::string& type = pnode.attrs.op->name;
+          const std::string& type = pnode->attrs.op->name;
 
           if (get_node_attr(*pnode, "__force_mirroring__", false)) return true;
           if (do_mirror == 0)           return false;
