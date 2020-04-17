@@ -433,7 +433,47 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
             << idx.num_node_entries() << " node entries in the graph";
 
   // take gradient
-  if (dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR_V2", 0)) {
+  if (dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR_V3", 0)) {
+    int do_mirror = dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR_V3", 0);
+
+    std::function<bool(const nnvm::Node* const)> need_mirror =
+        [do_mirror](const nnvm::Node* const pnode)->bool {
+          if (pnode->is_variable()) return false;
+
+          const std::string& type = pnode.attrs.op->name;
+
+          if (get_node_attr(*pnode, "__force_mirroring__", false)) return true;
+          if (do_mirror == 0)           return false;
+
+          if (type == "Dropout")        return false;
+          if (type == "Convolution")    return false;
+          if (type == "FullyConnected") return false;
+          if (type == "Concat")         return false;
+          if (type == "SoftmaxOutput")  return false;
+          if (type == "transpose")      return false;
+
+          if (std::regex_match(pnode->attrs.name, std::regex("(.*)(state)"))
+              ) {
+            return false;
+          }
+          return true;
+        };
+    nnvm::Graph g_grad = nnvm::pass::GradientV3(
+          g, symbol.outputs, xs, head_grad_entry_,
+          AggregateGradient, need_mirror, zero_ops, "_copy");
+    CHECK_EQ(g_grad.outputs.size(), xs.size());
+    for (const auto &e : g_grad.outputs) {
+      g.outputs.push_back(e);
+    }
+
+    const nnvm::IndexedGraph& grad_idx = g_grad.indexed_graph();
+    LOG(INFO) << "After to the Gradient pass, there are "
+              << grad_idx.num_nodes() << " nodes and "
+              << grad_idx.num_node_entries() << " node entries in the graph";
+
+    return g;
+  }
+  else if (dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR_V2", 0)) {
     int do_mirror = dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR_V2", 0);
   
     std::function<MirrorType(
@@ -513,11 +553,11 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
     std::function<bool(
         const nnvm::Node&)> need_mirror = [do_mirror](
         const nnvm::Node& node) -> bool {
-    if (node.is_variable()) return 0;
+      if (node.is_variable()) return 0;
 
-    const std::string& type = node.attrs.op->name;
+      const std::string& type = node.attrs.op->name;
 
-    if (get_node_attr(node, "__force_mirroring__", false)) return true;
+      if (get_node_attr(node, "__force_mirroring__", false)) return true;
       if (do_mirror == 0)           return false;
 
       if (type == "Dropout")        return false;
