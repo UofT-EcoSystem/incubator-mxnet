@@ -460,7 +460,8 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
         };
     nnvm::Graph g_grad = nnvm::pass::GradientV3(
           g, symbol.outputs, xs, head_grad_entry_,
-          AggregateGradient, need_mirror, zero_ops, "_copy");
+          AggregateGradient, need_mirror,
+          zero_ops, "_copy", in_arg_shapes, in_arg_dtypes);
     CHECK_EQ(g_grad.outputs.size(), xs.size());
     for (const auto &e : g_grad.outputs) {
       g.outputs.push_back(e);
