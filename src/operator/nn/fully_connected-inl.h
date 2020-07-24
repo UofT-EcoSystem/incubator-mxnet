@@ -201,10 +201,10 @@ void FCForward(const OpContext &ctx, const FullyConnectedParam &param,
   }
 
   // <bojian/TVM-AutoDiff> Added logging on the tensor shapes.
-  // LOG(INFO) << "Fully-Connected Layer instantiated with (B, I, H)="
-  //           << "("  << data.shape_[0] 
-  //           << ", " << data.shape_[1]
-  //           << ", " << wmat.shape_[0] << ")";
+  LOG(INFO) << "Fully-Connected Layer instantiated with (B, I, H)="
+            << "("  << data.shape_[0] 
+            << ", " << data.shape_[1]
+            << ", " << wmat.shape_[0] << ")";
 
   CHECK_EQ(data.shape_[1], wmat.shape_[1])
     << "Incomplete weight tensor detected: weight.data().shape[1] != prod(data.data().shape[1:])."
