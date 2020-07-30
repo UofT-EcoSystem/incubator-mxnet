@@ -99,9 +99,7 @@ USE_NCCL_PATH = NONE
 # whether use opencv during compilation
 # you can disable it, however, you will not able to use
 # imbin iterator
-# <bojian/TVM-AutoDiff> Compile with OpenCV disabled.
-# USE_OPENCV = 1
-USE_OPENCV = 0
+USE_OPENCV = 1
 # Add OpenCV include path, in which the directory `opencv2` exists
 USE_OPENCV_INC_PATH = NONE
 # Add OpenCV shared library path, in which the shared library exists
