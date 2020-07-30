@@ -227,8 +227,8 @@ void BatchNormForward(const OpContext &ctx, const BatchNormParam& param,
                        const std::string& tblob_name) {
         std::ostringstream strout;
         strout << tblob_name << " : [";
-        for (size_t i = 0; i < in_data[batchnorm::kData].ndim(); ++i) {
-          strout << in_data[batchnorm::kData].shape_[i] << ", ";
+        for (size_t i = 0; i < tblob.ndim(); ++i) {
+          strout << tblob.shape_[i] << ", ";
         }
         strout << "]";
         LOG(INFO) << strout.str();
