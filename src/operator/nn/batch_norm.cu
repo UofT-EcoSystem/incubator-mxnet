@@ -708,10 +708,10 @@ void BatchNormGradCompute<gpu>(const nnvm::NodeAttrs& attrs,
         strout << "]";
         LOG(INFO) << strout.str();
       };
-  printTBlob(in_data[batchnorm::kData],  "data");
-  printTBlob(in_data[batchnorm::kGamma], "gamma");
-  printTBlob(in_data[batchnorm::kBeta],  "beta");
-  printTBlob(out_data[batchnorm::kOut],  "out");
+  printTBlob(inputs[batchnorm::kData],  "data");
+  printTBlob(inputs[batchnorm::kGamma], "gamma");
+  printTBlob(inputs[batchnorm::kBeta],  "beta");
+  printTBlob(outputs[batchnorm::kOut],  "out");
 
   param.axis = mxnet::op::batchnorm::GetRealAxis(shape, param.axis);
 #if MXNET_USE_CUDNN == 1
