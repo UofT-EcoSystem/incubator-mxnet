@@ -682,8 +682,8 @@ void BatchNormCompute<gpu>(const nnvm::NodeAttrs& attrs,
   printTBlob(inputs[batchnorm::kData],  "data");
   printTBlob(inputs[batchnorm::kGamma], "gamma");
   printTBlob(inputs[batchnorm::kBeta],  "beta");
-  printTBlob(inputs[batchnorm::kMovingMean], "moving_mean");
-  printTBlob(inputs[batchnorm::kMovingVar],  "moving_var");
+  printTBlob(inputs[batchnorm::kInMovingMean], "moving_mean");
+  printTBlob(inputs[batchnorm::kInMovingVar],  "moving_var");
   printTBlob(outputs[batchnorm::kOut],  "out");
   LOG(INFO) << "eps : " << param.eps << ", momentum : " << param.momentum
             << ", fix_gamma : " << param.fix_gamma
