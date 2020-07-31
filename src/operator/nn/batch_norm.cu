@@ -688,7 +688,7 @@ void BatchNormCompute<gpu>(const nnvm::NodeAttrs& attrs,
   LOG(INFO) << "eps : " << param.eps << ", momentum : " << param.momentum
             << ", fix_gamma : " << param.fix_gamma
             << ", axis : " << param.axis
-            << ", use_global_stats" << param.use_global_stats;
+            << ", use_global_stats : " << param.use_global_stats;
 
   param.axis = mxnet::op::batchnorm::GetRealAxis(shape, param.axis);
 #if MXNET_USE_CUDNN == 1
