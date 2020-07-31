@@ -668,6 +668,28 @@ void BatchNormCompute<gpu>(const nnvm::NodeAttrs& attrs,
   int dtype = inputs[0].type_flag_;
   mxnet::TShape shape = inputs[0].shape_;
 
+  // <bojian/TVM-AutoDiff> Added the logging of data shapes.
+  auto printTBlob = [](const TBlob& tblob,
+                       const std::string& tblob_name) {
+        std::ostringstream strout;
+        strout << tblob_name << " : [";
+        for (int i = 0; i < tblob.ndim(); ++i) {
+          strout << tblob.shape_[i] << ", ";
+        }
+        strout << "]";
+        LOG(INFO) << strout.str();
+      };
+  printTBlob(inputs[batchnorm::kData],  "data");
+  printTBlob(inputs[batchnorm::kGamma], "gamma");
+  printTBlob(inputs[batchnorm::kBeta],  "beta");
+  printTBlob(inputs[batchnorm::kMovingMean], "moving_var");
+  printTBlob(inputs[batchnorm::kMovingVar],  "moving_mean");
+  printTBlob(outputs[batchnorm::kOut],  "out");
+  LOG(INFO) << "eps : " << param.eps << ", momentum : " << param.momentum
+            << ", fix_gamma : " << param.fix_gamma
+            << ", axis : " << param.axis
+            << ", use_global_stats" << param.use_global_stats;
+
   param.axis = mxnet::op::batchnorm::GetRealAxis(shape, param.axis);
 #if MXNET_USE_CUDNN == 1
   if (!param.use_global_stats && !param.cudnn_off
@@ -696,22 +718,6 @@ void BatchNormGradCompute<gpu>(const nnvm::NodeAttrs& attrs,
   BatchNormParam param = nnvm::get<BatchNormParam>(attrs.parsed);
   int dtype = inputs[0].type_flag_;
   mxnet::TShape shape = inputs[0].shape_;
-
-  // <bojian/TVM-AutoDiff> Added the logging of data shapes.
-  auto printTBlob = [](const TBlob& tblob,
-                       const std::string& tblob_name) {
-        std::ostringstream strout;
-        strout << tblob_name << " : [";
-        for (int i = 0; i < tblob.ndim(); ++i) {
-          strout << tblob.shape_[i] << ", ";
-        }
-        strout << "]";
-        LOG(INFO) << strout.str();
-      };
-  printTBlob(inputs[batchnorm::kData],  "data");
-  printTBlob(inputs[batchnorm::kGamma], "gamma");
-  printTBlob(inputs[batchnorm::kBeta],  "beta");
-  printTBlob(outputs[batchnorm::kOut],  "out");
 
   param.axis = mxnet::op::batchnorm::GetRealAxis(shape, param.axis);
 #if MXNET_USE_CUDNN == 1
