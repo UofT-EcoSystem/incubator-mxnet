@@ -521,12 +521,6 @@ class BaseModule(object):
         nsteps = 0
 
         for epoch in range(begin_epoch, num_epoch):
-
-            # <bojian/TVM-AutoDiff>
-            if num_steps is not None and \
-               nsteps >= num_steps:
-                break
-
             tic = time.time()
             eval_metric.reset()
             nbatch = 0
@@ -534,12 +528,6 @@ class BaseModule(object):
             end_of_batch = False
             next_data_batch = next(data_iter)
             while not end_of_batch:
-
-                # <bojian/TVM-AutoDiff>
-                if num_steps is not None and \
-                   nsteps >= num_steps:
-                    break
-
                 data_batch = next_data_batch
                 if monitor is not None:
                     monitor.tic()
@@ -576,6 +564,12 @@ class BaseModule(object):
 
                 # <bojian/TVM-AutoDiff>
                 nsteps += 1
+                if num_steps is not None and \
+                   nsteps >= num_steps:
+                    break
+            if num_steps is not None and \
+               nsteps >= num_steps:
+                break
 
             # one epoch of training is finished
             for name, val in eval_name_vals:
