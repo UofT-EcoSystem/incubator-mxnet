@@ -332,7 +332,11 @@ def fit(args, network, data_loader, **kwargs):
               batch_end_callback=batch_end_callbacks,
               epoch_end_callback=checkpoint,
               allow_missing=True,
-              monitor=monitor)
+              monitor=monitor
+              
+              # <bojian/TVM-AutoDiff> Added a limit on the maximum number of training steps.
+            , num_steps=1  
+              )
 
     if args.profile_server_suffix:
         mx.profiler.set_state(state='run', profile_process='server')

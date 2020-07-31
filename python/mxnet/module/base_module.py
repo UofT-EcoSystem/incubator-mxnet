@@ -413,7 +413,12 @@ class BaseModule(object):
             eval_batch_end_callback=None, initializer=Uniform(0.01),
             arg_params=None, aux_params=None, allow_missing=False,
             force_rebind=False, force_init=False, begin_epoch=0, num_epoch=None,
-            validation_metric=None, monitor=None, sparse_row_id_fn=None):
+            validation_metric=None, monitor=None, sparse_row_id_fn=None
+            
+            # <bojian/TVM-AutoDiff> Added a limit on the maximum number of training steps.
+          , num_steps=None
+            
+            ):
         """Trains the module parameters.
 
         Checkout `Module Tutorial <https://mxnet.apache.org/api/python/tutorials/packages/module/index.html>`_
@@ -511,6 +516,10 @@ class BaseModule(object):
         ################################################################################
         # training loop
         ################################################################################
+
+        # <bojian/TVM-AutoDiff> Added a limit on the maximum number of training steps.
+        nsteps = 0
+
         for epoch in range(begin_epoch, num_epoch):
             tic = time.time()
             eval_metric.reset()
@@ -552,6 +561,13 @@ class BaseModule(object):
                     for callback in _as_list(batch_end_callback):
                         callback(batch_end_params)
                 nbatch += 1
+                nsteps += 1
+                if num_steps is not None and \
+                   nsteps >= num_steps:
+                    break
+            if num_steps is not None and \
+               nsteps >= num_steps:
+                break
 
             # one epoch of training is finished
             for name, val in eval_name_vals:
