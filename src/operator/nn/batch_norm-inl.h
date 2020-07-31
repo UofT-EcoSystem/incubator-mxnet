@@ -34,8 +34,6 @@
 #include <vector>
 #include <string>
 #include <utility>
-// <bojian/TVM-AutoDiff> Added the header for ostringstream.
-#include <sstream>
 #include "../mshadow_op.h"
 #include "../operator_common.h"
 #include "../mxnet_op.h"
@@ -221,22 +219,6 @@ void BatchNormForward(const OpContext &ctx, const BatchNormParam& param,
     CHECK_GE(req.size(), 1U);
     CHECK_EQ(req[batchnorm::kOut], kWriteTo);
   }
-
-  // <bojian/TVM-AutoDiff> Added the logging of data shapes.
-  auto printTBlob = [](const TBlob& tblob,
-                       const std::string& tblob_name) {
-        std::ostringstream strout;
-        strout << tblob_name << " : [";
-        for (int i = 0; i < tblob.ndim(); ++i) {
-          strout << tblob.shape_[i] << ", ";
-        }
-        strout << "]";
-        LOG(INFO) << strout.str();
-      };
-  printTBlob(in_data[batchnorm::kData],  "data");
-  printTBlob(in_data[batchnorm::kGamma], "gamma");
-  printTBlob(in_data[batchnorm::kBeta],  "beta");
-  printTBlob(out_data[batchnorm::kOut],  "out");
 
   Stream<xpu> *s = ctx.get_stream<xpu>();
   BatchNormForwardImpl<xpu, DType, AccReal>(s, ctx, param, in_data, req,
