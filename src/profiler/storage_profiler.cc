@@ -47,9 +47,10 @@ GpuDeviceStorageProfiler* GpuDeviceStorageProfiler::Get() {
 
 void GpuDeviceStorageProfiler::DumpProfile() const {
   size_t current_pid = common::current_process_id();
-  std::ofstream fout((filename_prefix_ + "-pid_" + std::to_string(current_pid)
+  std::ofstream csvfout((filename_prefix_ + "-pid_" + std::to_string(current_pid)
                       + ".csv").c_str());
-  if (!fout.is_open()) {
+  std::ofstream jsonfout((filename_prefix_ + ".json").c_str());
+  if (!csvfout.is_open()) {
     return;
   }
   struct AllocEntryDumpFmt {
@@ -84,15 +85,15 @@ void GpuDeviceStorageProfiler::DumpProfile() const {
           alloc_entry.second.reuse});
     gpu_dev_id_total_alloc_map[alloc_entry.second.dev_id] = 0;
   }
-  fout << "\"Attribute Name\",\"Requested Size\","
+  csvfout << "\"Attribute Name\",\"Requested Size\","
           "\"Device\",\"Actual Size\",\"Reuse?\"" << std::endl;
   for (const std::pair<const std::string, AllocEntryDumpFmt>& alloc_entry :
        gpu_mem_ordered_alloc_entries) {
-    fout << "\"" << alloc_entry.first << "\","
-         << "\"" << alloc_entry.second.requested_size << "\","
-         << "\"" << alloc_entry.second.dev_id << "\","
-         << "\"" << alloc_entry.second.actual_size << "\","
-         << "\"" << alloc_entry.second.reuse << "\"" << std::endl;
+    csvfout << "\"" << alloc_entry.first << "\","
+            << "\"" << alloc_entry.second.requested_size << "\","
+            << "\"" << alloc_entry.second.dev_id << "\","
+            << "\"" << alloc_entry.second.actual_size << "\","
+            << "\"" << alloc_entry.second.reuse << "\"" << std::endl;
     gpu_dev_id_total_alloc_map[alloc_entry.second.dev_id] +=
         alloc_entry.second.actual_size;
   }
@@ -119,11 +120,11 @@ void GpuDeviceStorageProfiler::DumpProfile() const {
     for (unsigned i = 0; i < info_count; ++i) {
       if (current_pid == infos[i].pid) {
         amend_made = true;
-        fout << "\"" << "nvml_amend" << "\","
-             << "\"" << infos[i].usedGpuMemory - dev_id_total_alloc_pair.second << "\","
-             << "\"" << dev_id_total_alloc_pair.first << "\","
-             << "\"" << infos[i].usedGpuMemory - dev_id_total_alloc_pair.second << "\","
-             << "\"0\"" << std::endl;
+        csvfout << "\"" << "nvml_amend" << "\","
+                << "\"" << infos[i].usedGpuMemory - dev_id_total_alloc_pair.second << "\","
+                << "\"" << dev_id_total_alloc_pair.first << "\","
+                << "\"" << infos[i].usedGpuMemory - dev_id_total_alloc_pair.second << "\","
+                << "\"0\"" << std::endl;
         break;
       }
     }
