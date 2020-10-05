@@ -142,9 +142,8 @@ struct GpuMemProfileTree {
   GpuMemProfileNodePtr root;
 
   GpuMemProfileTree(const int dev_id) {
-    root = std::make_shared<GpuMemProfileNode>(
-        new GpuMemProfileScopeNode(
-          "gpu_memory_profile_dev" + std::to_string(dev_id)));
+    root = std::make_shared<GpuMemProfileScopeNode>(
+        "gpu_memory_profile_dev" + std::to_string(dev_id));
   }
   void Save(dmlc::JSONWriter* const writer) const {
     writer->Write(root);
