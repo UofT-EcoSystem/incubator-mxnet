@@ -41,7 +41,8 @@ namespace json {
 
 template<typename T>
 struct Handler<std::shared_ptr<T> >  {
-  static void Write(JSONWriter* const writer, const T& ptr) {
+  static void Write(JSONWriter* const writer,
+                    const std::shared_ptr<T>& ptr) {
     writer->Write(*ptr);
   }
 }
@@ -66,6 +67,19 @@ struct GpuMemProfileNode {
 };  // struct GpuMemProfileNode
 
 using GpuMemProfileNodePtr = std::shared_ptr<GpuMemProfileNode>;
+
+struct GpuMemProfileAttributeNode : GpuMemProfileNode {
+  std::size_t size;
+
+  GpuMemProfileAttributeNode(const std::string& name_,
+                             const std::size_t size_)
+      : GpuMemProfileNode(name_), size(size_)
+  {}
+  virtual void Save(dmlc::JSONWriter* const writer) const override {
+    GpuMemProfileNode::Save(writer);
+    writer->WriteObjectKeyValue("value", size);
+  }
+};  // struct GpuMemProfileAttributeNode
 
 struct GpuMemProfileScopeNode : GpuMemProfileNode {
   std::vector<GpuMemProfileNodePtr> children;
@@ -119,19 +133,6 @@ struct GpuMemProfileScopeNode : GpuMemProfileNode {
   }
 };  // struct GpuMemProfileScopeNode
 
-struct GpuMemProfileAttributeNode : GpuMemProfileNode {
-  std::size_t size;
-
-  GpuMemProfileAttributeNode(const std::string& name_,
-                             const std::size_t size)
-      : GpuMemProfileNode(name_), size(size_)
-  {}
-  virtual void Save(dmlc::JSONWriter* const writer) const override {
-    GpuMemProfileNode::Save(writer);
-    writer->WriteObjectKeyValue("value", size);
-  }
-};  // struct GpuMemProfileAttributeNode
-
 /*!
  * \brief The @c GpuMemProfileTree is the data structure for storing the GPU
  *        memory profile information in a tree-like structure. This is needed
@@ -153,7 +154,7 @@ struct GpuMemProfileTree {
    */
   void Insert(const std::string& alloc_entry_name,
               const size_t size) {
-    root.Insert(alloc_entry_name, size);
+    root->Insert(alloc_entry_name, size);
   }
 };  // struct GpuMemProfileTree
 
@@ -165,7 +166,7 @@ class GpuMemProfileJSONGraph {
   std::map<int, GpuMemProfileTree> trees_;
  public:
   GpuMemProfileTree& operator[](const int dev_id) {
-    if (trees_ == dev_ids_.end()) {
+    if (trees_.find(dev_id) == trees_.end()) {
       return trees_.emplace(dev_id).first->second;
     }
     return trees_[dev_id];
