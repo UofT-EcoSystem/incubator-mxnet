@@ -45,7 +45,7 @@ struct Handler<std::shared_ptr<T> >  {
                     const std::shared_ptr<T>& ptr) {
     writer->Write(*ptr);
   }
-}
+};
 
 }  // namespace json
 }  // namespace dmlc
@@ -154,7 +154,7 @@ struct GpuMemProfileTree {
    */
   void Insert(const std::string& alloc_entry_name,
               const size_t size) {
-    root->Insert(alloc_entry_name, size);
+    std::dynamic_pointer_cast<GpuMemProfileScopeNode>(root)->Insert(alloc_entry_name, size);
   }
 };  // struct GpuMemProfileTree
 
@@ -167,7 +167,7 @@ class GpuMemProfileJSONGraph {
  public:
   GpuMemProfileTree& operator[](const int dev_id) {
     if (trees_.find(dev_id) == trees_.end()) {
-      return trees_.emplace(dev_id).first->second;
+      return trees_.emplace(dev_id, GpuMemProfileTree(dev_id)).first->second;
     }
     return trees_[dev_id];
   }
