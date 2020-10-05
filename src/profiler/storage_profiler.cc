@@ -37,6 +37,7 @@
 
 
 namespace dmlc {
+namespace json {
 
 template<typename T>
 struct Handler<std::shared_ptr<T> >  {
@@ -45,6 +46,7 @@ struct Handler<std::shared_ptr<T> >  {
   }
 }
 
+}  // namespace json
 }  // namespace dmlc
 
 
