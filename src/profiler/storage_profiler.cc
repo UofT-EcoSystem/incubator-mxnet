@@ -168,7 +168,7 @@ class GpuMemProfileJSONGraph {
     if (trees_.find(dev_id) == trees_.end()) {
       return trees_.emplace(dev_id, GpuMemProfileTree(dev_id)).first->second;
     }
-    return trees_[dev_id];
+    return trees_.at(dev_id);
   }
   void Save(dmlc::JSONWriter* const writer) const {
     writer->BeginObject();
