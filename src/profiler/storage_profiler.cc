@@ -175,14 +175,10 @@ class GpuMemProfileJSONGraph {
     return trees_.at(dev_id);
   }
   void Save(dmlc::JSONWriter* const writer) const {
-    writer->BeginObject();
-    writer->BeginArray(true);
     for (const std::pair<int, GpuMemProfileTree>& dev_id_tree_pair
          : trees_) {
-      writer->WriteArrayItem(dev_id_tree_pair.second);
+      writer->Write(dev_id_tree_pair.second);
     }
-    writer->EndArray();
-    writer->EndObject();
   }
 };  // struct GPUMemProfileJSONGraph
 
