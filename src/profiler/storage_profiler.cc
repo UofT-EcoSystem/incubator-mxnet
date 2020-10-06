@@ -76,8 +76,10 @@ struct GpuMemProfileAttributeNode : GpuMemProfileNode {
       : GpuMemProfileNode(name_), size(size_)
   {}
   virtual void Save(dmlc::JSONWriter* const writer) const override {
+    writer->BeginObject(false);
     GpuMemProfileNode::Save(writer);
     writer->WriteObjectKeyValue("value", size);
+    writer->EndObject();
   }
 };  // struct GpuMemProfileAttributeNode
 
